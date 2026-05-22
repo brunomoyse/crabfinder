@@ -1,0 +1,45 @@
+[package]
+name = "crabfinder-indexer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "BeSt XML → Tantivy indexing pipeline."
+
+[lib]
+
+[[bin]]
+name = "crabfinder-indexer"
+path = "src/main.rs"
+
+[dependencies]
+crabfinder-core    = { workspace = true }
+
+# XML + zip
+quick-xml          = "0.40"
+zip                = "5"
+# Reprojection EPSG:31370 → EPSG:4326. Pure Rust, no system deps.
+# We feed it an explicit proj-string (not the EPSG:31370 default) so the
+# IGN-published 7-parameter Helmert is applied. See reproject.rs and
+# docs/georust-adoption-analysis.md.
+proj4rs            = "0.1.10"
+
+# Search
+tantivy            = { workspace = true }
+
+# Errors / logging
+anyhow             = { workspace = true }
+thiserror          = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# CLI
+clap               = { workspace = true }
+
+# Serialization
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+serde_yaml         = "0.9"
+
+[dev-dependencies]
+tempfile           = "3.10"

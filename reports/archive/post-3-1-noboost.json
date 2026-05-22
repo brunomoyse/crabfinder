@@ -1,0 +1,215 @@
+{
+  "report_version": "1",
+  "service_url": "http://127.0.0.1:8080",
+  "metrics": {
+    "query_count": 2409,
+    "aggregated_query_count": 2406,
+    "error_count": 0,
+    "overall": {
+      "n": 2406,
+      "recall_at_1": 0.9114713216957606,
+      "recall_at_5": 0.9605153782211139,
+      "recall_at_10": 0.9729842061512884,
+      "mrr": 0.9329236432727701,
+      "building_group_recall_at_1": 0.912718204488778,
+      "strict_match_rate": 0.9966749792186201
+    },
+    "latency": {
+      "n": 2409,
+      "p50_ms": 0.671416,
+      "p95_ms": 2.639708,
+      "p99_ms": 7.977167000000001,
+      "mean_ms": 1.0890627210460775,
+      "max_ms": 65.335375
+    },
+    "by_region": {
+      "BE-WAL": {
+        "n": 706,
+        "recall_at_1": 0.9320113314447592,
+        "recall_at_5": 0.9773371104815864,
+        "recall_at_10": 0.990084985835694,
+        "mrr": 0.9534775619407344,
+        "building_group_recall_at_1": 0.9320113314447592,
+        "strict_match_rate": 0.9971671388101983
+      },
+      "BE-BRU": {
+        "n": 400,
+        "recall_at_1": 0.965,
+        "recall_at_5": 0.9875,
+        "recall_at_10": 0.9925,
+        "mrr": 0.9757142857142859,
+        "building_group_recall_at_1": 0.965,
+        "strict_match_rate": 1.0
+      },
+      "BE-VLG": {
+        "n": 1205,
+        "recall_at_1": 0.9269709543568465,
+        "recall_at_5": 0.9726141078838174,
+        "recall_at_10": 0.9850622406639005,
+        "mrr": 0.9464950931963381,
+        "building_group_recall_at_1": 0.9269709543568465,
+        "strict_match_rate": 1.0
+      }
+    },
+    "by_variant": {
+      "canonical": {
+        "n": 500,
+        "recall_at_1": 0.98,
+        "recall_at_5": 0.996,
+        "recall_at_10": 0.998,
+        "mrr": 0.9872857142857143,
+        "building_group_recall_at_1": 0.98,
+        "strict_match_rate": 0.998
+      },
+      "with_postal": {
+        "n": 500,
+        "recall_at_1": 0.998,
+        "recall_at_5": 0.998,
+        "recall_at_10": 0.998,
+        "mrr": 0.998,
+        "building_group_recall_at_1": 0.998,
+        "strict_match_rate": 1.0
+      },
+      "cross_language": {
+        "n": 311,
+        "recall_at_1": 0.9871382636655949,
+        "recall_at_5": 0.9967845659163987,
+        "recall_at_10": 0.9967845659163987,
+        "mrr": 0.9919614147909968,
+        "building_group_recall_at_1": 0.9871382636655949,
+        "strict_match_rate": 1.0
+      },
+      "casing": {
+        "n": 500,
+        "recall_at_1": 0.98,
+        "recall_at_5": 0.996,
+        "recall_at_10": 0.998,
+        "mrr": 0.9872857142857143,
+        "building_group_recall_at_1": 0.98,
+        "strict_match_rate": 0.998
+      },
+      "minimal": {
+        "n": 500,
+        "recall_at_1": 0.75,
+        "recall_at_5": 0.904,
+        "recall_at_10": 0.952,
+        "mrr": 0.8183634920634921,
+        "building_group_recall_at_1": 0.75,
+        "strict_match_rate": 1.0
+      }
+    },
+    "by_language": {
+      "nl": {
+        "n": 1625,
+        "recall_at_1": 0.936,
+        "recall_at_5": 0.9766153846153847,
+        "recall_at_10": 0.9870769230769231,
+        "mrr": 0.9537306471306471,
+        "building_group_recall_at_1": 0.936,
+        "strict_match_rate": 1.0
+      },
+      "de": {
+        "n": 15,
+        "recall_at_1": 0.9333333333333333,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.9666666666666667,
+        "building_group_recall_at_1": 0.9333333333333333,
+        "strict_match_rate": 1.0
+      },
+      "fr": {
+        "n": 671,
+        "recall_at_1": 0.9329359165424739,
+        "recall_at_5": 0.9761549925484352,
+        "recall_at_10": 0.9895678092399404,
+        "mrr": 0.9532863766470322,
+        "building_group_recall_at_1": 0.9329359165424739,
+        "strict_match_rate": 0.9970193740685543
+      }
+    },
+    "by_adversarial_category": {
+      "cross_language": {
+        "n": 10,
+        "recall_at_1": 0.9,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.95,
+        "building_group_recall_at_1": 0.9,
+        "strict_match_rate": 1.0
+      },
+      "de_zone": {
+        "n": 9,
+        "recall_at_1": 0.0,
+        "recall_at_5": 0.5555555555555556,
+        "recall_at_10": 0.6666666666666666,
+        "mrr": 0.2,
+        "building_group_recall_at_1": 0.0,
+        "strict_match_rate": 0.8888888888888888
+      },
+      "facilites": {
+        "n": 6,
+        "recall_at_1": 0.0,
+        "recall_at_5": 0.16666666666666666,
+        "recall_at_10": 0.3333333333333333,
+        "mrr": 0.10185185185185186,
+        "building_group_recall_at_1": 0.0,
+        "strict_match_rate": 0.8333333333333334
+      },
+      "hamlet": {
+        "n": 30,
+        "recall_at_1": 0.23333333333333334,
+        "recall_at_5": 0.3,
+        "recall_at_10": 0.3333333333333333,
+        "mrr": 0.2630952380952381,
+        "building_group_recall_at_1": 0.23333333333333334,
+        "strict_match_rate": 0.9
+      },
+      "notability": {
+        "n": 30,
+        "recall_at_1": 0.23333333333333334,
+        "recall_at_5": 0.6333333333333333,
+        "recall_at_10": 0.6666666666666666,
+        "mrr": 0.3780952380952381,
+        "building_group_recall_at_1": 0.3333333333333333,
+        "strict_match_rate": 1.0
+      },
+      "special_chars": {
+        "n": 10,
+        "recall_at_1": 0.9,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.95,
+        "building_group_recall_at_1": 0.9,
+        "strict_match_rate": 0.9
+      }
+    },
+    "cross_language_recall_at_1": 0.9834710743801653,
+    "cross_language_n": 121,
+    "cross_language_recall_at_1_boosted": 0.985,
+    "cross_language_boosted_n": 200,
+    "known_failure_tracking": [
+      {
+        "id": "adv-known-001",
+        "subcategory": "rue-de-la-gare-brussels",
+        "state": "still_failing",
+        "current_top1_bgid": "geodata.wallonie.be/id/Streetname|7717257|3",
+        "current_top1_match_type": "strict"
+      },
+      {
+        "id": "adv-known-002",
+        "subcategory": "place-de-l-eglise-ambiguous",
+        "state": "still_failing",
+        "current_top1_bgid": "https://data.vlaanderen.be/id/straatnaam/|74945|4",
+        "current_top1_match_type": "strict"
+      },
+      {
+        "id": "adv-known-003",
+        "subcategory": "anvers-grand-place-cross-region",
+        "state": "still_failing",
+        "current_top1_bgid": "https://data.vlaanderen.be/id/straatnaam/|74896|9",
+        "current_top1_match_type": "fuzzy"
+      }
+    ]
+  },
+  "wall_clock_seconds": 0.32794401187500055
+}

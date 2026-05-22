@@ -1,0 +1,2055 @@
+version: adversarial-belgium-v1
+
+# Header notes:
+# - expected_building_group_id_set (list) used for notability entries:
+#   queries like 'Grand-Place' can resolve to any of ~36 distinct buildings
+#   on Brussels' Grand-Place, all equivalent from the user's perspective.
+# - known_failure entries are tracked, NOT aggregated. Quarterly review
+#   enforced via acceptable_until.
+# - All best_id/bgid identifiers pinned to the live v3 index at
+#   generation time (2026-05-19 dump). Re-validate after BeSt refresh.
+
+queries:
+
+# ---------- Hamlet (Wallonia parts of municipality) — 30 entries
+  - id: adv-hamlet-001
+    category: hamlet
+    subcategory: hives-laroche
+    query: "rue de la barri\u00e8re hives"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7743804|1"
+    notes: "Route de Hives — La Roche-en-Ardenne (fuzzy)"
+  - id: adv-hamlet-002
+    category: hamlet
+    subcategory: beausaint-laroche
+    query: "beausaint la roche"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7743890|1"
+      - "geodata.wallonie.be/id/Streetname|7743890|2"
+      - "geodata.wallonie.be/id/Streetname|7743890|3"
+      - "geodata.wallonie.be/id/Streetname|7743890|3A"
+      - "geodata.wallonie.be/id/Streetname|7743890|4"
+      - "geodata.wallonie.be/id/Streetname|7743890|6"
+      - "geodata.wallonie.be/id/Streetname|7743890|7"
+      - "geodata.wallonie.be/id/Streetname|7743890|8"
+      - "geodata.wallonie.be/id/Streetname|7743890|9"
+      - "geodata.wallonie.be/id/Streetname|7743890|10"
+      - "geodata.wallonie.be/id/Streetname|7743890|11"
+      - "geodata.wallonie.be/id/Streetname|7743890|12"
+      - "geodata.wallonie.be/id/Streetname|7743890|13"
+      - "geodata.wallonie.be/id/Streetname|7743890|14"
+      - "geodata.wallonie.be/id/Streetname|7743890|15"
+      - "geodata.wallonie.be/id/Streetname|7743890|16"
+      - "geodata.wallonie.be/id/Streetname|7743890|17"
+      - "geodata.wallonie.be/id/Streetname|7743890|18"
+      - "geodata.wallonie.be/id/Streetname|7743890|19"
+      - "geodata.wallonie.be/id/Streetname|7743890|20"
+      - "geodata.wallonie.be/id/Streetname|7743890|20A"
+      - "geodata.wallonie.be/id/Streetname|7743890|20B"
+      - "geodata.wallonie.be/id/Streetname|7743890|20C"
+      - "geodata.wallonie.be/id/Streetname|7743890|21"
+      - "geodata.wallonie.be/id/Streetname|7743890|23"
+      - "geodata.wallonie.be/id/Streetname|7743890|25"
+      - "geodata.wallonie.be/id/Streetname|7743890|26"
+      - "geodata.wallonie.be/id/Streetname|7743890|27"
+      - "geodata.wallonie.be/id/Streetname|7743890|27A"
+      - "geodata.wallonie.be/id/Streetname|7743890|28"
+      - "geodata.wallonie.be/id/Streetname|7743890|30"
+      - "geodata.wallonie.be/id/Streetname|7743890|32"
+      - "geodata.wallonie.be/id/Streetname|7743890|34"
+      - "geodata.wallonie.be/id/Streetname|7743890|34A"
+      - "geodata.wallonie.be/id/Streetname|7743890|36"
+      - "geodata.wallonie.be/id/Streetname|7743890|38"
+    notes: "Vieille-Route-de-Beausaint — La Roche-en-Ardenne (strict)"
+  - id: adv-hamlet-003
+    category: hamlet
+    subcategory: maredsous-anhee
+    query: "maredsous"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7748300|7"
+      - "geodata.wallonie.be/id/Streetname|7748300|8"
+      - "geodata.wallonie.be/id/Streetname|7748300|10"
+      - "geodata.wallonie.be/id/Streetname|7748300|11"
+      - "geodata.wallonie.be/id/Streetname|7748300|12"
+      - "geodata.wallonie.be/id/Streetname|7748300|13"
+      - "geodata.wallonie.be/id/Streetname|7748300|14"
+      - "geodata.wallonie.be/id/Streetname|7748300|14A"
+      - "geodata.wallonie.be/id/Streetname|7748300|15"
+      - "geodata.wallonie.be/id/Streetname|7748300|15A"
+      - "geodata.wallonie.be/id/Streetname|7748300|16"
+      - "geodata.wallonie.be/id/Streetname|7748300|17"
+      - "geodata.wallonie.be/id/Streetname|7748300|18"
+    notes: "Rue de Maredsous — Anhée (strict)"
+  - id: adv-hamlet-004
+    category: hamlet
+    subcategory: han-sur-lesse-rochefort
+    query: "han sur lesse 5580"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7750392|2"
+      - "geodata.wallonie.be/id/Streetname|7750392|3"
+      - "geodata.wallonie.be/id/Streetname|7750392|5"
+      - "geodata.wallonie.be/id/Streetname|7750392|6"
+      - "geodata.wallonie.be/id/Streetname|7750392|7"
+      - "geodata.wallonie.be/id/Streetname|7750392|8"
+      - "geodata.wallonie.be/id/Streetname|7750392|9"
+      - "geodata.wallonie.be/id/Streetname|7750392|10"
+      - "geodata.wallonie.be/id/Streetname|7750392|11"
+      - "geodata.wallonie.be/id/Streetname|7750392|12A"
+      - "geodata.wallonie.be/id/Streetname|7750392|12B"
+      - "geodata.wallonie.be/id/Streetname|7750392|13"
+      - "geodata.wallonie.be/id/Streetname|7750392|14"
+      - "geodata.wallonie.be/id/Streetname|7750392|15"
+      - "geodata.wallonie.be/id/Streetname|7750392|16"
+    notes: "Rue de la Lesse — Rochefort (strict)"
+  - id: adv-hamlet-005
+    category: hamlet
+    subcategory: spontin-yvoir
+    query: "spontin yvoir"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7750943|1"
+      - "geodata.wallonie.be/id/Streetname|7750943|2"
+      - "geodata.wallonie.be/id/Streetname|7750943|6"
+      - "geodata.wallonie.be/id/Streetname|7750943|16"
+      - "geodata.wallonie.be/id/Streetname|7750943|17"
+      - "geodata.wallonie.be/id/Streetname|7750943|18"
+    notes: "Rue du Bailoy — Yvoir (strict)"
+  - id: adv-hamlet-006
+    category: hamlet
+    subcategory: crupet-assesse
+    query: "crupet"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7751880|1"
+      - "geodata.wallonie.be/id/Streetname|7751880|3"
+      - "geodata.wallonie.be/id/Streetname|7751880|4"
+      - "geodata.wallonie.be/id/Streetname|7751880|8"
+      - "geodata.wallonie.be/id/Streetname|7751880|9"
+      - "geodata.wallonie.be/id/Streetname|7751880|9A"
+      - "geodata.wallonie.be/id/Streetname|7751880|11"
+      - "geodata.wallonie.be/id/Streetname|7751880|20B"
+      - "geodata.wallonie.be/id/Streetname|7751880|26"
+      - "geodata.wallonie.be/id/Streetname|7751880|29"
+      - "geodata.wallonie.be/id/Streetname|7751880|33"
+      - "geodata.wallonie.be/id/Streetname|7751880|37A"
+      - "geodata.wallonie.be/id/Streetname|7751880|40"
+      - "geodata.wallonie.be/id/Streetname|7751880|40A"
+      - "geodata.wallonie.be/id/Streetname|7751880|41"
+    notes: "Rue Basse — Assesse (strict)"
+  - id: adv-hamlet-007
+    category: hamlet
+    subcategory: sosoye-anhee
+    query: "sosoye"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7748363|2"
+      - "geodata.wallonie.be/id/Streetname|7748363|7"
+      - "geodata.wallonie.be/id/Streetname|7748363|8"
+      - "geodata.wallonie.be/id/Streetname|7748363|9"
+      - "geodata.wallonie.be/id/Streetname|7748363|10"
+      - "geodata.wallonie.be/id/Streetname|7748363|12"
+      - "geodata.wallonie.be/id/Streetname|7748363|15"
+      - "geodata.wallonie.be/id/Streetname|7748363|16A"
+      - "geodata.wallonie.be/id/Streetname|7748363|16B"
+      - "geodata.wallonie.be/id/Streetname|7748363|17"
+      - "geodata.wallonie.be/id/Streetname|7748363|18"
+      - "geodata.wallonie.be/id/Streetname|7748363|21"
+      - "geodata.wallonie.be/id/Streetname|7748363|22"
+      - "geodata.wallonie.be/id/Streetname|7748363|23"
+      - "geodata.wallonie.be/id/Streetname|7748363|24"
+    notes: "Rue Par-delà-l'Eau — Anhée (strict)"
+  - id: adv-hamlet-008
+    category: hamlet
+    subcategory: falaen-onhaye
+    query: "fala\u00ebn"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7750219|4"
+      - "geodata.wallonie.be/id/Streetname|7750219|6"
+      - "geodata.wallonie.be/id/Streetname|7750219|8"
+      - "geodata.wallonie.be/id/Streetname|7750219|9"
+      - "geodata.wallonie.be/id/Streetname|7750219|12B"
+      - "geodata.wallonie.be/id/Streetname|7750219|14A"
+      - "geodata.wallonie.be/id/Streetname|7750219|42"
+      - "geodata.wallonie.be/id/Streetname|7750219|43"
+      - "geodata.wallonie.be/id/Streetname|7750219|44"
+      - "geodata.wallonie.be/id/Streetname|7750219|64"
+      - "geodata.wallonie.be/id/Streetname|7750219|66"
+      - "geodata.wallonie.be/id/Streetname|7750219|80"
+      - "geodata.wallonie.be/id/Streetname|7750219|82"
+      - "geodata.wallonie.be/id/Streetname|7750219|83"
+      - "geodata.wallonie.be/id/Streetname|7750219|85"
+      - "geodata.wallonie.be/id/Streetname|7750219|87"
+    notes: "Rue de la Gare — Onhaye (strict)"
+  - id: adv-hamlet-009
+    category: hamlet
+    subcategory: mozet-gesves
+    query: "mozet"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7752720|1"
+      - "geodata.wallonie.be/id/Streetname|7752720|2"
+      - "geodata.wallonie.be/id/Streetname|7752720|3"
+      - "geodata.wallonie.be/id/Streetname|7752720|4"
+      - "geodata.wallonie.be/id/Streetname|7752720|5"
+      - "geodata.wallonie.be/id/Streetname|7752720|7"
+      - "geodata.wallonie.be/id/Streetname|7752720|9"
+    notes: "Rue de Mozet — Gesves (strict)"
+  - id: adv-hamlet-010
+    category: hamlet
+    subcategory: soulme-doische
+    query: "soulme"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7757004|7"
+    notes: "Moulin-de-Soulme — Doische (strict)"
+  - id: adv-hamlet-011
+    category: hamlet
+    subcategory: laforet-vresse
+    query: "lafor\u00eat vresse"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7751410|1"
+      - "geodata.wallonie.be/id/Streetname|7751410|2"
+      - "geodata.wallonie.be/id/Streetname|7751410|3"
+      - "geodata.wallonie.be/id/Streetname|7751410|5"
+      - "geodata.wallonie.be/id/Streetname|7751410|8"
+      - "geodata.wallonie.be/id/Streetname|7751410|15"
+      - "geodata.wallonie.be/id/Streetname|7751410|19"
+      - "geodata.wallonie.be/id/Streetname|7751410|20"
+      - "geodata.wallonie.be/id/Streetname|7751410|22"
+      - "geodata.wallonie.be/id/Streetname|7751410|24"
+      - "geodata.wallonie.be/id/Streetname|7751410|26"
+      - "geodata.wallonie.be/id/Streetname|7751410|28"
+      - "geodata.wallonie.be/id/Streetname|7751410|29"
+      - "geodata.wallonie.be/id/Streetname|7751410|33"
+      - "geodata.wallonie.be/id/Streetname|7751410|36"
+      - "geodata.wallonie.be/id/Streetname|7751410|41"
+      - "geodata.wallonie.be/id/Streetname|7751410|42"
+      - "geodata.wallonie.be/id/Streetname|7751410|43"
+      - "geodata.wallonie.be/id/Streetname|7751410|44"
+      - "geodata.wallonie.be/id/Streetname|7751410|47"
+      - "geodata.wallonie.be/id/Streetname|7751410|48"
+      - "geodata.wallonie.be/id/Streetname|7751410|49"
+      - "geodata.wallonie.be/id/Streetname|7751410|50"
+      - "geodata.wallonie.be/id/Streetname|7751410|51"
+      - "geodata.wallonie.be/id/Streetname|7751410|52"
+      - "geodata.wallonie.be/id/Streetname|7751410|54"
+      - "geodata.wallonie.be/id/Streetname|7751410|57"
+      - "geodata.wallonie.be/id/Streetname|7751410|60"
+      - "geodata.wallonie.be/id/Streetname|7751410|61"
+      - "geodata.wallonie.be/id/Streetname|7751410|62"
+      - "geodata.wallonie.be/id/Streetname|7751410|63"
+      - "geodata.wallonie.be/id/Streetname|7751410|64"
+      - "geodata.wallonie.be/id/Streetname|7751410|65"
+      - "geodata.wallonie.be/id/Streetname|7751410|67"
+      - "geodata.wallonie.be/id/Streetname|7751410|68"
+      - "geodata.wallonie.be/id/Streetname|7751410|69"
+      - "geodata.wallonie.be/id/Streetname|7751410|70"
+      - "geodata.wallonie.be/id/Streetname|7751410|72"
+      - "geodata.wallonie.be/id/Streetname|7751410|73"
+      - "geodata.wallonie.be/id/Streetname|7751410|76"
+      - "geodata.wallonie.be/id/Streetname|7751410|77"
+      - "geodata.wallonie.be/id/Streetname|7751410|78"
+      - "geodata.wallonie.be/id/Streetname|7751410|79"
+      - "geodata.wallonie.be/id/Streetname|7751410|82"
+      - "geodata.wallonie.be/id/Streetname|7751410|84"
+      - "geodata.wallonie.be/id/Streetname|7751410|88"
+      - "geodata.wallonie.be/id/Streetname|7751410|89"
+      - "geodata.wallonie.be/id/Streetname|7751410|90"
+      - "geodata.wallonie.be/id/Streetname|7751410|92"
+      - "geodata.wallonie.be/id/Streetname|7751410|94"
+      - "geodata.wallonie.be/id/Streetname|7751410|95"
+      - "geodata.wallonie.be/id/Streetname|7751410|96"
+      - "geodata.wallonie.be/id/Streetname|7751410|97"
+      - "geodata.wallonie.be/id/Streetname|7751410|99"
+      - "geodata.wallonie.be/id/Streetname|7751410|108"
+      - "geodata.wallonie.be/id/Streetname|7751410|110"
+      - "geodata.wallonie.be/id/Streetname|7751410|117"
+      - "geodata.wallonie.be/id/Streetname|7751410|119"
+      - "geodata.wallonie.be/id/Streetname|7751410|120"
+    notes: "Rue Sainte-Agathe — Vresse-sur-Semois (strict)"
+  - id: adv-hamlet-012
+    category: hamlet
+    subcategory: chassepierre-florenville
+    query: "chassepierre"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7747217|2"
+      - "geodata.wallonie.be/id/Streetname|7747217|3"
+      - "geodata.wallonie.be/id/Streetname|7747217|11"
+      - "geodata.wallonie.be/id/Streetname|7747217|13"
+      - "geodata.wallonie.be/id/Streetname|7747217|15"
+      - "geodata.wallonie.be/id/Streetname|7747217|22"
+      - "geodata.wallonie.be/id/Streetname|7747217|23"
+      - "geodata.wallonie.be/id/Streetname|7747217|27"
+    notes: "Rue de la Cure — Florenville (strict)"
+  - id: adv-hamlet-013
+    category: hamlet
+    subcategory: torgny-rouvroy
+    query: "torgny"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7748211|1"
+      - "geodata.wallonie.be/id/Streetname|7748211|6"
+      - "geodata.wallonie.be/id/Streetname|7748211|7"
+      - "geodata.wallonie.be/id/Streetname|7748211|8"
+      - "geodata.wallonie.be/id/Streetname|7748211|14"
+      - "geodata.wallonie.be/id/Streetname|7748211|16"
+      - "geodata.wallonie.be/id/Streetname|7748211|20"
+      - "geodata.wallonie.be/id/Streetname|7748211|22"
+    notes: "Rue Pêchières — Rouvroy (strict)"
+  - id: adv-hamlet-014
+    category: hamlet
+    subcategory: mirwart-saint-hubert
+    query: "mirwart"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7775199|2"
+    notes: "Halte de Mirwart — Saint-Hubert (strict)"
+  - id: adv-hamlet-015
+    category: hamlet
+    subcategory: weris-durbuy
+    query: "w\u00e9ris"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7743384|1A"
+      - "geodata.wallonie.be/id/Streetname|7743384|8"
+      - "geodata.wallonie.be/id/Streetname|7743384|10"
+      - "geodata.wallonie.be/id/Streetname|7743384|11"
+      - "geodata.wallonie.be/id/Streetname|7743384|18"
+      - "geodata.wallonie.be/id/Streetname|7743384|21"
+      - "geodata.wallonie.be/id/Streetname|7743384|27"
+      - "geodata.wallonie.be/id/Streetname|7743384|28"
+    notes: "Rue des Dolmens — Durbuy (strict)"
+  - id: adv-hamlet-016
+    category: hamlet
+    subcategory: olloy-viroinval
+    query: "olloy-sur-viroin"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7758173|1"
+      - "geodata.wallonie.be/id/Streetname|7758173|3"
+      - "geodata.wallonie.be/id/Streetname|7758173|3A"
+      - "geodata.wallonie.be/id/Streetname|7758173|4"
+      - "geodata.wallonie.be/id/Streetname|7758173|6"
+      - "geodata.wallonie.be/id/Streetname|7758173|9"
+      - "geodata.wallonie.be/id/Streetname|7758173|15"
+      - "geodata.wallonie.be/id/Streetname|7758173|17"
+      - "geodata.wallonie.be/id/Streetname|7758173|21"
+      - "geodata.wallonie.be/id/Streetname|7758173|23"
+    notes: "Route du Viroin — Viroinval (strict)"
+  - id: adv-hamlet-017
+    category: hamlet
+    subcategory: vierves-viroinval
+    query: "vierves-sur-viroin"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7758162|5"
+      - "geodata.wallonie.be/id/Streetname|7758162|6"
+      - "geodata.wallonie.be/id/Streetname|7758162|12"
+      - "geodata.wallonie.be/id/Streetname|7758162|18"
+      - "geodata.wallonie.be/id/Streetname|7758162|24"
+      - "geodata.wallonie.be/id/Streetname|7758162|29"
+      - "geodata.wallonie.be/id/Streetname|7758162|36"
+      - "geodata.wallonie.be/id/Streetname|7758162|37B"
+      - "geodata.wallonie.be/id/Streetname|7758162|45"
+      - "geodata.wallonie.be/id/Streetname|7758162|46"
+      - "geodata.wallonie.be/id/Streetname|7758162|63"
+      - "geodata.wallonie.be/id/Streetname|7758162|67"
+      - "geodata.wallonie.be/id/Streetname|7758162|68"
+      - "geodata.wallonie.be/id/Streetname|7758162|71"
+      - "geodata.wallonie.be/id/Streetname|7758162|73"
+      - "geodata.wallonie.be/id/Streetname|7758162|74"
+      - "geodata.wallonie.be/id/Streetname|7758162|81"
+      - "geodata.wallonie.be/id/Streetname|7758162|82"
+      - "geodata.wallonie.be/id/Streetname|7758162|86"
+      - "geodata.wallonie.be/id/Streetname|7758162|87"
+      - "geodata.wallonie.be/id/Streetname|7758162|88"
+      - "geodata.wallonie.be/id/Streetname|7758162|90"
+      - "geodata.wallonie.be/id/Streetname|7758162|104"
+      - "geodata.wallonie.be/id/Streetname|7758162|108"
+      - "geodata.wallonie.be/id/Streetname|7758162|109"
+      - "geodata.wallonie.be/id/Streetname|7758162|115"
+      - "geodata.wallonie.be/id/Streetname|7758162|123"
+      - "geodata.wallonie.be/id/Streetname|7758162|129"
+      - "geodata.wallonie.be/id/Streetname|7758162|131"
+      - "geodata.wallonie.be/id/Streetname|7758162|136"
+      - "geodata.wallonie.be/id/Streetname|7758162|146"
+    notes: "Parc Résidentiel La Jussière — Viroinval (strict)"
+  - id: adv-hamlet-018
+    category: hamlet
+    subcategory: treignes-viroinval
+    query: "treignes"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7758293|1"
+      - "geodata.wallonie.be/id/Streetname|7758293|7"
+      - "geodata.wallonie.be/id/Streetname|7758293|8"
+    notes: "Rue Malgré-Tout — Viroinval (strict)"
+  - id: adv-hamlet-019
+    category: hamlet
+    subcategory: roly-philippeville
+    query: "roly philippeville"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7757460|1"
+      - "geodata.wallonie.be/id/Streetname|7757460|2"
+      - "geodata.wallonie.be/id/Streetname|7757460|6"
+      - "geodata.wallonie.be/id/Streetname|7757460|10"
+      - "geodata.wallonie.be/id/Streetname|7757460|12"
+      - "geodata.wallonie.be/id/Streetname|7757460|18"
+      - "geodata.wallonie.be/id/Streetname|7757460|20"
+      - "geodata.wallonie.be/id/Streetname|7757460|24"
+      - "geodata.wallonie.be/id/Streetname|7757460|26"
+      - "geodata.wallonie.be/id/Streetname|7757460|28"
+      - "geodata.wallonie.be/id/Streetname|7757460|28A"
+      - "geodata.wallonie.be/id/Streetname|7757460|30"
+    notes: "Place de Roly — Philippeville (strict)"
+  - id: adv-hamlet-020
+    category: hamlet
+    subcategory: bellevaux-bouillon
+    query: "bellevaux bouillon"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7745144|1"
+      - "geodata.wallonie.be/id/Streetname|7745144|2"
+      - "geodata.wallonie.be/id/Streetname|7745144|3"
+      - "geodata.wallonie.be/id/Streetname|7745144|6"
+      - "geodata.wallonie.be/id/Streetname|7745144|7"
+      - "geodata.wallonie.be/id/Streetname|7745144|8"
+      - "geodata.wallonie.be/id/Streetname|7745144|9"
+      - "geodata.wallonie.be/id/Streetname|7745144|10"
+      - "geodata.wallonie.be/id/Streetname|7745144|11"
+      - "geodata.wallonie.be/id/Streetname|7745144|12"
+      - "geodata.wallonie.be/id/Streetname|7745144|13"
+      - "geodata.wallonie.be/id/Streetname|7745144|13A"
+      - "geodata.wallonie.be/id/Streetname|7745144|13B"
+      - "geodata.wallonie.be/id/Streetname|7745144|14"
+      - "geodata.wallonie.be/id/Streetname|7745144|16"
+      - "geodata.wallonie.be/id/Streetname|7745144|17"
+      - "geodata.wallonie.be/id/Streetname|7745144|18"
+      - "geodata.wallonie.be/id/Streetname|7745144|20"
+      - "geodata.wallonie.be/id/Streetname|7745144|21"
+      - "geodata.wallonie.be/id/Streetname|7745144|23A"
+      - "geodata.wallonie.be/id/Streetname|7745144|29"
+      - "geodata.wallonie.be/id/Streetname|7745144|32"
+      - "geodata.wallonie.be/id/Streetname|7745144|34"
+      - "geodata.wallonie.be/id/Streetname|7745144|36"
+      - "geodata.wallonie.be/id/Streetname|7745144|41"
+      - "geodata.wallonie.be/id/Streetname|7745144|45"
+    notes: "Route de Brienne — Bouillon (strict)"
+  - id: adv-hamlet-021
+    category: hamlet
+    subcategory: frahan-bouillon
+    query: "frahan"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7745186|2"
+      - "geodata.wallonie.be/id/Streetname|7745186|3"
+      - "geodata.wallonie.be/id/Streetname|7745186|4"
+      - "geodata.wallonie.be/id/Streetname|7745186|5"
+      - "geodata.wallonie.be/id/Streetname|7745186|6"
+      - "geodata.wallonie.be/id/Streetname|7745186|8"
+      - "geodata.wallonie.be/id/Streetname|7745186|9"
+      - "geodata.wallonie.be/id/Streetname|7745186|11"
+      - "geodata.wallonie.be/id/Streetname|7745186|12"
+      - "geodata.wallonie.be/id/Streetname|7745186|13"
+      - "geodata.wallonie.be/id/Streetname|7745186|13A"
+      - "geodata.wallonie.be/id/Streetname|7745186|14"
+      - "geodata.wallonie.be/id/Streetname|7745186|15"
+      - "geodata.wallonie.be/id/Streetname|7745186|16"
+      - "geodata.wallonie.be/id/Streetname|7745186|17"
+      - "geodata.wallonie.be/id/Streetname|7745186|18"
+      - "geodata.wallonie.be/id/Streetname|7745186|19"
+      - "geodata.wallonie.be/id/Streetname|7745186|21"
+      - "geodata.wallonie.be/id/Streetname|7745186|23"
+      - "geodata.wallonie.be/id/Streetname|7745186|25"
+      - "geodata.wallonie.be/id/Streetname|7745186|26"
+    notes: "Rue de la Passerelle — Bouillon (strict)"
+  - id: adv-hamlet-022
+    category: hamlet
+    subcategory: wibrin-houffalize
+    query: "wibrin"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7742691|2"
+      - "geodata.wallonie.be/id/Streetname|7742691|4"
+      - "geodata.wallonie.be/id/Streetname|7742691|4A"
+      - "geodata.wallonie.be/id/Streetname|7742691|10C"
+      - "geodata.wallonie.be/id/Streetname|7742691|15"
+      - "geodata.wallonie.be/id/Streetname|7742691|20"
+      - "geodata.wallonie.be/id/Streetname|7742691|26"
+      - "geodata.wallonie.be/id/Streetname|7742691|27"
+      - "geodata.wallonie.be/id/Streetname|7742691|29B"
+      - "geodata.wallonie.be/id/Streetname|7742691|31O"
+      - "geodata.wallonie.be/id/Streetname|7742691|31P"
+      - "geodata.wallonie.be/id/Streetname|7742691|32"
+    notes: "Grande Mormont — Houffalize (strict)"
+  - id: adv-hamlet-023
+    category: hamlet
+    subcategory: lompret-chimay
+    query: "lompret"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7756750|23"
+      - "geodata.wallonie.be/id/Streetname|7756750|25"
+      - "geodata.wallonie.be/id/Streetname|7756750|27"
+      - "geodata.wallonie.be/id/Streetname|7756750|29"
+    notes: "Route de Lompret — Couvin (strict)"
+  - id: adv-hamlet-024
+    category: hamlet
+    subcategory: aubechies-beloeil
+    query: "aubechies"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7707860|2"
+    notes: "Place d'Aubechies — Beloeil (strict)"
+  - id: adv-hamlet-025
+    category: hamlet
+    subcategory: ny-hotton
+    query: "ny hotton"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7743673|3"
+      - "geodata.wallonie.be/id/Streetname|7743673|4"
+      - "geodata.wallonie.be/id/Streetname|7743673|5"
+      - "geodata.wallonie.be/id/Streetname|7743673|6"
+      - "geodata.wallonie.be/id/Streetname|7743673|6A"
+      - "geodata.wallonie.be/id/Streetname|7743673|7"
+      - "geodata.wallonie.be/id/Streetname|7743673|11"
+      - "geodata.wallonie.be/id/Streetname|7743673|12"
+      - "geodata.wallonie.be/id/Streetname|7743673|24"
+      - "geodata.wallonie.be/id/Streetname|7743673|25"
+      - "geodata.wallonie.be/id/Streetname|7743673|26"
+      - "geodata.wallonie.be/id/Streetname|7743673|27"
+      - "geodata.wallonie.be/id/Streetname|7743673|29"
+      - "geodata.wallonie.be/id/Streetname|7743673|38"
+      - "geodata.wallonie.be/id/Streetname|7743673|41"
+      - "geodata.wallonie.be/id/Streetname|7743673|43"
+      - "geodata.wallonie.be/id/Streetname|7743673|45"
+      - "geodata.wallonie.be/id/Streetname|7743673|46"
+      - "geodata.wallonie.be/id/Streetname|7743673|47"
+      - "geodata.wallonie.be/id/Streetname|7743673|48"
+      - "geodata.wallonie.be/id/Streetname|7743673|49"
+      - "geodata.wallonie.be/id/Streetname|7743673|52"
+      - "geodata.wallonie.be/id/Streetname|7743673|56"
+      - "geodata.wallonie.be/id/Streetname|7743673|62"
+      - "geodata.wallonie.be/id/Streetname|7743673|68"
+      - "geodata.wallonie.be/id/Streetname|7743673|81"
+    notes: "Rue de Ny — Hotton (strict)"
+  - id: adv-hamlet-026
+    category: hamlet
+    subcategory: ave-namur
+    query: "ave namur"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7746516|3"
+      - "geodata.wallonie.be/id/Streetname|7746516|6"
+      - "geodata.wallonie.be/id/Streetname|7746516|7"
+      - "geodata.wallonie.be/id/Streetname|7746516|8"
+      - "geodata.wallonie.be/id/Streetname|7746516|9"
+      - "geodata.wallonie.be/id/Streetname|7746516|10"
+      - "geodata.wallonie.be/id/Streetname|7746516|11"
+      - "geodata.wallonie.be/id/Streetname|7746516|13B"
+      - "geodata.wallonie.be/id/Streetname|7746516|13C"
+      - "geodata.wallonie.be/id/Streetname|7746516|17"
+      - "geodata.wallonie.be/id/Streetname|7746516|18"
+      - "geodata.wallonie.be/id/Streetname|7746516|22"
+      - "geodata.wallonie.be/id/Streetname|7746516|23"
+      - "geodata.wallonie.be/id/Streetname|7746516|23A"
+    notes: "Chemin d'Ave — Wellin (fuzzy)"
+  - id: adv-hamlet-027
+    category: hamlet
+    subcategory: celles-houyet
+    query: "celles houyet"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7750142|1"
+    notes: "Soinne — Houyet (strict)"
+  - id: adv-hamlet-028
+    category: hamlet
+    subcategory: furfooz-dinant
+    query: "furfooz"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7750058|1"
+      - "geodata.wallonie.be/id/Streetname|7750058|2"
+    notes: "Rue de Furfooz — Houyet (strict)"
+  - id: adv-hamlet-029
+    category: hamlet
+    subcategory: limbourg-dolhain
+    query: "dolhain limbourg"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7735228|1"
+      - "geodata.wallonie.be/id/Streetname|7735228|2"
+      - "geodata.wallonie.be/id/Streetname|7735228|2A"
+      - "geodata.wallonie.be/id/Streetname|7735228|3"
+      - "geodata.wallonie.be/id/Streetname|7735228|4"
+      - "geodata.wallonie.be/id/Streetname|7735228|5"
+      - "geodata.wallonie.be/id/Streetname|7735228|7"
+      - "geodata.wallonie.be/id/Streetname|7735228|8"
+      - "geodata.wallonie.be/id/Streetname|7735228|9"
+      - "geodata.wallonie.be/id/Streetname|7735228|10"
+      - "geodata.wallonie.be/id/Streetname|7735228|11"
+      - "geodata.wallonie.be/id/Streetname|7735228|12"
+      - "geodata.wallonie.be/id/Streetname|7735228|13"
+      - "geodata.wallonie.be/id/Streetname|7735228|14"
+      - "geodata.wallonie.be/id/Streetname|7735228|14A"
+      - "geodata.wallonie.be/id/Streetname|7735228|15"
+      - "geodata.wallonie.be/id/Streetname|7735228|16A"
+      - "geodata.wallonie.be/id/Streetname|7735228|16B"
+      - "geodata.wallonie.be/id/Streetname|7735228|16D"
+      - "geodata.wallonie.be/id/Streetname|7735228|17"
+      - "geodata.wallonie.be/id/Streetname|7735228|18"
+      - "geodata.wallonie.be/id/Streetname|7735228|19"
+      - "geodata.wallonie.be/id/Streetname|7735228|20"
+      - "geodata.wallonie.be/id/Streetname|7735228|21"
+      - "geodata.wallonie.be/id/Streetname|7735228|22"
+      - "geodata.wallonie.be/id/Streetname|7735228|23"
+      - "geodata.wallonie.be/id/Streetname|7735228|24"
+      - "geodata.wallonie.be/id/Streetname|7735228|25"
+      - "geodata.wallonie.be/id/Streetname|7735228|26"
+      - "geodata.wallonie.be/id/Streetname|7735228|26A"
+      - "geodata.wallonie.be/id/Streetname|7735228|26B"
+      - "geodata.wallonie.be/id/Streetname|7735228|27"
+      - "geodata.wallonie.be/id/Streetname|7735228|28"
+      - "geodata.wallonie.be/id/Streetname|7735228|28A"
+      - "geodata.wallonie.be/id/Streetname|7735228|29"
+      - "geodata.wallonie.be/id/Streetname|7735228|30"
+      - "geodata.wallonie.be/id/Streetname|7735228|31"
+      - "geodata.wallonie.be/id/Streetname|7735228|32"
+      - "geodata.wallonie.be/id/Streetname|7735228|33"
+      - "geodata.wallonie.be/id/Streetname|7735228|34"
+      - "geodata.wallonie.be/id/Streetname|7735228|35"
+      - "geodata.wallonie.be/id/Streetname|7735228|36"
+      - "geodata.wallonie.be/id/Streetname|7735228|37"
+      - "geodata.wallonie.be/id/Streetname|7735228|39"
+      - "geodata.wallonie.be/id/Streetname|7735228|40"
+      - "geodata.wallonie.be/id/Streetname|7735228|41"
+      - "geodata.wallonie.be/id/Streetname|7735228|51"
+      - "geodata.wallonie.be/id/Streetname|7735228|53"
+    notes: "Route de Dolhain — Baelen (fuzzy)"
+  - id: adv-hamlet-030
+    category: hamlet
+    subcategory: xhignesse-hamoir
+    query: "xhignesse"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7725158|1"
+      - "geodata.wallonie.be/id/Streetname|7725158|2"
+      - "geodata.wallonie.be/id/Streetname|7725158|2B"
+      - "geodata.wallonie.be/id/Streetname|7725158|3"
+      - "geodata.wallonie.be/id/Streetname|7725158|3A"
+      - "geodata.wallonie.be/id/Streetname|7725158|4"
+      - "geodata.wallonie.be/id/Streetname|7725158|4A"
+      - "geodata.wallonie.be/id/Streetname|7725158|5"
+      - "geodata.wallonie.be/id/Streetname|7725158|5A"
+      - "geodata.wallonie.be/id/Streetname|7725158|5B"
+      - "geodata.wallonie.be/id/Streetname|7725158|5C"
+      - "geodata.wallonie.be/id/Streetname|7725158|6"
+      - "geodata.wallonie.be/id/Streetname|7725158|6A"
+      - "geodata.wallonie.be/id/Streetname|7725158|6B"
+      - "geodata.wallonie.be/id/Streetname|7725158|7"
+      - "geodata.wallonie.be/id/Streetname|7725158|7B"
+      - "geodata.wallonie.be/id/Streetname|7725158|8"
+      - "geodata.wallonie.be/id/Streetname|7725158|8A"
+      - "geodata.wallonie.be/id/Streetname|7725158|9"
+      - "geodata.wallonie.be/id/Streetname|7725158|9A"
+      - "geodata.wallonie.be/id/Streetname|7725158|9B"
+      - "geodata.wallonie.be/id/Streetname|7725158|9C"
+      - "geodata.wallonie.be/id/Streetname|7725158|10"
+      - "geodata.wallonie.be/id/Streetname|7725158|10A"
+      - "geodata.wallonie.be/id/Streetname|7725158|11"
+      - "geodata.wallonie.be/id/Streetname|7725158|12"
+      - "geodata.wallonie.be/id/Streetname|7725158|13"
+      - "geodata.wallonie.be/id/Streetname|7725158|14"
+      - "geodata.wallonie.be/id/Streetname|7725158|15"
+      - "geodata.wallonie.be/id/Streetname|7725158|17"
+      - "geodata.wallonie.be/id/Streetname|7725158|19"
+      - "geodata.wallonie.be/id/Streetname|7725158|21"
+      - "geodata.wallonie.be/id/Streetname|7725158|23"
+      - "geodata.wallonie.be/id/Streetname|7725158|24"
+      - "geodata.wallonie.be/id/Streetname|7725158|25"
+      - "geodata.wallonie.be/id/Streetname|7725158|26"
+      - "geodata.wallonie.be/id/Streetname|7725158|27"
+    notes: "Hameau de Xhignesse — Hamoir (strict)"
+
+# ---------- DE zone (9 German-speaking communes) — 9 entries
+  - id: adv-de_zone-001
+    category: de_zone
+    subcategory: eupen-63023
+    query: "Rathausplatz Eupen 4700"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7735881|1"
+      - "geodata.wallonie.be/id/Streetname|7735881|2"
+      - "geodata.wallonie.be/id/Streetname|7735881|3"
+      - "geodata.wallonie.be/id/Streetname|7735881|4"
+      - "geodata.wallonie.be/id/Streetname|7735881|5"
+      - "geodata.wallonie.be/id/Streetname|7735881|7"
+      - "geodata.wallonie.be/id/Streetname|7735881|8"
+      - "geodata.wallonie.be/id/Streetname|7735881|9"
+      - "geodata.wallonie.be/id/Streetname|7735881|10"
+      - "geodata.wallonie.be/id/Streetname|7735881|11"
+      - "geodata.wallonie.be/id/Streetname|7735881|13"
+      - "geodata.wallonie.be/id/Streetname|7735881|14"
+      - "geodata.wallonie.be/id/Streetname|7735881|14A"
+      - "geodata.wallonie.be/id/Streetname|7735881|15"
+    notes: "Place de l'Hôtel de Ville — Eupen (strict)"
+  - id: adv-de_zone-002
+    category: de_zone
+    subcategory: kelmis-63040
+    query: "Maxstra\u00dfe Kelmis"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7736410|3"
+      - "geodata.wallonie.be/id/Streetname|7736410|3A"
+      - "geodata.wallonie.be/id/Streetname|7736410|4"
+      - "geodata.wallonie.be/id/Streetname|7736410|5"
+      - "geodata.wallonie.be/id/Streetname|7736410|6"
+      - "geodata.wallonie.be/id/Streetname|7736410|7"
+      - "geodata.wallonie.be/id/Streetname|7736410|8"
+      - "geodata.wallonie.be/id/Streetname|7736410|9"
+      - "geodata.wallonie.be/id/Streetname|7736410|10"
+      - "geodata.wallonie.be/id/Streetname|7736410|10A"
+      - "geodata.wallonie.be/id/Streetname|7736410|12"
+      - "geodata.wallonie.be/id/Streetname|7736410|13"
+      - "geodata.wallonie.be/id/Streetname|7736410|14"
+      - "geodata.wallonie.be/id/Streetname|7736410|16"
+      - "geodata.wallonie.be/id/Streetname|7736410|18"
+      - "geodata.wallonie.be/id/Streetname|7736410|20"
+      - "geodata.wallonie.be/id/Streetname|7736410|22"
+      - "geodata.wallonie.be/id/Streetname|7736410|24"
+      - "geodata.wallonie.be/id/Streetname|7736410|26"
+      - "geodata.wallonie.be/id/Streetname|7736410|28"
+      - "geodata.wallonie.be/id/Streetname|7736410|30"
+      - "geodata.wallonie.be/id/Streetname|7736410|32"
+      - "geodata.wallonie.be/id/Streetname|7736410|34"
+      - "geodata.wallonie.be/id/Streetname|7736410|36"
+      - "geodata.wallonie.be/id/Streetname|7736410|38"
+      - "geodata.wallonie.be/id/Streetname|7736410|40"
+      - "geodata.wallonie.be/id/Streetname|7736410|42"
+    notes: "Rue Max — La Calamine (strict)"
+  - id: adv-de_zone-003
+    category: de_zone
+    subcategory: lontzen-63048
+    query: "Aachener Stra\u00dfe Lontzen"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7736759|56"
+      - "geodata.wallonie.be/id/Streetname|7736759|58"
+      - "geodata.wallonie.be/id/Streetname|7736759|68"
+    notes: "Rue Marie-Thérèse — Lontzen (fuzzy)"
+  - id: adv-de_zone-004
+    category: de_zone
+    subcategory: raeren-63061
+    query: "Hauptstra\u00dfe Raeren"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7737466|2"
+      - "geodata.wallonie.be/id/Streetname|7737466|5"
+      - "geodata.wallonie.be/id/Streetname|7737466|7"
+      - "geodata.wallonie.be/id/Streetname|7737466|10"
+      - "geodata.wallonie.be/id/Streetname|7737466|12"
+      - "geodata.wallonie.be/id/Streetname|7737466|15"
+      - "geodata.wallonie.be/id/Streetname|7737466|16"
+      - "geodata.wallonie.be/id/Streetname|7737466|18"
+      - "geodata.wallonie.be/id/Streetname|7737466|19"
+      - "geodata.wallonie.be/id/Streetname|7737466|20"
+      - "geodata.wallonie.be/id/Streetname|7737466|21"
+      - "geodata.wallonie.be/id/Streetname|7737466|22"
+      - "geodata.wallonie.be/id/Streetname|7737466|29"
+      - "geodata.wallonie.be/id/Streetname|7737466|30"
+      - "geodata.wallonie.be/id/Streetname|7737466|32"
+      - "geodata.wallonie.be/id/Streetname|7737466|34"
+      - "geodata.wallonie.be/id/Streetname|7737466|35"
+      - "geodata.wallonie.be/id/Streetname|7737466|36"
+      - "geodata.wallonie.be/id/Streetname|7737466|36A"
+      - "geodata.wallonie.be/id/Streetname|7737466|37"
+      - "geodata.wallonie.be/id/Streetname|7737466|38"
+      - "geodata.wallonie.be/id/Streetname|7737466|44"
+      - "geodata.wallonie.be/id/Streetname|7737466|45A"
+      - "geodata.wallonie.be/id/Streetname|7737466|50"
+      - "geodata.wallonie.be/id/Streetname|7737466|51"
+      - "geodata.wallonie.be/id/Streetname|7737466|55"
+      - "geodata.wallonie.be/id/Streetname|7737466|56A"
+      - "geodata.wallonie.be/id/Streetname|7737466|57"
+      - "geodata.wallonie.be/id/Streetname|7737466|58"
+      - "geodata.wallonie.be/id/Streetname|7737466|59"
+      - "geodata.wallonie.be/id/Streetname|7737466|64"
+      - "geodata.wallonie.be/id/Streetname|7737466|65"
+      - "geodata.wallonie.be/id/Streetname|7737466|66"
+      - "geodata.wallonie.be/id/Streetname|7737466|67"
+      - "geodata.wallonie.be/id/Streetname|7737466|70A"
+      - "geodata.wallonie.be/id/Streetname|7737466|70B"
+      - "geodata.wallonie.be/id/Streetname|7737466|71"
+      - "geodata.wallonie.be/id/Streetname|7737466|72"
+      - "geodata.wallonie.be/id/Streetname|7737466|73"
+      - "geodata.wallonie.be/id/Streetname|7737466|73A"
+      - "geodata.wallonie.be/id/Streetname|7737466|76"
+      - "geodata.wallonie.be/id/Streetname|7737466|77"
+      - "geodata.wallonie.be/id/Streetname|7737466|80"
+      - "geodata.wallonie.be/id/Streetname|7737466|81"
+      - "geodata.wallonie.be/id/Streetname|7737466|83"
+      - "geodata.wallonie.be/id/Streetname|7737466|85"
+      - "geodata.wallonie.be/id/Streetname|7737466|85A"
+      - "geodata.wallonie.be/id/Streetname|7737466|85B"
+      - "geodata.wallonie.be/id/Streetname|7737466|91"
+      - "geodata.wallonie.be/id/Streetname|7737466|92"
+      - "geodata.wallonie.be/id/Streetname|7737466|94"
+      - "geodata.wallonie.be/id/Streetname|7737466|95"
+      - "geodata.wallonie.be/id/Streetname|7737466|96"
+      - "geodata.wallonie.be/id/Streetname|7737466|97"
+      - "geodata.wallonie.be/id/Streetname|7737466|98"
+      - "geodata.wallonie.be/id/Streetname|7737466|99"
+      - "geodata.wallonie.be/id/Streetname|7737466|99A"
+      - "geodata.wallonie.be/id/Streetname|7737466|99B"
+      - "geodata.wallonie.be/id/Streetname|7737466|100"
+      - "geodata.wallonie.be/id/Streetname|7737466|101"
+      - "geodata.wallonie.be/id/Streetname|7737466|102"
+      - "geodata.wallonie.be/id/Streetname|7737466|103"
+      - "geodata.wallonie.be/id/Streetname|7737466|104"
+      - "geodata.wallonie.be/id/Streetname|7737466|108"
+      - "geodata.wallonie.be/id/Streetname|7737466|108A"
+      - "geodata.wallonie.be/id/Streetname|7737466|110"
+      - "geodata.wallonie.be/id/Streetname|7737466|111"
+      - "geodata.wallonie.be/id/Streetname|7737466|112"
+      - "geodata.wallonie.be/id/Streetname|7737466|113"
+      - "geodata.wallonie.be/id/Streetname|7737466|114"
+      - "geodata.wallonie.be/id/Streetname|7737466|117B"
+      - "geodata.wallonie.be/id/Streetname|7737466|117C"
+      - "geodata.wallonie.be/id/Streetname|7737466|118"
+      - "geodata.wallonie.be/id/Streetname|7737466|119C"
+      - "geodata.wallonie.be/id/Streetname|7737466|120"
+      - "geodata.wallonie.be/id/Streetname|7737466|121"
+      - "geodata.wallonie.be/id/Streetname|7737466|121A"
+      - "geodata.wallonie.be/id/Streetname|7737466|122"
+      - "geodata.wallonie.be/id/Streetname|7737466|125"
+      - "geodata.wallonie.be/id/Streetname|7737466|126"
+      - "geodata.wallonie.be/id/Streetname|7737466|128"
+      - "geodata.wallonie.be/id/Streetname|7737466|135"
+      - "geodata.wallonie.be/id/Streetname|7737466|137"
+      - "geodata.wallonie.be/id/Streetname|7737466|139"
+      - "geodata.wallonie.be/id/Streetname|7737466|147"
+      - "geodata.wallonie.be/id/Streetname|7737466|149"
+      - "geodata.wallonie.be/id/Streetname|7737466|153"
+      - "geodata.wallonie.be/id/Streetname|7737466|155"
+      - "geodata.wallonie.be/id/Streetname|7737466|157"
+    notes: "Hauptstraße — Raeren (strict)"
+  - id: adv-de_zone-005
+    category: de_zone
+    subcategory: amel-63001
+    query: "Hauptstra\u00dfe Amel"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7734922|7"
+      - "geodata.wallonie.be/id/Streetname|7734922|8"
+      - "geodata.wallonie.be/id/Streetname|7734922|11"
+      - "geodata.wallonie.be/id/Streetname|7734922|13"
+      - "geodata.wallonie.be/id/Streetname|7734922|24"
+      - "geodata.wallonie.be/id/Streetname|7734922|24A"
+      - "geodata.wallonie.be/id/Streetname|7734922|28"
+      - "geodata.wallonie.be/id/Streetname|7734922|28A"
+      - "geodata.wallonie.be/id/Streetname|7734922|30"
+      - "geodata.wallonie.be/id/Streetname|7734922|30A"
+      - "geodata.wallonie.be/id/Streetname|7734922|31"
+      - "geodata.wallonie.be/id/Streetname|7734922|34"
+      - "geodata.wallonie.be/id/Streetname|7734922|35"
+      - "geodata.wallonie.be/id/Streetname|7734922|37"
+      - "geodata.wallonie.be/id/Streetname|7734922|38"
+      - "geodata.wallonie.be/id/Streetname|7734922|40"
+      - "geodata.wallonie.be/id/Streetname|7734922|52"
+      - "geodata.wallonie.be/id/Streetname|7734922|54"
+      - "geodata.wallonie.be/id/Streetname|7734922|56"
+      - "geodata.wallonie.be/id/Streetname|7734922|61"
+    notes: "Hauptstraße — Amblève (strict)"
+  - id: adv-de_zone-006
+    category: de_zone
+    subcategory: buellingen-63012
+    query: "Bahnhofstra\u00dfe B\u00fcllingen"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7735308|1"
+      - "geodata.wallonie.be/id/Streetname|7735308|3"
+      - "geodata.wallonie.be/id/Streetname|7735308|4"
+      - "geodata.wallonie.be/id/Streetname|7735308|5"
+      - "geodata.wallonie.be/id/Streetname|7735308|6"
+      - "geodata.wallonie.be/id/Streetname|7735308|7"
+      - "geodata.wallonie.be/id/Streetname|7735308|7A"
+      - "geodata.wallonie.be/id/Streetname|7735308|8"
+      - "geodata.wallonie.be/id/Streetname|7735308|9"
+      - "geodata.wallonie.be/id/Streetname|7735308|10"
+      - "geodata.wallonie.be/id/Streetname|7735308|13"
+      - "geodata.wallonie.be/id/Streetname|7735308|17"
+      - "geodata.wallonie.be/id/Streetname|7735308|19"
+      - "geodata.wallonie.be/id/Streetname|7735308|20"
+      - "geodata.wallonie.be/id/Streetname|7735308|21"
+      - "geodata.wallonie.be/id/Streetname|7735308|22"
+      - "geodata.wallonie.be/id/Streetname|7735308|23"
+      - "geodata.wallonie.be/id/Streetname|7735308|25"
+    notes: "Bahnhofstraße — Bullange (strict)"
+  - id: adv-de_zone-007
+    category: de_zone
+    subcategory: burg-reuland-63013
+    query: "Burg-Reuland 4790"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7763291|5"
+      - "geodata.wallonie.be/id/Streetname|7763291|7"
+      - "geodata.wallonie.be/id/Streetname|7763291|11"
+      - "geodata.wallonie.be/id/Streetname|7763291|14"
+      - "geodata.wallonie.be/id/Streetname|7763291|21"
+      - "geodata.wallonie.be/id/Streetname|7763291|43"
+      - "geodata.wallonie.be/id/Streetname|7763291|45"
+      - "geodata.wallonie.be/id/Streetname|7763291|54"
+    notes: "Peckeneck — Burg-Reuland (strict)"
+  - id: adv-de_zone-008
+    category: de_zone
+    subcategory: buetgenbach-63087
+    query: "Bahnhofstra\u00dfe B\u00fctgenbach"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7735460|1"
+      - "geodata.wallonie.be/id/Streetname|7735460|2"
+      - "geodata.wallonie.be/id/Streetname|7735460|2A"
+      - "geodata.wallonie.be/id/Streetname|7735460|3"
+      - "geodata.wallonie.be/id/Streetname|7735460|3A"
+      - "geodata.wallonie.be/id/Streetname|7735460|4"
+      - "geodata.wallonie.be/id/Streetname|7735460|5"
+      - "geodata.wallonie.be/id/Streetname|7735460|6"
+      - "geodata.wallonie.be/id/Streetname|7735460|6A"
+      - "geodata.wallonie.be/id/Streetname|7735460|7"
+      - "geodata.wallonie.be/id/Streetname|7735460|8"
+      - "geodata.wallonie.be/id/Streetname|7735460|8A"
+      - "geodata.wallonie.be/id/Streetname|7735460|9"
+      - "geodata.wallonie.be/id/Streetname|7735460|11"
+      - "geodata.wallonie.be/id/Streetname|7735460|12"
+      - "geodata.wallonie.be/id/Streetname|7735460|13"
+      - "geodata.wallonie.be/id/Streetname|7735460|14"
+      - "geodata.wallonie.be/id/Streetname|7735460|15"
+      - "geodata.wallonie.be/id/Streetname|7735460|16"
+      - "geodata.wallonie.be/id/Streetname|7735460|17"
+      - "geodata.wallonie.be/id/Streetname|7735460|18A"
+      - "geodata.wallonie.be/id/Streetname|7735460|19"
+      - "geodata.wallonie.be/id/Streetname|7735460|19A"
+      - "geodata.wallonie.be/id/Streetname|7735460|20"
+      - "geodata.wallonie.be/id/Streetname|7735460|21"
+      - "geodata.wallonie.be/id/Streetname|7735460|22"
+      - "geodata.wallonie.be/id/Streetname|7735460|25"
+      - "geodata.wallonie.be/id/Streetname|7735460|25A"
+      - "geodata.wallonie.be/id/Streetname|7735460|26"
+      - "geodata.wallonie.be/id/Streetname|7735460|27"
+      - "geodata.wallonie.be/id/Streetname|7735460|30"
+      - "geodata.wallonie.be/id/Streetname|7735460|31"
+      - "geodata.wallonie.be/id/Streetname|7735460|32"
+      - "geodata.wallonie.be/id/Streetname|7735460|34"
+      - "geodata.wallonie.be/id/Streetname|7735460|35"
+      - "geodata.wallonie.be/id/Streetname|7735460|37"
+      - "geodata.wallonie.be/id/Streetname|7735460|38"
+      - "geodata.wallonie.be/id/Streetname|7735460|39"
+      - "geodata.wallonie.be/id/Streetname|7735460|40"
+      - "geodata.wallonie.be/id/Streetname|7735460|41"
+      - "geodata.wallonie.be/id/Streetname|7735460|43"
+      - "geodata.wallonie.be/id/Streetname|7735460|44"
+      - "geodata.wallonie.be/id/Streetname|7735460|45"
+      - "geodata.wallonie.be/id/Streetname|7735460|47"
+      - "geodata.wallonie.be/id/Streetname|7735460|52"
+      - "geodata.wallonie.be/id/Streetname|7735460|54"
+      - "geodata.wallonie.be/id/Streetname|7735460|55"
+      - "geodata.wallonie.be/id/Streetname|7735460|55A"
+      - "geodata.wallonie.be/id/Streetname|7735460|55B"
+      - "geodata.wallonie.be/id/Streetname|7735460|55C"
+      - "geodata.wallonie.be/id/Streetname|7735460|55D"
+      - "geodata.wallonie.be/id/Streetname|7735460|56"
+      - "geodata.wallonie.be/id/Streetname|7735460|59"
+      - "geodata.wallonie.be/id/Streetname|7735460|60"
+      - "geodata.wallonie.be/id/Streetname|7735460|61"
+      - "geodata.wallonie.be/id/Streetname|7735460|61A"
+      - "geodata.wallonie.be/id/Streetname|7735460|61B"
+      - "geodata.wallonie.be/id/Streetname|7735460|62"
+      - "geodata.wallonie.be/id/Streetname|7735460|63"
+      - "geodata.wallonie.be/id/Streetname|7735460|66"
+      - "geodata.wallonie.be/id/Streetname|7735460|67"
+      - "geodata.wallonie.be/id/Streetname|7735460|68"
+      - "geodata.wallonie.be/id/Streetname|7735460|71"
+      - "geodata.wallonie.be/id/Streetname|7735460|72"
+      - "geodata.wallonie.be/id/Streetname|7735460|73"
+      - "geodata.wallonie.be/id/Streetname|7735460|74"
+      - "geodata.wallonie.be/id/Streetname|7735460|75"
+      - "geodata.wallonie.be/id/Streetname|7735460|77"
+      - "geodata.wallonie.be/id/Streetname|7735460|77A"
+      - "geodata.wallonie.be/id/Streetname|7735460|78"
+      - "geodata.wallonie.be/id/Streetname|7735460|79"
+      - "geodata.wallonie.be/id/Streetname|7735460|80"
+      - "geodata.wallonie.be/id/Streetname|7735460|81"
+      - "geodata.wallonie.be/id/Streetname|7735460|83"
+      - "geodata.wallonie.be/id/Streetname|7735460|84"
+      - "geodata.wallonie.be/id/Streetname|7735460|85"
+      - "geodata.wallonie.be/id/Streetname|7735460|87"
+      - "geodata.wallonie.be/id/Streetname|7735460|89"
+      - "geodata.wallonie.be/id/Streetname|7735460|91"
+      - "geodata.wallonie.be/id/Streetname|7735460|93"
+      - "geodata.wallonie.be/id/Streetname|7735460|95"
+    notes: "Bahnhofstraße — Butgenbach (strict)"
+  - id: adv-de_zone-009
+    category: de_zone
+    subcategory: sankt-vith-63067
+    query: "Hauptstra\u00dfe Sankt Vith"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7737666|4"
+      - "geodata.wallonie.be/id/Streetname|7737666|10"
+      - "geodata.wallonie.be/id/Streetname|7737666|11"
+      - "geodata.wallonie.be/id/Streetname|7737666|12"
+      - "geodata.wallonie.be/id/Streetname|7737666|13"
+      - "geodata.wallonie.be/id/Streetname|7737666|15"
+      - "geodata.wallonie.be/id/Streetname|7737666|16"
+      - "geodata.wallonie.be/id/Streetname|7737666|18"
+      - "geodata.wallonie.be/id/Streetname|7737666|18A"
+      - "geodata.wallonie.be/id/Streetname|7737666|20"
+      - "geodata.wallonie.be/id/Streetname|7737666|21"
+      - "geodata.wallonie.be/id/Streetname|7737666|23"
+      - "geodata.wallonie.be/id/Streetname|7737666|24"
+      - "geodata.wallonie.be/id/Streetname|7737666|25"
+      - "geodata.wallonie.be/id/Streetname|7737666|26"
+      - "geodata.wallonie.be/id/Streetname|7737666|27"
+      - "geodata.wallonie.be/id/Streetname|7737666|28"
+      - "geodata.wallonie.be/id/Streetname|7737666|29"
+      - "geodata.wallonie.be/id/Streetname|7737666|33"
+      - "geodata.wallonie.be/id/Streetname|7737666|34"
+      - "geodata.wallonie.be/id/Streetname|7737666|35"
+      - "geodata.wallonie.be/id/Streetname|7737666|37"
+      - "geodata.wallonie.be/id/Streetname|7737666|38"
+      - "geodata.wallonie.be/id/Streetname|7737666|39"
+      - "geodata.wallonie.be/id/Streetname|7737666|40"
+      - "geodata.wallonie.be/id/Streetname|7737666|45"
+      - "geodata.wallonie.be/id/Streetname|7737666|47"
+      - "geodata.wallonie.be/id/Streetname|7737666|49"
+      - "geodata.wallonie.be/id/Streetname|7737666|50"
+      - "geodata.wallonie.be/id/Streetname|7737666|52"
+      - "geodata.wallonie.be/id/Streetname|7737666|54"
+      - "geodata.wallonie.be/id/Streetname|7737666|55"
+      - "geodata.wallonie.be/id/Streetname|7737666|56"
+      - "geodata.wallonie.be/id/Streetname|7737666|59"
+      - "geodata.wallonie.be/id/Streetname|7737666|62"
+      - "geodata.wallonie.be/id/Streetname|7737666|63"
+      - "geodata.wallonie.be/id/Streetname|7737666|66"
+      - "geodata.wallonie.be/id/Streetname|7737666|67"
+      - "geodata.wallonie.be/id/Streetname|7737666|68A"
+      - "geodata.wallonie.be/id/Streetname|7737666|70"
+      - "geodata.wallonie.be/id/Streetname|7737666|71"
+      - "geodata.wallonie.be/id/Streetname|7737666|73"
+      - "geodata.wallonie.be/id/Streetname|7737666|74"
+      - "geodata.wallonie.be/id/Streetname|7737666|77"
+      - "geodata.wallonie.be/id/Streetname|7737666|78"
+      - "geodata.wallonie.be/id/Streetname|7737666|79A"
+      - "geodata.wallonie.be/id/Streetname|7737666|81"
+      - "geodata.wallonie.be/id/Streetname|7737666|83"
+      - "geodata.wallonie.be/id/Streetname|7737666|86"
+      - "geodata.wallonie.be/id/Streetname|7737666|87"
+      - "geodata.wallonie.be/id/Streetname|7737666|89"
+      - "geodata.wallonie.be/id/Streetname|7737666|89A"
+      - "geodata.wallonie.be/id/Streetname|7737666|90"
+      - "geodata.wallonie.be/id/Streetname|7737666|92"
+      - "geodata.wallonie.be/id/Streetname|7737666|93"
+      - "geodata.wallonie.be/id/Streetname|7737666|94"
+      - "geodata.wallonie.be/id/Streetname|7737666|95A"
+      - "geodata.wallonie.be/id/Streetname|7737666|96"
+      - "geodata.wallonie.be/id/Streetname|7737666|97"
+      - "geodata.wallonie.be/id/Streetname|7737666|101"
+      - "geodata.wallonie.be/id/Streetname|7737666|103"
+    notes: "Hauptstrasse — Saint-Vith (strict)"
+
+# ---------- Facilités (Brussels periphery) — 6 entries
+  - id: adv-facilites-001
+    category: facilites
+    subcategory: drogenbos-23098
+    query: "Grote Baan Drogenbos"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|7"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|10"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|14"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|16"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|17"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|22"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|26A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|26E"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|26F"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|29"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|37"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|42"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|55"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|65"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|75"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|83A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|91"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|93"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|98"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|104"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|106"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|107"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|119"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|121"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|130"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|134"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|151"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|152"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|165"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|170"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|172"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|174"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|176"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|195"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|197"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|199"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|224"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|225"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|226"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|227"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|234"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|245"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|247"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|249"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|251"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|287"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|289"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|293"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|309"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|316"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|323"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|329"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|334"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|336"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|340"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|359"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|367"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|369"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|379"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|393"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|395"
+      - "https://data.vlaanderen.be/id/straatnaam/|30394|323_1"
+    notes: "Grote Baan — Drogenbos (strict)"
+  - id: adv-facilites-002
+    category: facilites
+    subcategory: kraainem-23099
+    query: "Wezembeeklaan Kraainem"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|28"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|37"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|38"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|39"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|41"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|43"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|48"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|51"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|52"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|55"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|57"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|58"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|59"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|61"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|66"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|83"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|86"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|88"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|89"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|91"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|93"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|100"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|102"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|104"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|106"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|110"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|112"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|114"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|116"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|118"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|120"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|155"
+      - "https://data.vlaanderen.be/id/straatnaam/|30578|157"
+    notes: "Wezembeeklaan — Kraainem (strict)"
+  - id: adv-facilites-003
+    category: facilites
+    subcategory: linkebeek-23100
+    query: "Hollebeekstraat Linkebeek"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|9"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|12"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|17"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|19"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|27"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|57B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|63"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|71"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|72"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|74"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|78"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|90"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|100"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|102"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|110"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|120"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|122"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|130"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|140"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|155"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|157"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|160B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|163"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|163B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|165"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|167"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|171"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|171B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|173"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|175"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|178"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|178B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|182"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|202"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|210"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|213"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|235"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|237"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|245"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|257"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|263"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|265"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|279"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|284A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|291"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|293"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|300"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|306"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|308"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|309"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|310"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|319"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|327"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|337"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|339"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|345"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|347"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|350"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|353"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|354A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|360"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|365"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|371"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|376"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|378"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|381"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|385"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|387B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|388"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|398"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|399"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|401"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|403"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|404"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|405"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|415"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|417"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|421"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|423"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|426"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|428"
+      - "https://data.vlaanderen.be/id/straatnaam/|30616|441"
+    notes: "Hollebeekstraat — Linkebeek (strict)"
+  - id: adv-facilites-004
+    category: facilites
+    subcategory: sint-genesius-rode-23101
+    query: "Linkebeekstraat Sint-Genesius-Rode"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|42"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|44"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|46"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|48"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|50"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|52"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|54"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|111"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|113"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|115"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|117"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|119"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|122"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|124"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|126"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|128"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|130"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|131"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|133"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|136"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|138A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|140"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|142"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|144"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|146"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|148"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|150"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|153"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|155"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|157"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|159"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|161"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|163"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|165"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|166"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|168A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|168B"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|170"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|170A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|171"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|172"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|173"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|174"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|176"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|177"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|178"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|179"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|180"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|181"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|182"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|183"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|184"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|185"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|185A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|186"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|187"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|187A"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|189"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|190"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|191"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|192"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|193"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|195"
+      - "https://data.vlaanderen.be/id/straatnaam/|30845|198"
+    notes: "Sint-Annalaan — Rhode-Saint-Genèse (fuzzy)"
+  - id: adv-facilites-005
+    category: facilites
+    subcategory: wemmel-23102
+    query: "Steenweg Wemmel"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|748"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|750"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|752"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|754"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|758B"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|760"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|764"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|780"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|782"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|798"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|804"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|808"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|810"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|846"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|850"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|884"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|904"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|938"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|944"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|950"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|962"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1000"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1012"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1014"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1016"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1022"
+      - "https://data.vlaanderen.be/id/straatnaam/|31008|1032"
+    notes: "Romeinse Steenweg — Wemmel (strict)"
+  - id: adv-facilites-006
+    category: facilites
+    subcategory: wezembeek-oppem-23103
+    query: "Astridlaan Wezembeek-Oppem"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|1"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|3"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|5"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|12"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|15"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|17"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|19"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|23"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|25"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|57"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|59"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|61"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|63"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|65"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|69"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|70"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|71"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|75"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|77"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|80"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|81"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|83"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|85"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|85A"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|87"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|89"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|91"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|93"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|93A"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|95"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|97"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|99"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|101"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|103"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|105"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|107"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|109"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|111"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|116"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|118"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|120"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|122"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|180"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|182"
+      - "https://data.vlaanderen.be/id/straatnaam/|31039|184"
+    notes: "Astridlaan — Wezembeek-Oppem (strict)"
+
+# ---------- Cross_language muni-alias pairs — 10 entries (the §3.2 contract)
+  - id: adv-cross_language-001
+    category: cross_language
+    subcategory: antwerpen-grote-markt
+    query: "Grote Markt 1, 2000 Antwerpen"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/5343861/2023-11-01T19:29:21+01:00"
+    expected_building_group_id: "https://data.vlaanderen.be/id/straatnaam/|1064|14"
+    notes: "Grote Markt — Anvers (strict)"
+  - id: adv-cross_language-002
+    category: cross_language
+    subcategory: anvers-grote-markt-fr-muni
+    query: "Grote Markt 1 2000 Anvers"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/3738064/2023-11-01T15:50:24+01:00"
+    expected_building_group_id: "https://data.vlaanderen.be/id/straatnaam/|1064|1"
+    notes: "Grote Markt — Anvers (strict)"
+  - id: adv-cross_language-003
+    category: cross_language
+    subcategory: liege-place-saint-lambert
+    query: "Place Saint-Lambert 1, 4000 Li\u00e8ge"
+    expected_best_id: "geodata.wallonie.be/id/Address/1135113/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7730055|1"
+    notes: "Place Saint-Lambert — Liège (strict)"
+  - id: adv-cross_language-004
+    category: cross_language
+    subcategory: luik-place-saint-lambert
+    query: "Place Saint-Lambert 1 4000 Luik"
+    expected_best_id: "geodata.wallonie.be/id/Address/1135113/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7730055|1"
+    notes: "Place Saint-Lambert — Liège (strict)"
+  - id: adv-cross_language-005
+    category: cross_language
+    subcategory: mons-grand-place
+    query: "Grand-Place 1, 7000 Mons"
+    expected_best_id: "geodata.wallonie.be/id/Address/583416/2"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7713298|1"
+    notes: "Grand-Place — Mons (strict)"
+  - id: adv-cross_language-006
+    category: cross_language
+    subcategory: bergen-grand-place
+    query: "Grand-Place 1 7000 Bergen"
+    expected_best_id: "geodata.wallonie.be/id/Address/583416/2"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7713298|1"
+    notes: "Grand-Place — Mons (strict)"
+  - id: adv-cross_language-007
+    category: cross_language
+    subcategory: tournai-grand-place
+    query: "Grand'Place 1, 7500 Tournai"
+    expected_best_id: "geodata.wallonie.be/id/Address/1865802/2"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7723083|61"
+    notes: "Grand'Place — Tournai (strict)"
+  - id: adv-cross_language-008
+    category: cross_language
+    subcategory: doornik-grand-place
+    query: "Grand'Place 1 7500 Doornik"
+    expected_best_id: "geodata.wallonie.be/id/Address/975501/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7723083|1"
+    notes: "Grand'Place — Tournai (strict)"
+  - id: adv-cross_language-009
+    category: cross_language
+    subcategory: namur-rue-de-fer
+    query: "Rue de Fer 1, 5000 Namur"
+    expected_best_id: "geodata.wallonie.be/id/Address/366974/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7753710|1"
+    notes: "Rue de Fer — Namur (strict)"
+  - id: adv-cross_language-010
+    category: cross_language
+    subcategory: namen-rue-de-fer
+    query: "Rue de Fer 1 5000 Namen"
+    expected_best_id: "geodata.wallonie.be/id/Address/366974/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7753710|1"
+    notes: "Rue de Fer — Namur (strict)"
+
+# ---------- Special chars (apostrophe/hyphen/accent) — 10 entries
+  - id: adv-special_chars-001
+    category: special_chars
+    subcategory: place-eglise-apostrophe
+    query: "Place de l'\u00c9glise 1 6000 Charleroi"
+    expected_best_id: "geodata.wallonie.be/id/Address/887093/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7760001|1"
+    notes: "Place de l'Abattoir — Charleroi (fuzzy)"
+  - id: adv-special_chars-002
+    category: special_chars
+    subcategory: rue-saint-gery-accent
+    query: "Rue Saint-G\u00e9ry 1 1000 Bruxelles"
+    expected_best_id: "https://databrussels.be/id/address/13023/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|472|1"
+    notes: "Sint-Goriksstraat — Bruxelles (strict)"
+  - id: adv-special_chars-003
+    category: special_chars
+    subcategory: rue-saint-gilles-hyphen
+    query: "Rue Saint-Gilles 1 4000 Li\u00e8ge"
+    expected_best_id: "geodata.wallonie.be/id/Address/1203098/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7731307|1"
+    notes: "Rue Saint-Gilles — Liège (strict)"
+  - id: adv-special_chars-004
+    category: special_chars
+    subcategory: place-saint-lambert-hyphen
+    query: "Place Saint-Lambert 1 4000 Li\u00e8ge"
+    expected_best_id: "geodata.wallonie.be/id/Address/1135113/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7730055|1"
+    notes: "Place Saint-Lambert — Liège (strict)"
+  - id: adv-special_chars-005
+    category: special_chars
+    subcategory: grand-place-hyphen
+    query: "Grand-Place 1 1000 Bruxelles"
+    expected_best_id: "https://databrussels.be/id/address/146554/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|3281|1"
+    notes: "Grote Markt — Bruxelles (strict)"
+  - id: adv-special_chars-006
+    category: special_chars
+    subcategory: grand-place-apostrophe
+    query: "Grand'Place 1 7500 Tournai"
+    expected_best_id: "geodata.wallonie.be/id/Address/975501/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7723083|1"
+    notes: "Grand'Place — Tournai (strict)"
+  - id: adv-special_chars-007
+    category: special_chars
+    subcategory: avenue-louise-no-special
+    query: "Avenue Louise 32 1050 Ixelles"
+    expected_best_id: "https://databrussels.be/id/address/219073/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|3919|32"
+    notes: "Louizalaan — Ixelles (strict)"
+  - id: adv-special_chars-008
+    category: special_chars
+    subcategory: rue-de-la-loi-de-article
+    query: "Rue de la Loi 16 1000 Bruxelles"
+    expected_best_id: "https://databrussels.be/id/address/210225/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|1679|16"
+    notes: "Wetstraat — Bruxelles (strict)"
+  - id: adv-special_chars-009
+    category: special_chars
+    subcategory: place-poelaert-accent
+    query: "Place Poelaert 1 1000 Bruxelles"
+    expected_best_id: "https://databrussels.be/id/address/104857/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|3362|1"
+    notes: "Poelaertplein — Bruxelles (strict)"
+  - id: adv-special_chars-010
+    category: special_chars
+    subcategory: rue-neuve-1
+    query: "Rue Neuve 1 1000 Bruxelles"
+    expected_best_id: "https://databrussels.be/id/address/149139/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|3449|1"
+    notes: "Nieuwland — Bruxelles (strict)"
+
+# ---------- Notability (file 13 §4 whitelist) — 30 entries — §3.1 target metric
+  - id: adv-notability-001
+    category: notability
+    subcategory: grand-place-bxl
+    query: "Grand-Place"
+    expected_best_id: "https://databrussels.be/id/address/142083/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|3281|13"
+      - "https://databrussels.be/id/streetname|3281|2"
+      - "https://databrussels.be/id/streetname|3281|25"
+      - "https://databrussels.be/id/streetname|3281|27"
+      - "https://databrussels.be/id/streetname|3281|14"
+      - "https://databrussels.be/id/streetname|3281|3"
+      - "https://databrussels.be/id/streetname|3281|26"
+      - "https://databrussels.be/id/streetname|3281|4"
+      - "https://databrussels.be/id/streetname|3281|34"
+      - "https://databrussels.be/id/streetname|3281|12"
+    notes: "Bruxelles \u2014 anchor='Grand-Place 1000'; street match='grand-place'"
+    regression_marker: true
+  - id: adv-notability-002
+    category: notability
+    subcategory: meir-anvers
+    query: "Meir"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2406046/2023-11-01T12:15:25+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|58"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|85"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|107"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|68"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|12"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|46"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|36"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|3"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|75"
+      - "https://data.vlaanderen.be/id/straatnaam/|1992|28"
+    notes: "Anvers \u2014 anchor='Meir 2000'; street match='meir'"
+    regression_marker: true
+  - id: adv-notability-003
+    category: notability
+    subcategory: grote-markt-anvers
+    query: "Grote Markt"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/473057/2023-11-01T12:02:03+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|14"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|48"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|29A"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|30"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|34"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|46"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|27"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|54"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|50"
+      - "https://data.vlaanderen.be/id/straatnaam/|1064|58"
+    notes: "Anvers \u2014 anchor='Grote Markt 2000 Antwerpen'; street match='grote markt'"
+    regression_marker: true
+  - id: adv-notability-004
+    category: notability
+    subcategory: markt-bruges
+    query: "Markt"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2003673/2023-11-01T11:56:11+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|21"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|28"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|24"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|7"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|5"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|18"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|13"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|31"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|11"
+      - "https://data.vlaanderen.be/id/straatnaam/|45658|19"
+    notes: "Bruges \u2014 anchor='Markt 8000 Brugge'; street match='markt'"
+    regression_marker: true
+  - id: adv-notability-005
+    category: notability
+    subcategory: burg-bruges
+    query: "Burg"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2121236/2023-11-01T11:57:22+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|2D"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|2B"
+      - "https://data.vlaanderen.be/id/straatnaam/|45014|2B"
+      - "https://data.vlaanderen.be/id/straatnaam/|45014|6"
+      - "https://data.vlaanderen.be/id/straatnaam/|45014|15"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|8"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|22A"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|16"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|30"
+      - "https://data.vlaanderen.be/id/straatnaam/|45752|34"
+    notes: "Bruges \u2014 anchor='Burg 8000 Brugge'; street match='burg'"
+    regression_marker: true
+  - id: adv-notability-006
+    category: notability
+    subcategory: korenmarkt-gand
+    query: "Korenmarkt"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2871450/2023-11-01T16:28:41+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|30"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|3A"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|35"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|8"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|3"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|3B"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|3D"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|3E"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|14B"
+      - "https://data.vlaanderen.be/id/straatnaam/|70762|31"
+    notes: "Gand \u2014 anchor='Korenmarkt 9000 Gent'; street match='korenmarkt'"
+    regression_marker: true
+  - id: adv-notability-007
+    category: notability
+    subcategory: vrijdagmarkt-gand
+    query: "Vrijdagmarkt"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/1336028/2023-11-01T16:59:39+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|61"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|28"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|49"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|40"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|32"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|19"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|22"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|5"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|15A"
+      - "https://data.vlaanderen.be/id/straatnaam/|71940|60"
+    notes: "Gand \u2014 anchor='Vrijdagmarkt 9000 Gent'; street match='vrijdagmarkt'"
+    regression_marker: true
+  - id: adv-notability-008
+    category: notability
+    subcategory: place-saint-lambert-liege
+    query: "Place Saint-Lambert"
+    expected_best_id: "geodata.wallonie.be/id/Address/1872244/2"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7730055|10"
+      - "geodata.wallonie.be/id/Streetname|7730055|32"
+      - "geodata.wallonie.be/id/Streetname|7730055|2"
+      - "geodata.wallonie.be/id/Streetname|7730055|44"
+      - "geodata.wallonie.be/id/Streetname|7730055|80"
+      - "geodata.wallonie.be/id/Streetname|7730055|8"
+      - "geodata.wallonie.be/id/Streetname|7730055|19"
+      - "geodata.wallonie.be/id/Streetname|7730055|9"
+      - "geodata.wallonie.be/id/Streetname|7730055|41"
+      - "geodata.wallonie.be/id/Streetname|7730055|17"
+    notes: "Li\u00e8ge \u2014 anchor='Place Saint-Lambert 4000 Li\u00e8ge'; street match='place saint-lambert'"
+    regression_marker: true
+  - id: adv-notability-009
+    category: notability
+    subcategory: grand-place-mons
+    query: "Grand-Place Mons"
+    expected_best_id: "geodata.wallonie.be/id/Address/581272/1"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7713298|5"
+      - "geodata.wallonie.be/id/Streetname|7713298|41"
+      - "geodata.wallonie.be/id/Streetname|7713298|30"
+      - "geodata.wallonie.be/id/Streetname|7713298|21"
+      - "geodata.wallonie.be/id/Streetname|7713298|9"
+      - "geodata.wallonie.be/id/Streetname|7713298|7"
+      - "geodata.wallonie.be/id/Streetname|7713298|6"
+      - "geodata.wallonie.be/id/Streetname|7713298|23"
+      - "geodata.wallonie.be/id/Streetname|7713298|38"
+      - "geodata.wallonie.be/id/Streetname|7713298|37"
+    notes: "Mons \u2014 anchor='Grand-Place 7000 Mons'; street match='grand-place'"
+  - id: adv-notability-010
+    category: notability
+    subcategory: grand-place-tournai
+    query: "Grand-Place Tournai"
+    expected_best_id: "geodata.wallonie.be/id/Address/975045/1"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7723083|58"
+      - "geodata.wallonie.be/id/Streetname|7723083|48"
+      - "geodata.wallonie.be/id/Streetname|7723083|33"
+      - "geodata.wallonie.be/id/Streetname|7723083|26A"
+      - "geodata.wallonie.be/id/Streetname|7723083|14"
+      - "geodata.wallonie.be/id/Streetname|7723083|68"
+      - "geodata.wallonie.be/id/Streetname|7723083|8"
+      - "geodata.wallonie.be/id/Streetname|7723083|50"
+      - "geodata.wallonie.be/id/Streetname|7723083|45"
+      - "geodata.wallonie.be/id/Streetname|7723083|13"
+    notes: "Tournai \u2014 anchor=\"Grand'Place 7500 Tournai\"; street match='grand'"
+  - id: adv-notability-011
+    category: notability
+    subcategory: sablon-bxl
+    query: "Sablon"
+    expected_best_id: "https://databrussels.be/id/address/209987/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|2461|32"
+      - "https://databrussels.be/id/streetname|2461|21"
+      - "https://databrussels.be/id/streetname|2461|34"
+      - "https://databrussels.be/id/streetname|2461|3"
+      - "https://databrussels.be/id/streetname|2461|7"
+      - "https://databrussels.be/id/streetname|2461|6"
+      - "https://databrussels.be/id/streetname|2461|39"
+      - "https://databrussels.be/id/streetname|2461|44"
+      - "https://databrussels.be/id/streetname|2461|41"
+      - "https://databrussels.be/id/streetname|2461|49"
+    notes: "Bruxelles \u2014 anchor='Place du Grand Sablon 1000'; street match='sablon'"
+  - id: adv-notability-012
+    category: notability
+    subcategory: place-de-brouckere-bxl
+    query: "Place de Brouck\u00e8re"
+    expected_best_id: "https://databrussels.be/id/address/170298/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|1803|48"
+      - "https://databrussels.be/id/streetname|1803|33"
+      - "https://databrussels.be/id/streetname|1803|35"
+      - "https://databrussels.be/id/streetname|1803|41"
+      - "https://databrussels.be/id/streetname|1803|6"
+      - "https://databrussels.be/id/streetname|1803|2"
+      - "https://databrussels.be/id/streetname|1803|38"
+      - "https://databrussels.be/id/streetname|1803|37"
+      - "https://databrussels.be/id/streetname|1803|39"
+      - "https://databrussels.be/id/streetname|1803|21"
+    notes: "Bruxelles \u2014 anchor='Place de Brouck\u00e8re 1000 Bruxelles'; street match='brouck\u00e8re'"
+  - id: adv-notability-013
+    category: notability
+    subcategory: place-st-gery-bxl
+    query: "Place Saint-G\u00e9ry"
+    expected_best_id: "https://databrussels.be/id/address/141027/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|5690|4"
+      - "https://databrussels.be/id/streetname|5690|23"
+      - "https://databrussels.be/id/streetname|5690|20"
+      - "https://databrussels.be/id/streetname|5690|25B"
+      - "https://databrussels.be/id/streetname|5690|37"
+      - "https://databrussels.be/id/streetname|5690|25"
+      - "https://databrussels.be/id/streetname|5690|19"
+      - "https://databrussels.be/id/streetname|5690|2"
+      - "https://databrussels.be/id/streetname|5690|28"
+      - "https://databrussels.be/id/streetname|5690|7"
+    notes: "Bruxelles \u2014 anchor='Place Saint-G\u00e9ry 1000'; street match='saint-g\u00e9ry'"
+  - id: adv-notability-014
+    category: notability
+    subcategory: place-jeu-de-balle-bxl
+    query: "Place du Jeu de Balle"
+    expected_best_id: "https://databrussels.be/id/address/104983/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|1717|55"
+      - "https://databrussels.be/id/streetname|1717|39"
+      - "https://databrussels.be/id/streetname|1717|7"
+      - "https://databrussels.be/id/streetname|1717|69"
+      - "https://databrussels.be/id/streetname|1717|77"
+      - "https://databrussels.be/id/streetname|1717|10"
+      - "https://databrussels.be/id/streetname|1717|5"
+      - "https://databrussels.be/id/streetname|1717|76"
+      - "https://databrussels.be/id/streetname|1717|32"
+      - "https://databrussels.be/id/streetname|1717|68"
+    notes: "Bruxelles \u2014 anchor='Place du Jeu de Balle 1000'; street match='jeu de balle'"
+  - id: adv-notability-015
+    category: notability
+    subcategory: kouter-gand
+    query: "Kouter"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/1922319/2023-11-01T16:36:54+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|86"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|48"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|7A"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|174"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|7B"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|114"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|9"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|176"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|8"
+      - "https://data.vlaanderen.be/id/straatnaam/|70780|150"
+    notes: "Gand \u2014 anchor='Kouter 9000 Gent'; street match='kouter'"
+  - id: adv-notability-016
+    category: notability
+    subcategory: groenplaats-anvers
+    query: "Groenplaats"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2022733/2023-11-01T12:01:57+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|40"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|8"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|40A"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|11"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|2"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|42"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|27"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|36"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|6"
+      - "https://data.vlaanderen.be/id/straatnaam/|1053|26"
+    notes: "Anvers \u2014 anchor='Groenplaats 2000 Antwerpen'; street match='groenplaats'"
+  - id: adv-notability-017
+    category: notability
+    subcategory: steen-anvers
+    query: "Steenplein"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/3118193/2023-11-01T11:51:04+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|2734|1"
+      - "https://data.vlaanderen.be/id/straatnaam/|2734|4"
+    notes: "Anvers \u2014 anchor='Steenplein 2000 Antwerpen'; street match='steenplein'"
+  - id: adv-notability-018
+    category: notability
+    subcategory: place-pol-mons
+    query: "Place L\u00e9opold Mons"
+    expected_best_id: "geodata.wallonie.be/id/Address/580336/3"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7713386|13"
+      - "geodata.wallonie.be/id/Streetname|7713386|7"
+      - "geodata.wallonie.be/id/Streetname|7713386|6"
+      - "geodata.wallonie.be/id/Streetname|7713386|5"
+      - "geodata.wallonie.be/id/Streetname|7713386|1"
+      - "geodata.wallonie.be/id/Streetname|7713386|9A"
+      - "geodata.wallonie.be/id/Streetname|7713386|9"
+      - "geodata.wallonie.be/id/Streetname|7713386|2"
+      - "geodata.wallonie.be/id/Streetname|7713386|15"
+      - "geodata.wallonie.be/id/Streetname|7713386|8"
+    notes: "Mons \u2014 anchor='Place L\u00e9opold 7000 Mons'; street match='l\u00e9opold'"
+  - id: adv-notability-019
+    category: notability
+    subcategory: rue-de-la-loi-bxl
+    query: "Rue de la Loi"
+    expected_best_id: "https://databrussels.be/id/address/210226/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|1679|14"
+      - "https://databrussels.be/id/streetname|1679|24"
+      - "https://databrussels.be/id/streetname|1679|16"
+      - "https://databrussels.be/id/streetname|1679|2"
+      - "https://databrussels.be/id/streetname|1679|10"
+      - "https://databrussels.be/id/streetname|1679|9"
+      - "https://databrussels.be/id/streetname|1679|13"
+      - "https://databrussels.be/id/streetname|1679|11"
+      - "https://databrussels.be/id/streetname|1679|20"
+      - "https://databrussels.be/id/streetname|1679|3"
+    notes: "Bruxelles \u2014 anchor='Rue de la Loi 1000 Bruxelles'; street match='rue de la loi'"
+    regression_marker: true
+  - id: adv-notability-020
+    category: notability
+    subcategory: avenue-louise-bxl
+    query: "Avenue Louise"
+    expected_best_id: "https://databrussels.be/id/address/108349/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|3919|32A"
+      - "https://databrussels.be/id/streetname|3919|52"
+      - "https://databrussels.be/id/streetname|3919|50A"
+      - "https://databrussels.be/id/streetname|3919|50B"
+      - "https://databrussels.be/id/streetname|3919|32"
+      - "https://databrussels.be/id/streetname|3919|34"
+      - "https://databrussels.be/id/streetname|3919|36"
+      - "https://databrussels.be/id/streetname|3919|50"
+      - "https://databrussels.be/id/streetname|3919|30"
+      - "https://databrussels.be/id/streetname|3919|46"
+    notes: "Ixelles \u2014 anchor='Avenue Louise 1050 Ixelles'; street match='avenue louise'"
+    regression_marker: true
+  - id: adv-notability-021
+    category: notability
+    subcategory: rue-haute-bxl
+    query: "Rue Haute"
+    expected_best_id: "https://databrussels.be/id/address/112848/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|2986|283"
+      - "https://databrussels.be/id/streetname|2986|21"
+      - "https://databrussels.be/id/streetname|2986|221"
+      - "https://databrussels.be/id/streetname|2986|363"
+      - "https://databrussels.be/id/streetname|2986|193"
+      - "https://databrussels.be/id/streetname|2986|357"
+      - "https://databrussels.be/id/streetname|2986|97"
+      - "https://databrussels.be/id/streetname|2986|225"
+      - "https://databrussels.be/id/streetname|2986|361"
+      - "https://databrussels.be/id/streetname|2986|71"
+    notes: "Bruxelles \u2014 anchor='Rue Haute 1000 Bruxelles'; street match='rue haute'"
+  - id: adv-notability-022
+    category: notability
+    subcategory: place-poelaert-bxl
+    query: "Place Poelaert"
+    expected_best_id: "https://databrussels.be/id/address/217184/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|3362|6"
+      - "https://databrussels.be/id/streetname|3362|3"
+      - "https://databrussels.be/id/streetname|3362|2"
+      - "https://databrussels.be/id/streetname|3362|1"
+    notes: "Bruxelles \u2014 anchor='Place Poelaert 1000 Bruxelles'; street match='poelaert'"
+  - id: adv-notability-023
+    category: notability
+    subcategory: place-flagey-ixelles
+    query: "Place Flagey"
+    expected_best_id: "https://databrussels.be/id/address/167297/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|2411|21"
+      - "https://databrussels.be/id/streetname|2411|17"
+      - "https://databrussels.be/id/streetname|2411|26"
+      - "https://databrussels.be/id/streetname|2411|28"
+      - "https://databrussels.be/id/streetname|2411|23"
+      - "https://databrussels.be/id/streetname|2411|9"
+      - "https://databrussels.be/id/streetname|2411|3"
+      - "https://databrussels.be/id/streetname|2411|1"
+      - "https://databrussels.be/id/streetname|2411|18"
+      - "https://databrussels.be/id/streetname|2411|4"
+    notes: "Ixelles \u2014 anchor='Place Flagey 1050'; street match='flagey'"
+  - id: adv-notability-024
+    category: notability
+    subcategory: place-jourdan-bxl
+    query: "Place Jourdan"
+    expected_best_id: "https://databrussels.be/id/address/613792/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|652|23"
+      - "https://databrussels.be/id/streetname|652|54"
+      - "https://databrussels.be/id/streetname|652|29"
+      - "https://databrussels.be/id/streetname|652|14"
+      - "https://databrussels.be/id/streetname|652|41"
+      - "https://databrussels.be/id/streetname|652|45"
+      - "https://databrussels.be/id/streetname|652|58"
+      - "https://databrussels.be/id/streetname|652|44"
+      - "https://databrussels.be/id/streetname|652|66"
+      - "https://databrussels.be/id/streetname|652|15"
+    notes: "Etterbeek \u2014 anchor='Place Jourdan 1040'; street match='jourdan'"
+  - id: adv-notability-025
+    category: notability
+    subcategory: place-luxembourg-bxl
+    query: "Place du Luxembourg"
+    expected_best_id: "https://databrussels.be/id/address/163554/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|3461|11"
+      - "https://databrussels.be/id/streetname|3461|12"
+      - "https://databrussels.be/id/streetname|3461|5"
+      - "https://databrussels.be/id/streetname|3461|6"
+      - "https://databrussels.be/id/streetname|3461|10"
+      - "https://databrussels.be/id/streetname|3461|4"
+      - "https://databrussels.be/id/streetname|3461|8A"
+      - "https://databrussels.be/id/streetname|3461|1"
+      - "https://databrussels.be/id/streetname|3461|2"
+      - "https://databrussels.be/id/streetname|3461|8"
+    notes: "Ixelles \u2014 anchor='Place du Luxembourg 1050'; street match='luxembourg'"
+  - id: adv-notability-026
+    category: notability
+    subcategory: avenue-de-tervueren-bxl
+    query: "Avenue de Tervueren"
+    expected_best_id: "https://databrussels.be/id/address/181891/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|4033|25"
+      - "https://databrussels.be/id/streetname|4033|110"
+      - "https://databrussels.be/id/streetname|4033|12"
+      - "https://databrussels.be/id/streetname|4033|66"
+      - "https://databrussels.be/id/streetname|4033|8"
+      - "https://databrussels.be/id/streetname|4033|17"
+      - "https://databrussels.be/id/streetname|4033|18"
+      - "https://databrussels.be/id/streetname|4033|1"
+      - "https://databrussels.be/id/streetname|4033|112"
+      - "https://databrussels.be/id/streetname|4033|82"
+    notes: "Etterbeek \u2014 anchor='Avenue de Tervueren 1040'; street match='tervueren'"
+  - id: adv-notability-027
+    category: notability
+    subcategory: boulevard-anspach-bxl
+    query: "Boulevard Anspach"
+    expected_best_id: "https://databrussels.be/id/address/143812/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|441|156"
+      - "https://databrussels.be/id/streetname|441|142"
+      - "https://databrussels.be/id/streetname|441|53"
+      - "https://databrussels.be/id/streetname|441|170"
+      - "https://databrussels.be/id/streetname|441|48"
+      - "https://databrussels.be/id/streetname|441|73"
+      - "https://databrussels.be/id/streetname|441|52"
+      - "https://databrussels.be/id/streetname|441|162"
+      - "https://databrussels.be/id/streetname|441|150"
+      - "https://databrussels.be/id/streetname|441|145"
+    notes: "Bruxelles \u2014 anchor='Boulevard Anspach 1000'; street match='anspach'"
+  - id: adv-notability-028
+    category: notability
+    subcategory: dam-anvers
+    query: "Dam Antwerpen"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/2013074/2023-11-01T12:32:30+01:00"
+    expected_building_group_id_set:
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|124"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|114"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|122"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|5"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|43"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|94"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|8"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|35"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|98"
+      - "https://data.vlaanderen.be/id/straatnaam/|3032|23"
+    notes: "Anvers \u2014 anchor='Dam 2060 Antwerpen'; street match='dam'"
+  - id: adv-notability-029
+    category: notability
+    subcategory: place-eveche-tournai
+    query: "Place de l'\u00c9v\u00each\u00e9 Tournai"
+    expected_best_id: "geodata.wallonie.be/id/Address/973055/1"
+    expected_building_group_id_set:
+      - "geodata.wallonie.be/id/Streetname|7723130|1"
+      - "geodata.wallonie.be/id/Streetname|7723130|2"
+    notes: "Tournai \u2014 anchor=\"Place de l'\u00c9v\u00each\u00e9 7500 Tournai\"; street match='\u00e9v\u00each\u00e9'"
+  - id: adv-notability-030
+    category: notability
+    subcategory: place-grand-sablon-bxl
+    query: "Grand Sablon"
+    expected_best_id: "https://databrussels.be/id/address/209987/1"
+    expected_building_group_id_set:
+      - "https://databrussels.be/id/streetname|2461|32"
+      - "https://databrussels.be/id/streetname|2461|21"
+      - "https://databrussels.be/id/streetname|2461|34"
+      - "https://databrussels.be/id/streetname|2461|3"
+      - "https://databrussels.be/id/streetname|2461|7"
+      - "https://databrussels.be/id/streetname|2461|6"
+      - "https://databrussels.be/id/streetname|2461|39"
+      - "https://databrussels.be/id/streetname|2461|44"
+      - "https://databrussels.be/id/streetname|2461|41"
+      - "https://databrussels.be/id/streetname|2461|49"
+    notes: "Bruxelles \u2014 anchor='Grand Sablon 1000 Bruxelles'; street match='sablon'"
+
+# ---------- Known failures — 3 entries — tracked, NOT aggregated
+  - id: adv-known-001
+    category: known_failure
+    subcategory: rue-de-la-gare-brussels
+    query: "Rue de la Gare"
+    expected_behavior: |
+      Returns zero Brussels matches in top-100; file 13 §1. Top results are Wallonia (Villers-la-Ville, La Roche-en-Ardenne, La Louvière). Tracked for Phase 7 autocomplete design.
+    expected_to_fail: true
+    introduced: "2026-05-21"
+    reference: "airmail-analysis/13-phase6-3-1-design.md \u00a71"
+    acceptable_until: "2026-08-21"
+  - id: adv-known-002
+    category: known_failure
+    subcategory: place-de-l-eglise-ambiguous
+    query: "Place de l'\u00c9glise"
+    expected_behavior: |
+      36+ munis have a Place de l'Église. No notability prior should pick a 'right' answer until §3.1 adds whitelist scoring or postal context. Tracked as a Class-2 ambiguous query per file 13 §1.
+    expected_to_fail: true
+    introduced: "2026-05-21"
+    reference: "airmail-analysis/13-phase6-3-1-design.md \u00a71"
+    acceptable_until: "2026-08-21"
+  - id: adv-known-003
+    category: known_failure
+    subcategory: anvers-grand-place-cross-region
+    query: "Anvers Grand Place"
+    expected_behavior: |
+      Anvers has no FR street 'Grand Place'. Expected behavior is fuzzy fallback within the Antwerpen/Anvers region, but currently the fuzzy OR returns brussels+wallonia noise. Cross-region leakage on an underspecified query. Tracked as Phase 6.5b region_leakage_rate input.
+    expected_to_fail: true
+    introduced: "2026-05-21"
+    reference: "airmail-analysis/12-phase5-outcomes.md \u00a73.2"
+    acceptable_until: "2026-08-21"

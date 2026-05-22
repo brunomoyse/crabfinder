@@ -1,0 +1,700 @@
+# crabfinder notability whitelist (file 13 §4, file 14 §1 metric #14)
+#
+# Each entry contributes a `boost_multiplier` (> 1.0) applied to BM25
+# at query time via Tantivy's TopDocs::tweak_score, against any address
+# whose building_group_id is in `target_building_group_ids`.
+#
+# Higher multiplier = stronger 'this is the famous one' signal.
+# 3.0 = UNESCO / globally famous; 2.0–2.5 = nationally iconic;
+# 1.8 = locally known.
+#
+# To add an entry, query the service with the canonical name +
+# postal_code, capture top-N building_group_ids whose street_name
+# matches the place, and PR an entry. The schema is intentionally
+# small so contributions are low-friction.
+
+version: v1
+entries:
+- notability_id: nota-grand-place-bxl
+  canonical_name: Grand-Place / Grote Markt — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|3281|13
+  - https://databrussels.be/id/streetname|3281|2
+  - https://databrussels.be/id/streetname|3281|25
+  - https://databrussels.be/id/streetname|3281|27
+  - https://databrussels.be/id/streetname|3281|14
+  - https://databrussels.be/id/streetname|3281|3
+  - https://databrussels.be/id/streetname|3281|26
+  - https://databrussels.be/id/streetname|3281|4
+  - https://databrussels.be/id/streetname|3281|34
+  - https://databrussels.be/id/streetname|3281|12
+  boost_multiplier: 3.0
+  rationale: UNESCO World Heritage; central square of Brussels.
+- notability_id: nota-meir-anvers
+  canonical_name: Meir — Anvers
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|1992|58
+  - https://data.vlaanderen.be/id/straatnaam/|1992|85
+  - https://data.vlaanderen.be/id/straatnaam/|1992|107
+  - https://data.vlaanderen.be/id/straatnaam/|1992|68
+  - https://data.vlaanderen.be/id/straatnaam/|1992|12
+  - https://data.vlaanderen.be/id/straatnaam/|1992|46
+  - https://data.vlaanderen.be/id/straatnaam/|1992|36
+  - https://data.vlaanderen.be/id/straatnaam/|1992|3
+  - https://data.vlaanderen.be/id/straatnaam/|1992|75
+  - https://data.vlaanderen.be/id/straatnaam/|1992|28
+  boost_multiplier: 3.0
+  rationale: Iconic 1.6 km shopping axis through Antwerp city centre.
+- notability_id: nota-grote-markt-anvers
+  canonical_name: Grote Markt — Anvers
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|1064|14
+  - https://data.vlaanderen.be/id/straatnaam/|1064|48
+  - https://data.vlaanderen.be/id/straatnaam/|1064|29A
+  - https://data.vlaanderen.be/id/straatnaam/|1064|30
+  - https://data.vlaanderen.be/id/straatnaam/|1064|34
+  - https://data.vlaanderen.be/id/straatnaam/|1064|46
+  - https://data.vlaanderen.be/id/straatnaam/|1064|27
+  - https://data.vlaanderen.be/id/straatnaam/|1064|54
+  - https://data.vlaanderen.be/id/straatnaam/|1064|50
+  - https://data.vlaanderen.be/id/straatnaam/|1064|58
+  boost_multiplier: 3.0
+  rationale: Antwerp's central square; cathedral + city hall.
+- notability_id: nota-markt-bruges
+  canonical_name: Markt — Brugge
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|45658|21
+  - https://data.vlaanderen.be/id/straatnaam/|45658|28
+  - https://data.vlaanderen.be/id/straatnaam/|45658|24
+  - https://data.vlaanderen.be/id/straatnaam/|45658|7
+  - https://data.vlaanderen.be/id/straatnaam/|45658|5
+  - https://data.vlaanderen.be/id/straatnaam/|45658|18
+  - https://data.vlaanderen.be/id/straatnaam/|45658|13
+  - https://data.vlaanderen.be/id/straatnaam/|45658|31
+  - https://data.vlaanderen.be/id/straatnaam/|45658|11
+  - https://data.vlaanderen.be/id/straatnaam/|45658|19
+  boost_multiplier: 3.0
+  rationale: UNESCO old town main square (Belfort, Provinciaal Hof).
+- notability_id: nota-burg-bruges
+  canonical_name: Burg — Brugge
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|45752|2D
+  - https://data.vlaanderen.be/id/straatnaam/|45752|2B
+  - https://data.vlaanderen.be/id/straatnaam/|45014|2B
+  - https://data.vlaanderen.be/id/straatnaam/|45014|6
+  - https://data.vlaanderen.be/id/straatnaam/|45014|15
+  - https://data.vlaanderen.be/id/straatnaam/|45752|8
+  - https://data.vlaanderen.be/id/straatnaam/|45752|22A
+  - https://data.vlaanderen.be/id/straatnaam/|45752|16
+  - https://data.vlaanderen.be/id/straatnaam/|45752|30
+  - https://data.vlaanderen.be/id/straatnaam/|45752|34
+  boost_multiplier: 3.0
+  rationale: UNESCO old town civic square (Stadhuis, Heilig Bloed).
+- notability_id: nota-korenmarkt-gand
+  canonical_name: Korenmarkt — Gent
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|70762|30
+  - https://data.vlaanderen.be/id/straatnaam/|70762|3A
+  - https://data.vlaanderen.be/id/straatnaam/|70762|35
+  - https://data.vlaanderen.be/id/straatnaam/|70762|8
+  - https://data.vlaanderen.be/id/straatnaam/|70762|3
+  - https://data.vlaanderen.be/id/straatnaam/|70762|3B
+  - https://data.vlaanderen.be/id/straatnaam/|70762|3D
+  - https://data.vlaanderen.be/id/straatnaam/|70762|3E
+  - https://data.vlaanderen.be/id/straatnaam/|70762|14B
+  - https://data.vlaanderen.be/id/straatnaam/|70762|31
+  boost_multiplier: 3.0
+  rationale: Central market square; Sint-Niklaaskerk, Belfort access.
+- notability_id: nota-vrijdagmarkt-gand
+  canonical_name: Vrijdagmarkt — Gent
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|71940|61
+  - https://data.vlaanderen.be/id/straatnaam/|71940|28
+  - https://data.vlaanderen.be/id/straatnaam/|71940|49
+  - https://data.vlaanderen.be/id/straatnaam/|71940|40
+  - https://data.vlaanderen.be/id/straatnaam/|71940|32
+  - https://data.vlaanderen.be/id/straatnaam/|71940|19
+  - https://data.vlaanderen.be/id/straatnaam/|71940|22
+  - https://data.vlaanderen.be/id/straatnaam/|71940|5
+  - https://data.vlaanderen.be/id/straatnaam/|71940|15A
+  - https://data.vlaanderen.be/id/straatnaam/|71940|60
+  boost_multiplier: 3.0
+  rationale: Historic civic square; weekly market for centuries.
+- notability_id: nota-place-saint-lambert-liege
+  canonical_name: Place Saint-Lambert — Liège
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7730055|10
+  - geodata.wallonie.be/id/Streetname|7730055|32
+  - geodata.wallonie.be/id/Streetname|7730055|2
+  - geodata.wallonie.be/id/Streetname|7730055|44
+  - geodata.wallonie.be/id/Streetname|7730055|80
+  - geodata.wallonie.be/id/Streetname|7730055|8
+  - geodata.wallonie.be/id/Streetname|7730055|19
+  - geodata.wallonie.be/id/Streetname|7730055|9
+  - geodata.wallonie.be/id/Streetname|7730055|41
+  - geodata.wallonie.be/id/Streetname|7730055|17
+  boost_multiplier: 3.0
+  rationale: Liège's central square; Palais des Princes-Évêques.
+- notability_id: nota-grand-place-mons
+  canonical_name: Grand-Place — Mons
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7713298|5
+  - geodata.wallonie.be/id/Streetname|7713298|41
+  - geodata.wallonie.be/id/Streetname|7713298|30
+  - geodata.wallonie.be/id/Streetname|7713298|21
+  - geodata.wallonie.be/id/Streetname|7713298|9
+  - geodata.wallonie.be/id/Streetname|7713298|7
+  - geodata.wallonie.be/id/Streetname|7713298|6
+  - geodata.wallonie.be/id/Streetname|7713298|23
+  - geodata.wallonie.be/id/Streetname|7713298|38
+  - geodata.wallonie.be/id/Streetname|7713298|37
+  boost_multiplier: 3.0
+  rationale: UNESCO belfry square; Doudou processional point.
+- notability_id: nota-grand-place-tournai
+  canonical_name: Grand-Place / Grand'Place — Tournai
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7723083|58
+  - geodata.wallonie.be/id/Streetname|7723083|48
+  - geodata.wallonie.be/id/Streetname|7723083|33
+  - geodata.wallonie.be/id/Streetname|7723083|26A
+  - geodata.wallonie.be/id/Streetname|7723083|14
+  - geodata.wallonie.be/id/Streetname|7723083|68
+  - geodata.wallonie.be/id/Streetname|7723083|8
+  - geodata.wallonie.be/id/Streetname|7723083|50
+  - geodata.wallonie.be/id/Streetname|7723083|45
+  - geodata.wallonie.be/id/Streetname|7723083|13
+  boost_multiplier: 3.0
+  rationale: Mediaeval central square; cathedral approach.
+- notability_id: nota-sablon-bxl
+  canonical_name: Sablon (Grand Sablon) — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|2461|32
+  - https://databrussels.be/id/streetname|2461|21
+  - https://databrussels.be/id/streetname|2461|34
+  - https://databrussels.be/id/streetname|2461|3
+  - https://databrussels.be/id/streetname|2461|7
+  - https://databrussels.be/id/streetname|2461|6
+  - https://databrussels.be/id/streetname|2461|39
+  - https://databrussels.be/id/streetname|2461|44
+  - https://databrussels.be/id/streetname|2461|41
+  - https://databrussels.be/id/streetname|2461|49
+  boost_multiplier: 2.5
+  rationale: Notre-Dame du Sablon; antiques quarter.
+- notability_id: nota-place-de-brouckere-bxl
+  canonical_name: Place de Brouckère — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|1803|48
+  - https://databrussels.be/id/streetname|1803|33
+  - https://databrussels.be/id/streetname|1803|35
+  - https://databrussels.be/id/streetname|1803|41
+  - https://databrussels.be/id/streetname|1803|6
+  - https://databrussels.be/id/streetname|1803|2
+  - https://databrussels.be/id/streetname|1803|38
+  - https://databrussels.be/id/streetname|1803|37
+  - https://databrussels.be/id/streetname|1803|39
+  - https://databrussels.be/id/streetname|1803|21
+  boost_multiplier: 2.0
+  rationale: Major Brussels civic square; metro hub.
+- notability_id: nota-place-st-gery-bxl
+  canonical_name: Place Saint-Géry — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|5690|4
+  - https://databrussels.be/id/streetname|5690|23
+  - https://databrussels.be/id/streetname|5690|20
+  - https://databrussels.be/id/streetname|5690|25B
+  - https://databrussels.be/id/streetname|5690|37
+  - https://databrussels.be/id/streetname|5690|25
+  - https://databrussels.be/id/streetname|5690|19
+  - https://databrussels.be/id/streetname|5690|2
+  - https://databrussels.be/id/streetname|5690|28
+  - https://databrussels.be/id/streetname|5690|7
+  boost_multiplier: 2.0
+  rationale: Hipster heart of Brussels old town.
+- notability_id: nota-place-jeu-de-balle-bxl
+  canonical_name: Place du Jeu de Balle — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|1717|55
+  - https://databrussels.be/id/streetname|1717|39
+  - https://databrussels.be/id/streetname|1717|7
+  - https://databrussels.be/id/streetname|1717|69
+  - https://databrussels.be/id/streetname|1717|77
+  - https://databrussels.be/id/streetname|1717|10
+  - https://databrussels.be/id/streetname|1717|5
+  - https://databrussels.be/id/streetname|1717|76
+  - https://databrussels.be/id/streetname|1717|32
+  - https://databrussels.be/id/streetname|1717|68
+  boost_multiplier: 2.0
+  rationale: Marolles flea market square; daily Vieux Marché.
+- notability_id: nota-kouter-gand
+  canonical_name: Kouter — Gent
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|70780|86
+  - https://data.vlaanderen.be/id/straatnaam/|70780|48
+  - https://data.vlaanderen.be/id/straatnaam/|70780|7A
+  - https://data.vlaanderen.be/id/straatnaam/|70780|174
+  - https://data.vlaanderen.be/id/straatnaam/|70780|7B
+  - https://data.vlaanderen.be/id/straatnaam/|70780|114
+  - https://data.vlaanderen.be/id/straatnaam/|70780|9
+  - https://data.vlaanderen.be/id/straatnaam/|70780|176
+  - https://data.vlaanderen.be/id/straatnaam/|70780|8
+  - https://data.vlaanderen.be/id/straatnaam/|70780|150
+  boost_multiplier: 2.0
+  rationale: Ghent's flower-market square; weekly Sunday market.
+- notability_id: nota-groenplaats-anvers
+  canonical_name: Groenplaats — Anvers
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|1053|40
+  - https://data.vlaanderen.be/id/straatnaam/|1053|8
+  - https://data.vlaanderen.be/id/straatnaam/|1053|40A
+  - https://data.vlaanderen.be/id/straatnaam/|1053|11
+  - https://data.vlaanderen.be/id/straatnaam/|1053|2
+  - https://data.vlaanderen.be/id/straatnaam/|1053|42
+  - https://data.vlaanderen.be/id/straatnaam/|1053|27
+  - https://data.vlaanderen.be/id/straatnaam/|1053|36
+  - https://data.vlaanderen.be/id/straatnaam/|1053|6
+  - https://data.vlaanderen.be/id/straatnaam/|1053|26
+  boost_multiplier: 2.5
+  rationale: Antwerp cathedral square (Rubens monument).
+- notability_id: nota-steen-anvers
+  canonical_name: Steenplein — Anvers
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|2734|1
+  - https://data.vlaanderen.be/id/straatnaam/|2734|4
+  boost_multiplier: 2.0
+  rationale: Antwerp's medieval Steen castle riverfront.
+- notability_id: nota-place-pol-mons
+  canonical_name: Place Léopold — Mons
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7713386|13
+  - geodata.wallonie.be/id/Streetname|7713386|7
+  - geodata.wallonie.be/id/Streetname|7713386|6
+  - geodata.wallonie.be/id/Streetname|7713386|5
+  - geodata.wallonie.be/id/Streetname|7713386|1
+  - geodata.wallonie.be/id/Streetname|7713386|9A
+  - geodata.wallonie.be/id/Streetname|7713386|9
+  - geodata.wallonie.be/id/Streetname|7713386|2
+  - geodata.wallonie.be/id/Streetname|7713386|15
+  - geodata.wallonie.be/id/Streetname|7713386|8
+  boost_multiplier: 2.0
+  rationale: Mons Place Léopold civic and commerce centre.
+- notability_id: nota-rue-de-la-loi-bxl
+  canonical_name: Rue de la Loi — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|1679|14
+  - https://databrussels.be/id/streetname|1679|24
+  - https://databrussels.be/id/streetname|1679|16
+  - https://databrussels.be/id/streetname|1679|2
+  - https://databrussels.be/id/streetname|1679|10
+  - https://databrussels.be/id/streetname|1679|9
+  - https://databrussels.be/id/streetname|1679|13
+  - https://databrussels.be/id/streetname|1679|11
+  - https://databrussels.be/id/streetname|1679|20
+  - https://databrussels.be/id/streetname|1679|3
+  boost_multiplier: 2.5
+  rationale: EU institutions axis; Brussels political street.
+- notability_id: nota-avenue-louise-bxl
+  canonical_name: Avenue Louise — Ixelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|3919|32A
+  - https://databrussels.be/id/streetname|3919|52
+  - https://databrussels.be/id/streetname|3919|50A
+  - https://databrussels.be/id/streetname|3919|50B
+  - https://databrussels.be/id/streetname|3919|32
+  - https://databrussels.be/id/streetname|3919|34
+  - https://databrussels.be/id/streetname|3919|36
+  - https://databrussels.be/id/streetname|3919|50
+  - https://databrussels.be/id/streetname|3919|30
+  - https://databrussels.be/id/streetname|3919|46
+  boost_multiplier: 2.5
+  rationale: Brussels' grand luxury avenue; iconic 2.6 km axis.
+- notability_id: nota-rue-haute-bxl
+  canonical_name: Rue Haute — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|2986|283
+  - https://databrussels.be/id/streetname|2986|21
+  - https://databrussels.be/id/streetname|2986|221
+  - https://databrussels.be/id/streetname|2986|363
+  - https://databrussels.be/id/streetname|2986|193
+  - https://databrussels.be/id/streetname|2986|357
+  - https://databrussels.be/id/streetname|2986|97
+  - https://databrussels.be/id/streetname|2986|225
+  - https://databrussels.be/id/streetname|2986|361
+  - https://databrussels.be/id/streetname|2986|71
+  boost_multiplier: 2.0
+  rationale: Marolles main commercial street.
+- notability_id: nota-place-poelaert-bxl
+  canonical_name: Place Poelaert — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|3362|6
+  - https://databrussels.be/id/streetname|3362|3
+  - https://databrussels.be/id/streetname|3362|2
+  - https://databrussels.be/id/streetname|3362|1
+  boost_multiplier: 2.0
+  rationale: Palais de Justice esplanade; panoramic viewpoint.
+- notability_id: nota-place-flagey-ixelles
+  canonical_name: Place Eugène Flagey — Ixelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|2411|21
+  - https://databrussels.be/id/streetname|2411|17
+  - https://databrussels.be/id/streetname|2411|26
+  - https://databrussels.be/id/streetname|2411|28
+  - https://databrussels.be/id/streetname|2411|23
+  - https://databrussels.be/id/streetname|2411|9
+  - https://databrussels.be/id/streetname|2411|3
+  - https://databrussels.be/id/streetname|2411|1
+  - https://databrussels.be/id/streetname|2411|18
+  - https://databrussels.be/id/streetname|2411|4
+  boost_multiplier: 2.0
+  rationale: Ixelles civic square; weekly market.
+- notability_id: nota-place-jourdan-bxl
+  canonical_name: Place Jourdan — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|652|23
+  - https://databrussels.be/id/streetname|652|54
+  - https://databrussels.be/id/streetname|652|29
+  - https://databrussels.be/id/streetname|652|14
+  - https://databrussels.be/id/streetname|652|41
+  - https://databrussels.be/id/streetname|652|45
+  - https://databrussels.be/id/streetname|652|58
+  - https://databrussels.be/id/streetname|652|44
+  - https://databrussels.be/id/streetname|652|66
+  - https://databrussels.be/id/streetname|652|15
+  boost_multiplier: 2.0
+  rationale: Etterbeek square; Maison Antoine fries.
+- notability_id: nota-place-luxembourg-bxl
+  canonical_name: Place du Luxembourg — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|3461|11
+  - https://databrussels.be/id/streetname|3461|12
+  - https://databrussels.be/id/streetname|3461|5
+  - https://databrussels.be/id/streetname|3461|6
+  - https://databrussels.be/id/streetname|3461|10
+  - https://databrussels.be/id/streetname|3461|4
+  - https://databrussels.be/id/streetname|3461|8A
+  - https://databrussels.be/id/streetname|3461|1
+  - https://databrussels.be/id/streetname|3461|2
+  - https://databrussels.be/id/streetname|3461|8
+  boost_multiplier: 2.0
+  rationale: European Parliament square.
+- notability_id: nota-avenue-de-tervueren-bxl
+  canonical_name: Avenue de Tervueren — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|4033|25
+  - https://databrussels.be/id/streetname|4033|110
+  - https://databrussels.be/id/streetname|4033|12
+  - https://databrussels.be/id/streetname|4033|66
+  - https://databrussels.be/id/streetname|4033|8
+  - https://databrussels.be/id/streetname|4033|17
+  - https://databrussels.be/id/streetname|4033|18
+  - https://databrussels.be/id/streetname|4033|1
+  - https://databrussels.be/id/streetname|4033|112
+  - https://databrussels.be/id/streetname|4033|82
+  boost_multiplier: 2.0
+  rationale: Long royal axis to Tervueren park.
+- notability_id: nota-boulevard-anspach-bxl
+  canonical_name: Boulevard Anspach — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|441|156
+  - https://databrussels.be/id/streetname|441|142
+  - https://databrussels.be/id/streetname|441|53
+  - https://databrussels.be/id/streetname|441|170
+  - https://databrussels.be/id/streetname|441|48
+  - https://databrussels.be/id/streetname|441|73
+  - https://databrussels.be/id/streetname|441|52
+  - https://databrussels.be/id/streetname|441|162
+  - https://databrussels.be/id/streetname|441|150
+  - https://databrussels.be/id/streetname|441|145
+  boost_multiplier: 2.0
+  rationale: Central pedestrian Brussels boulevard.
+- notability_id: nota-dam-anvers
+  canonical_name: Dam — Antwerpen 2060
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|3032|124
+  - https://data.vlaanderen.be/id/straatnaam/|3032|114
+  - https://data.vlaanderen.be/id/straatnaam/|3032|122
+  - https://data.vlaanderen.be/id/straatnaam/|3032|5
+  - https://data.vlaanderen.be/id/straatnaam/|3032|43
+  - https://data.vlaanderen.be/id/straatnaam/|3032|94
+  - https://data.vlaanderen.be/id/straatnaam/|3032|8
+  - https://data.vlaanderen.be/id/straatnaam/|3032|35
+  - https://data.vlaanderen.be/id/straatnaam/|3032|98
+  - https://data.vlaanderen.be/id/straatnaam/|3032|23
+  boost_multiplier: 2.0
+  rationale: Antwerp Park Spoor Noord-area neighbourhood square.
+- notability_id: nota-place-eveche-tournai
+  canonical_name: Place de l'Évêché — Tournai
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7723130|1
+  - geodata.wallonie.be/id/Streetname|7723130|2
+  boost_multiplier: 2.5
+  rationale: Tournai cathedral square (UNESCO).
+- notability_id: nota-place-grand-sablon-bxl
+  canonical_name: Place du Grand Sablon — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|2461|32
+  - https://databrussels.be/id/streetname|2461|21
+  - https://databrussels.be/id/streetname|2461|34
+  - https://databrussels.be/id/streetname|2461|3
+  - https://databrussels.be/id/streetname|2461|7
+  - https://databrussels.be/id/streetname|2461|6
+  - https://databrussels.be/id/streetname|2461|39
+  - https://databrussels.be/id/streetname|2461|44
+  - https://databrussels.be/id/streetname|2461|41
+  - https://databrussels.be/id/streetname|2461|49
+  boost_multiplier: 2.5
+  rationale: Antiques and chocolate quarter (same as Sablon, see notes).
+- notability_id: nota-atomium-bxl
+  canonical_name: Atomium — Bruxelles (Heysel)
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|3418|13
+  - https://databrussels.be/id/streetname|3418|6
+  - https://databrussels.be/id/streetname|6943|1
+  boost_multiplier: 2.5
+  rationale: Belgium's iconic 1958 World's Fair monument.
+- notability_id: nota-manneken-pis-bxl
+  canonical_name: Manneken Pis — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|2359|21
+  - https://databrussels.be/id/streetname|2359|6
+  - https://databrussels.be/id/streetname|2359|22
+  - https://databrussels.be/id/streetname|2359|5
+  - https://databrussels.be/id/streetname|2359|25
+  - https://databrussels.be/id/streetname|2359|1
+  - https://databrussels.be/id/streetname|2359|9
+  - https://databrussels.be/id/streetname|2359|20
+  - https://databrussels.be/id/streetname|2359|18
+  - https://databrussels.be/id/streetname|2359|10
+  boost_multiplier: 2.0
+  rationale: Brussels' iconic statuette; pilgrimage tourist target.
+- notability_id: nota-mont-des-arts-bxl
+  canonical_name: Mont des Arts — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|566|14
+  - https://databrussels.be/id/streetname|566|7
+  - https://databrussels.be/id/streetname|566|13
+  - https://databrussels.be/id/streetname|566|21
+  - https://databrussels.be/id/streetname|566|12
+  - https://databrussels.be/id/streetname|566|9
+  - https://databrussels.be/id/streetname|566|24
+  - https://databrussels.be/id/streetname|566|16
+  - https://databrussels.be/id/streetname|566|10
+  - https://databrussels.be/id/streetname|566|5
+  boost_multiplier: 2.0
+  rationale: Cultural acropolis between upper/lower town.
+- notability_id: nota-petit-sablon-bxl
+  canonical_name: Petit Sablon (Place du Petit Sablon) — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|282|12
+  - https://databrussels.be/id/streetname|282|4
+  - https://databrussels.be/id/streetname|282|2
+  - https://databrussels.be/id/streetname|282|1
+  - https://databrussels.be/id/streetname|282|8
+  - https://databrussels.be/id/streetname|282|10
+  - https://databrussels.be/id/streetname|282|11
+  - https://databrussels.be/id/streetname|282|5
+  - https://databrussels.be/id/streetname|282|6
+  - https://databrussels.be/id/streetname|282|3
+  boost_multiplier: 2.0
+  rationale: Statuary garden square opposite Grand Sablon.
+- notability_id: nota-place-royale-bxl
+  canonical_name: Place Royale — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|776|1
+  - https://databrussels.be/id/streetname|776|3
+  - https://databrussels.be/id/streetname|776|6
+  - https://databrussels.be/id/streetname|776|9
+  - https://databrussels.be/id/streetname|776|11
+  - https://databrussels.be/id/streetname|776|7
+  - https://databrussels.be/id/streetname|776|6A
+  - https://databrussels.be/id/streetname|776|4
+  - https://databrussels.be/id/streetname|776|10
+  - https://databrussels.be/id/streetname|776|2
+  boost_multiplier: 2.0
+  rationale: Royal palace approach; museums district.
+- notability_id: nota-oude-markt-leuven
+  canonical_name: Oude Markt — Leuven
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|35175|34B
+  - https://data.vlaanderen.be/id/straatnaam/|35175|31A
+  - https://data.vlaanderen.be/id/straatnaam/|35175|44
+  - https://data.vlaanderen.be/id/straatnaam/|35175|36
+  - https://data.vlaanderen.be/id/straatnaam/|35175|55A
+  - https://data.vlaanderen.be/id/straatnaam/|35175|30
+  - https://data.vlaanderen.be/id/straatnaam/|35175|12A
+  - https://data.vlaanderen.be/id/straatnaam/|35175|31
+  - https://data.vlaanderen.be/id/straatnaam/|35175|28
+  - https://data.vlaanderen.be/id/straatnaam/|35175|26
+  boost_multiplier: 2.0
+  rationale: '''Longest bar in the world''; Leuven student heart.'
+- notability_id: nota-grote-markt-leuven
+  canonical_name: Grote Markt — Leuven
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|34867|1C
+  - https://data.vlaanderen.be/id/straatnaam/|34867|9
+  - https://data.vlaanderen.be/id/straatnaam/|34867|14
+  - https://data.vlaanderen.be/id/straatnaam/|34867|5
+  - https://data.vlaanderen.be/id/straatnaam/|34867|12
+  - https://data.vlaanderen.be/id/straatnaam/|34867|16
+  - https://data.vlaanderen.be/id/straatnaam/|34867|8
+  - https://data.vlaanderen.be/id/straatnaam/|34867|14C
+  - https://data.vlaanderen.be/id/straatnaam/|34867|3
+  - https://data.vlaanderen.be/id/straatnaam/|34867|11
+  boost_multiplier: 2.5
+  rationale: Leuven's Stadhuis square (gothic city hall).
+- notability_id: nota-grote-markt-mechelen
+  canonical_name: Grote Markt — Mechelen
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|10570|20
+  - https://data.vlaanderen.be/id/straatnaam/|10570|27
+  - https://data.vlaanderen.be/id/straatnaam/|10570|17A
+  - https://data.vlaanderen.be/id/straatnaam/|10570|35
+  - https://data.vlaanderen.be/id/straatnaam/|10570|8
+  - https://data.vlaanderen.be/id/straatnaam/|10570|14
+  - https://data.vlaanderen.be/id/straatnaam/|10570|21
+  - https://data.vlaanderen.be/id/straatnaam/|10570|32
+  - https://data.vlaanderen.be/id/straatnaam/|10570|28
+  - https://data.vlaanderen.be/id/straatnaam/|10570|10
+  boost_multiplier: 2.5
+  rationale: Mechelen's central square (Sint-Rombouts belfry).
+- notability_id: nota-burchtplein-anvers
+  canonical_name: Het Steen — Antwerpen
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|2734|1
+  - https://data.vlaanderen.be/id/straatnaam/|2734|4
+  boost_multiplier: 2.0
+  rationale: Steen castle plaza; Schelde riverfront.
+- notability_id: nota-place-st-jacques-liege
+  canonical_name: Place Saint-Jacques — Liège
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7730054|12
+  - geodata.wallonie.be/id/Streetname|7730054|14
+  - geodata.wallonie.be/id/Streetname|7730054|10
+  - geodata.wallonie.be/id/Streetname|7730054|16
+  - geodata.wallonie.be/id/Streetname|7730054|24
+  - geodata.wallonie.be/id/Streetname|7730054|14A
+  - geodata.wallonie.be/id/Streetname|7730054|22
+  - geodata.wallonie.be/id/Streetname|7730054|20
+  - geodata.wallonie.be/id/Streetname|7730054|18
+  - geodata.wallonie.be/id/Streetname|7730054|9
+  boost_multiplier: 2.0
+  rationale: Liège church square (Romanesque-Gothic St-Jacques).
+- notability_id: nota-place-cathedrale-liege
+  canonical_name: Place de la Cathédrale — Liège
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7729972|14
+  - geodata.wallonie.be/id/Streetname|7729972|10
+  - geodata.wallonie.be/id/Streetname|7729972|6
+  - geodata.wallonie.be/id/Streetname|7729972|7
+  - geodata.wallonie.be/id/Streetname|7729972|5
+  - geodata.wallonie.be/id/Streetname|7729972|18
+  - geodata.wallonie.be/id/Streetname|7729972|1
+  - geodata.wallonie.be/id/Streetname|7729972|2
+  - geodata.wallonie.be/id/Streetname|7729972|8
+  - geodata.wallonie.be/id/Streetname|7729972|16
+  boost_multiplier: 2.0
+  rationale: Saint-Paul cathedral square (Liège centre).
+- notability_id: nota-rue-vinave-liege
+  canonical_name: Vinâve d'Île — Liège
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7731490|22
+  - geodata.wallonie.be/id/Streetname|7731490|32
+  - geodata.wallonie.be/id/Streetname|7731490|31
+  - geodata.wallonie.be/id/Streetname|7731490|23
+  - geodata.wallonie.be/id/Streetname|7731490|20
+  - geodata.wallonie.be/id/Streetname|7731490|1
+  - geodata.wallonie.be/id/Streetname|7731490|5
+  - geodata.wallonie.be/id/Streetname|7731490|5A
+  - geodata.wallonie.be/id/Streetname|7731490|21
+  - geodata.wallonie.be/id/Streetname|7731490|14
+  boost_multiplier: 2.0
+  rationale: Liège's main pedestrian shopping strip.
+- notability_id: nota-place-st-aubain-namur
+  canonical_name: Place Saint-Aubain — Namur
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7753536|5
+  - geodata.wallonie.be/id/Streetname|7753536|3
+  - geodata.wallonie.be/id/Streetname|7753536|15
+  - geodata.wallonie.be/id/Streetname|7753536|2
+  - geodata.wallonie.be/id/Streetname|7753536|9
+  - geodata.wallonie.be/id/Streetname|7753536|11
+  - geodata.wallonie.be/id/Streetname|7753536|17
+  - geodata.wallonie.be/id/Streetname|7753536|14
+  - geodata.wallonie.be/id/Streetname|7753536|13
+  - geodata.wallonie.be/id/Streetname|7753536|7
+  boost_multiplier: 2.0
+  rationale: Namur cathedral square.
+- notability_id: nota-grand-place-charleroi
+  canonical_name: Place du Manège — Charleroi
+  target_building_group_ids:
+  - geodata.wallonie.be/id/Streetname|7760101|3
+  - geodata.wallonie.be/id/Streetname|7760101|21
+  - geodata.wallonie.be/id/Streetname|7760101|20
+  - geodata.wallonie.be/id/Streetname|7760101|2
+  - geodata.wallonie.be/id/Streetname|7760101|14
+  - geodata.wallonie.be/id/Streetname|7760101|11
+  - geodata.wallonie.be/id/Streetname|7760101|5
+  - geodata.wallonie.be/id/Streetname|7760101|4
+  - geodata.wallonie.be/id/Streetname|7760101|19
+  - geodata.wallonie.be/id/Streetname|7760101|18
+  boost_multiplier: 2.0
+  rationale: Charleroi central square; Eden cultural centre.
+- notability_id: nota-ijzerlaan-anvers
+  canonical_name: IJzerlaan — Antwerpen
+  target_building_group_ids:
+  - https://data.vlaanderen.be/id/straatnaam/|1251|32
+  - https://data.vlaanderen.be/id/straatnaam/|1251|55
+  - https://data.vlaanderen.be/id/straatnaam/|1251|34
+  - https://data.vlaanderen.be/id/straatnaam/|1251|36
+  - https://data.vlaanderen.be/id/straatnaam/|1251|38
+  - https://data.vlaanderen.be/id/straatnaam/|1251|46
+  - https://data.vlaanderen.be/id/straatnaam/|1251|16
+  - https://data.vlaanderen.be/id/straatnaam/|1251|28
+  - https://data.vlaanderen.be/id/straatnaam/|1251|9
+  - https://data.vlaanderen.be/id/straatnaam/|1251|54C
+  boost_multiplier: 1.8
+  rationale: Major Antwerp axis (placeholder iconic).
+- notability_id: nota-place-charles-rogier-bxl
+  canonical_name: Place Charles Rogier — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|1532|16
+  - https://databrussels.be/id/streetname|1532|3
+  - https://databrussels.be/id/streetname|1532|20
+  - https://databrussels.be/id/streetname|1532|1
+  - https://databrussels.be/id/streetname|1532|11
+  - https://databrussels.be/id/streetname|1532|7
+  - https://databrussels.be/id/streetname|5356|10
+  - https://databrussels.be/id/streetname|5356|23C
+  - https://databrussels.be/id/streetname|5356|23B
+  - https://databrussels.be/id/streetname|5356|42
+  boost_multiplier: 1.8
+  rationale: Brussels-Nord station square.
+- notability_id: nota-place-stephanie-bxl
+  canonical_name: Place Stéphanie — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|4514|2
+  - https://databrussels.be/id/streetname|4514|10
+  - https://databrussels.be/id/streetname|4514|18
+  - https://databrussels.be/id/streetname|4514|4
+  - https://databrussels.be/id/streetname|4514|12A
+  - https://databrussels.be/id/streetname|4514|16
+  - https://databrussels.be/id/streetname|4514|12
+  - https://databrussels.be/id/streetname|4514|20
+  - https://databrussels.be/id/streetname|4514|14
+  - https://databrussels.be/id/streetname|4514|8
+  boost_multiplier: 1.8
+  rationale: Upper-Louise commerce square.
+- notability_id: nota-place-rouppe-bxl
+  canonical_name: Place Rouppe — Bruxelles
+  target_building_group_ids:
+  - https://databrussels.be/id/streetname|5426|27
+  - https://databrussels.be/id/streetname|5426|19
+  - https://databrussels.be/id/streetname|5426|7
+  - https://databrussels.be/id/streetname|5426|15
+  - https://databrussels.be/id/streetname|5426|16
+  - https://databrussels.be/id/streetname|5426|24
+  - https://databrussels.be/id/streetname|5426|4
+  - https://databrussels.be/id/streetname|5426|20
+  - https://databrussels.be/id/streetname|5426|12
+  - https://databrussels.be/id/streetname|5426|30
+  boost_multiplier: 1.8
+  rationale: Brussels south-of-centre square (cocktail bars).

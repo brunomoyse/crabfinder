@@ -1,0 +1,203 @@
+# Street-type abbreviation expansion (query-time only).
+#
+# Background: the bidirectional diagnostic in file 15 confirmed that BeSt is
+# ~99.5% canonical (full forms like "Avenue", "straat", "Straße"). Users,
+# however, frequently type abbreviated forms ("Av.", "Stationsstr.",
+# "Rathauspl."). The diagnostic showed 13 of 14 test abbreviation pairs already
+# pass via BM25 fuzzy-fallback luck, but the one that fails (Rathauspl. Eupen)
+# is the canary for queries on small corpora where the street-type token
+# carries real disambiguation weight. This dictionary closes that gap.
+#
+# Scope: query-time only. No index-time expansion needed — there is no
+# meaningful pool of abbreviated forms in BeSt to expand. (Exception: ~50
+# Flanders-FR translation entries — too small to engineer for.)
+#
+# Mechanism: at /geocode query time, each token of the input is checked
+# against this dictionary. If a match is found, the canonical form is OR'd
+# into the same token slot of the AND-of-tokens strict query (and added to
+# the OR-of-tokens fuzzy fallback). The original token is preserved, so if
+# BeSt happens to contain the abbreviated form, it still matches directly.
+#
+# Tokenization context: the `crab` analyzer is SimpleTokenizer → Lower →
+# AsciiFold. SimpleTokenizer splits on every non-alphanumeric character, so
+# "Av." → ["av"], "Rathauspl." → ["rathauspl"]. The dictionary stores
+# abbreviations in their already-tokenised form (lowercase, no punctuation,
+# diacritics ASCII-folded). Matching is then case-folded byte-equality.
+#
+# Kind semantics:
+#   - standalone: matches only when the WHOLE token equals the abbreviation.
+#     Example: token "av" (kind=standalone for FR avenue) → expand to "avenue".
+#   - suffix: matches only when the token is strictly longer than the
+#     abbreviation AND ends with it. Example: token "stationsstr" ends with
+#     "str" (kind=suffix for NL straat) → expand to "stationsstraat".
+#   - both: applies both rules — standalone match and suffix match.
+#     Used by DE "Str." which appears as standalone ("Lütticher Str.") AND
+#     as a compound suffix ("Aachenerstr.").
+#
+# Language: informational only. The expansion engine applies every entry
+# regardless of language hint — we cannot reliably detect query language,
+# and additive expansion is safe (BM25 sorts out false positives).
+#
+# Single-letter FR abbreviations (r → rue, q → quai) are deliberately
+# excluded from v1 due to false-positive risk on common Belgian queries.
+# Example failure mode: "Renard 10 1000" tokenises to ["renard", "10", "1000"];
+# the token "renard" starts with "r" but is not the abbreviation R. — yet a
+# naive lookup of single-char tokens would also trigger expansion paths in
+# any future variant. Multi-character forms (av, avn, bd, bld) are
+# unambiguous and remain. Consider adding single-letter forms in v2 if
+# measured user demand justifies the noise.
+
+version: v1
+language_scope: [fr, nl, de]
+
+entries:
+
+# ---------- French — standalone street-type prefixes -------------------------
+
+- canonical: avenue
+  abbreviations: [av, avn]
+  language: fr
+  kind: standalone
+  rationale: |
+    "Av." is the dominant FR abbreviation in user input. "Avn" rare but surfaces.
+
+- canonical: boulevard
+  abbreviations: [bd, bld, bdv, boul]
+  language: fr
+  kind: standalone
+  rationale: Four variants observed in Belgian address printing (Bd most common, Bld second).
+
+- canonical: chaussée
+  abbreviations: [ch, chsee, chee]
+  language: fr
+  kind: standalone
+  rationale: |
+    "Ch." standard in formal address forms; "Chsée"/"Chée" surface on older Brussels-area print.
+
+- canonical: place
+  abbreviations: [pl]
+  language: fr
+  kind: standalone
+  rationale: |
+    "Pl." extremely common in Wallonia public-facing text.
+
+- canonical: square
+  abbreviations: [sq]
+  language: fr
+  kind: standalone
+
+- canonical: impasse
+  abbreviations: [imp]
+  language: fr
+  kind: standalone
+
+- canonical: chemin
+  abbreviations: [chem]
+  language: fr
+  kind: standalone
+  rationale: |
+    "Chemin" is the 3rd-most-common FR street type in Wallonia (~3k entries); abbreviation "Chem." surfaces in print.
+
+- canonical: route
+  abbreviations: [rte]
+  language: fr
+  kind: standalone
+  rationale: |
+    ~500 FR "Route" streets concentrated in Wallonia (Route de Liège, Route de Mons, etc.).
+    "Rte." is the standard abbreviation on property and postal documents.
+
+- canonical: allée
+  abbreviations: [all, allee]
+  language: fr
+  kind: standalone
+  rationale: |
+    ~1k "Allée" streets, common in Brussels (Allée Verte) and Wallonia.
+    "All." is the canonical FR abbreviation; "Allee" (no accent) covers the
+    ASCII-folded form that surfaces in some print sources.
+
+- canonical: drève
+  abbreviations: [drv]
+  language: fr
+  kind: standalone
+  rationale: |
+    ~50 "Drève" streets concentrated in Brussels (Drève des Renards, Drève
+    de Lorraine). Niche but iconic locally; "Drv." surfaces in compact prints.
+
+# ---------- Dutch — suffix-in-compound, occasionally standalone --------------
+
+- canonical: straat
+  abbreviations: [str]
+  language: nl
+  kind: suffix
+  rationale: |
+    The single most common NL street-type (~25k entries across regions).
+    "Stationsstr" → "Stationsstraat" is the canonical user-error case.
+
+- canonical: steenweg
+  abbreviations: [stwg, stnwg]
+  language: nl
+  kind: suffix
+  rationale: |
+    "Stwg" and "Stnwg" both observed; the longer form is older convention.
+
+- canonical: laan
+  abbreviations: [ln]
+  language: nl
+  kind: suffix
+  rationale: ~6k NL streets end in "laan".
+
+- canonical: plein
+  abbreviations: [pl]
+  language: nl
+  kind: suffix
+  rationale: |
+    Note: NL "pl" as a SUFFIX overlaps with FR/DE "Pl." as STANDALONE.
+    The `kind: suffix` discriminator prevents collisions — "Pl. Sainte-Catherine"
+    won't trigger this entry (the token "pl" alone doesn't match a suffix rule).
+
+- canonical: dreef
+  abbreviations: [drf]
+  language: nl
+  kind: suffix
+  rationale: |
+    ~500 NL streets end in "dreef" (Brusselsedreef, Eikendreef, …), concentrated
+    in Flanders and Brussels-periphery. "Drf." is the compact form on printed
+    addresses.
+
+# ---------- German — both standalone and suffix forms ------------------------
+
+- canonical: straße
+  abbreviations: [str]
+  language: de
+  kind: both
+  also_match: strasse
+  rationale: |
+    "Str." appears standalone ("Lütticher Str. Lontzen") and as a compound suffix
+    ("Aachenerstr."). The ASCII-folded form "strasse" is added as a canonical
+    target because German users often spell ß as ss; "strasse" tokens may exist
+    in BeSt where ASCII-folding has run.
+
+- canonical: platz
+  abbreviations: [pl]
+  language: de
+  kind: both
+  rationale: |
+    "Pl." appears standalone (rare in DE) and as a compound suffix ("Rathauspl."
+    → token "rathauspl"). This is the entry that fixes the Eupen failure case.
+
+# 13 entries; 21 unique abbreviations. Coverage by frequency:
+#   FR Avenue (3,180 streets) → 2 abbreviations
+#   FR Boulevard (252) → 4
+#   FR Chaussée (316) → 3
+#   FR Place (1,731) → 1
+#   FR Square (352) → 1
+#   FR Impasse (573) → 1
+#   FR Chemin (~3,000) → 1
+#   NL straat (25,188) → 1
+#   NL steenweg (577) → 2
+#   NL laan (6,398) → 1
+#   NL plein (1,880) → 1
+#   DE Straße (212) → 1 (+ strasse also_match)
+#   DE Platz (12) → 1
+#
+# Single-letter forms (R. rue, Q. quai, G. gasse) intentionally omitted; see header.

@@ -1,0 +1,71 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/crabfinder-core",
+    "crates/crabfinder-indexer",
+    "crates/crabfinder-parser",
+    "crates/crabfinder-service",
+    "crates/crabfinder-eval",
+    "crates/crabfinder-batch",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86"
+license = "MIT OR Apache-2.0"
+authors = ["crabfinder contributors"]
+repository = "https://github.com/brunomoyse/crabfinder"
+
+[workspace.dependencies]
+# Internal crates
+crabfinder-core    = { path = "crates/crabfinder-core" }
+crabfinder-indexer = { path = "crates/crabfinder-indexer" }
+crabfinder-parser  = { path = "crates/crabfinder-parser" }
+
+# Search + IO
+tantivy            = "0.26"
+quick-xml          = "0.40"
+zip                = "5"
+
+# Async + HTTP
+tokio              = { version = "1.52", features = ["full"] }
+axum               = "0.8"
+tower-http         = { version = "0.6", features = ["cors", "trace"] }
+
+# Spatial
+geo                = "0.33"
+rstar              = "0.12"
+
+# Serialization
+serde              = { version = "1.0", features = ["derive"] }
+serde_json         = "1.0"
+
+# Concurrency
+rayon              = "1.12"
+crossbeam-channel  = "0.5"
+
+# Text
+deunicode          = "1.6"
+unicode-segmentation = "1.12"
+unicode-normalization = "0.1"
+
+# CLI / errors / logging
+clap               = { version = "4.6", features = ["derive", "env"] }
+anyhow             = "1.0"
+thiserror          = "2.0"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Parser (Phase 4)
+nom                = "8.0"
+
+# Dev
+proptest           = "1.11"
+insta              = "1.47"
+criterion          = "0.8"
+
+[profile.release]
+debug = 1
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,38 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Local data + index outputs.
+# `data/` itself is gitignored to keep multi-GB BeSt downloads out, but
+# the hand-curated config YAMLs (abbreviation dict, notability whitelist)
+# under `data/` are force-added in their own commit.
+/data/
+/index/
+/index-belgium/
+/index-belgium-v7/
+*.db
+*.db-journal
+
+# Runtime logs
+/logs/
+
+# IDE / agent
+.vscode/
+.idea/
+.claude/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bundled external (kept out of crabfinder's repo)
+/airmail/
+/best-full-latest/
+
+# Eval per-query detail artifacts (CI-only, file 14 §6 artifact split).
+# The metrics-only report.json is committed as a baseline; the detail
+# sidecar is regeneratable from the same eval-set + service run.
+/reports/*-detail.json.gz

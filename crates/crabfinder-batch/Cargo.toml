@@ -1,0 +1,42 @@
+[package]
+name = "crabfinder-batch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Standalone batch geocoder CLI for crabfinder."
+
+[[bin]]
+name = "crabfinder-batch"
+path = "src/main.rs"
+
+[dependencies]
+# Re-use the service crate's library surface: resolver, batch I/O, mid_street
+# loader, abbreviation loader, etc. This binary opens the index directly
+# (no HTTP hop) — it is a peer of `crabfinder-service`, not a wrapper.
+crabfinder-service = { path = "../crabfinder-service" }
+crabfinder-indexer = { workspace = true }
+crabfinder-core    = { workspace = true }
+
+tantivy            = { workspace = true }
+
+# CLI / errors / logging
+clap               = { workspace = true }
+anyhow             = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# rayon — pulled in to size the global thread pool from --parallel before
+# `dedup_then_resolve` starts farming out work.
+rayon              = { workspace = true }
+
+# JSON (for parsing options when invoked from scripts)
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+
+[dev-dependencies]
+# Integration tests build a tiny on-disk index in a tempdir and invoke
+# the binary against it via std::process::Command + CARGO_BIN_EXE_*.
+# crabfinder-core, crabfinder-indexer, and serde_json are reachable through
+# [dependencies] above — we only need `tempfile` for tempdirs.
+tempfile           = "3.10"

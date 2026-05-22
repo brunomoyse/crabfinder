@@ -1,0 +1,11 @@
+[package]
+name = "crabfinder-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rule-based Belgian address parser (nom). Phase 4 — placeholder for now."
+
+[lib]
+
+[dependencies]

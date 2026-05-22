@@ -1,0 +1,13 @@
+[package]
+name = "crabfinder-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Core domain types for crabfinder — BeSt-shaped Belgian addresses."
+
+[lib]
+
+[dependencies]
+serde      = { workspace = true }
+thiserror  = { workspace = true }

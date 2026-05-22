@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "computed_from": {
+    "eval_set_paths": [
+      "/Users/brunomoyse/Development/applications/PERSO/crabfinder/eval/belgium-2026-05-21-mvp-v1.json"
+    ],
+    "n_queries": 2610,
+    "n_resolved": 2608,
+    "elapsed_ms": 1958
+  },
+  "summary": {
+    "exact": {
+      "count": 1308,
+      "pct": 50.11494252873563
+    },
+    "fuzzy_street": {
+      "count": 299,
+      "pct": 11.455938697318008
+    },
+    "median_street": {
+      "count": 1001,
+      "pct": 38.35249042145594
+    },
+    "not_found": {
+      "count": 2,
+      "pct": 0.07662835249042145
+    }
+  },
+  "exact_score_quantiles": {
+    "n": 1308,
+    "q25": 25.826624,
+    "q50": 32.801357,
+    "q75": 101.12298,
+    "q95": 144.34982
+  }
+}

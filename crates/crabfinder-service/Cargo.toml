@@ -1,0 +1,56 @@
+[package]
+name = "crabfinder-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Axum HTTP service for crabfinder."
+
+[[bin]]
+name = "crabfinder-service"
+path = "src/main.rs"
+
+[dependencies]
+crabfinder-core    = { workspace = true }
+crabfinder-indexer = { workspace = true }   # share Tantivy schema
+crabfinder-parser  = { workspace = true }   # query parser
+
+tantivy            = { workspace = true }
+
+# Spatial index (Phase 4)
+rstar              = { workspace = true }
+# Great-circle distance (Haversine). Pure-Rust, no system deps. See
+# docs/georust-adoption-analysis.md for the rationale.
+geo                = { workspace = true }
+
+# HTTP
+axum               = { workspace = true, features = ["multipart"] }
+tokio              = { workspace = true }
+tower-http         = { workspace = true }
+# Body streaming helpers (Stream → Body::from_stream).
+futures            = "0.3"
+bytes              = "1.7"
+tokio-stream       = "0.1"
+
+# Serialization
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+serde_yaml         = "0.9"
+csv                = "1.3"
+
+# Parallelism (batch resolver fans out across CPU cores).
+rayon              = { workspace = true }
+
+# CLI / errors / logging
+clap               = { workspace = true }
+anyhow             = { workspace = true }
+thiserror          = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile           = "3.10"
+# E2E HTTP tests drive the Axum router in-process via tower::ServiceExt::oneshot
+# (no listener, no TCP). axum 0.8 brings tower 0.5.
+tower              = { version = "0.5", features = ["util"] }
+http-body-util     = "0.1"

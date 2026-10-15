@@ -26,8 +26,8 @@ use crate::focus::apply_focus_decay;
 use crate::hydrate::{HydratedHit, hydrate};
 use crate::mid_street::{MidStreetIndex, street_key_from_bgid};
 use crate::query_builder::{
-    FilterParams, analyze, build_fuzzy_query, build_strict_query, search_score_only,
-    search_with_notability, searchable_field,
+    FilterParams, analyze, build_fuzzy_query, build_strict_query, build_typo_query,
+    search_score_only, search_with_notability, searchable_field, slot_is_unknown,
 };
 
 /// Structured address input. Both the HTTP free-text path (after parsing) and
@@ -257,8 +257,13 @@ impl Default for SearchOptions {
 pub enum Tier {
     /// Strict street match + house-number filter.
     Exact,
+    /// Unknown street words corrected by edit distance + house-number
+    /// filter (Phase 3).
+    Typo,
     /// Strict street match, house number ignored (missing or not found).
     Street,
+    /// Typo-corrected street match, house number ignored.
+    TypoStreet,
     /// OR-of-tokens street match + house-number filter.
     OrWithNumber,
     /// OR-of-tokens street match, house number ignored.
@@ -268,9 +273,11 @@ pub enum Tier {
 }
 
 impl Tier {
-    const ORDER: [Tier; 4] = [
+    const ORDER: [Tier; 6] = [
         Tier::Exact,
+        Tier::Typo,
         Tier::Street,
+        Tier::TypoStreet,
         Tier::OrWithNumber,
         Tier::OrStreet,
     ];
@@ -278,7 +285,9 @@ impl Tier {
     pub fn as_str(self) -> &'static str {
         match self {
             Tier::Exact => "exact",
+            Tier::Typo => "typo",
             Tier::Street => "street",
+            Tier::TypoStreet => "typo_street",
             Tier::OrWithNumber => "or_with_number",
             Tier::OrStreet => "or_street",
             Tier::None => "none",
@@ -288,18 +297,23 @@ impl Tier {
     fn match_type(self) -> MatchType {
         match self {
             Tier::Exact | Tier::Street | Tier::None => MatchType::Strict,
+            Tier::Typo | Tier::TypoStreet => MatchType::Typo,
             Tier::OrWithNumber | Tier::OrStreet => MatchType::Fuzzy,
         }
     }
 
-    /// Strict tiers are tried for every reading before any OR fallback.
+    /// Strict tiers (typo included) are tried for every reading before
+    /// any OR fallback.
     fn is_strict(self) -> bool {
-        matches!(self, Tier::Exact | Tier::Street)
+        matches!(
+            self,
+            Tier::Exact | Tier::Typo | Tier::Street | Tier::TypoStreet
+        )
     }
 
     /// Whether this tier honours the requested house number.
     fn uses_house_number(self) -> bool {
-        matches!(self, Tier::Exact | Tier::OrWithNumber)
+        matches!(self, Tier::Exact | Tier::Typo | Tier::OrWithNumber)
     }
 
     /// `(confidence, fallback_reason, house_number_delta)` for a hit from
@@ -314,6 +328,16 @@ impl Tier {
         };
         match self {
             Tier::Exact => (Confidence::Exact, None, Some(0)),
+            Tier::Typo => (
+                Confidence::FuzzyStreet,
+                Some(FallbackReason::StreetSpellingFuzzy),
+                Some(0),
+            ),
+            Tier::TypoStreet => (
+                Confidence::FuzzyStreet,
+                missing_or(FallbackReason::StreetSpellingFuzzy),
+                None,
+            ),
             Tier::Street => (
                 Confidence::MedianStreet,
                 missing_or(FallbackReason::HouseNumberOutOfRange),
@@ -424,11 +448,13 @@ fn search_tiers(
     let field = searchable_field(ctx.schema);
     let searcher = ctx.reader.searcher();
     let raw_limit = raw_limit(opts.limit, opts.expand);
+    // Which slots the typo tiers make fuzzy; computed on first use.
+    let mut unknown: Option<Vec<bool>> = None;
 
     for tier in Tier::ORDER.into_iter().filter(|t| t.is_strict() == strict) {
         let enabled = match tier {
-            Tier::Exact | Tier::OrWithNumber => has_hn,
-            Tier::Street | Tier::OrStreet => opts.mid_street_fallback,
+            Tier::Exact | Tier::Typo | Tier::OrWithNumber => has_hn,
+            Tier::Street | Tier::TypoStreet | Tier::OrStreet => opts.mid_street_fallback,
             Tier::None => false,
         };
         if !enabled {
@@ -438,6 +464,15 @@ fn search_tiers(
         let q = match tier {
             Tier::Exact | Tier::Street => {
                 build_strict_query(field, &slots, &p, ctx.schema, &filters)
+            }
+            Tier::Typo | Tier::TypoStreet => {
+                let unknown = unknown.get_or_insert_with(|| {
+                    slots
+                        .iter()
+                        .map(|forms| slot_is_unknown(&searcher, field, forms))
+                        .collect()
+                });
+                build_typo_query(field, &slots, unknown, &p, ctx.schema, &filters)
             }
             _ => build_fuzzy_query(field, &slots, &p, ctx.schema, &filters),
         };
@@ -1222,5 +1257,96 @@ mod tests {
         assert_eq!(normalize_box("A"), "a");
         assert_eq!(normalize_box("0A"), "a");
         assert_eq!(normalize_box(""), "");
+    }
+
+    // --- Phase 3: typo tiers ---------------------------------------------
+
+    fn louise_plus_louis() -> TestIndex {
+        let mut addrs = fixtures::louise_street();
+        addrs.push(
+            AddressBuilder::new("lv", "4000", "999")
+                .street(Some("Avenue Louis"), None)
+                .postal("1050")
+                .build(),
+        );
+        TestIndex::build(&addrs)
+    }
+
+    #[test]
+    fn typo_with_house_number() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&parsed_query(&ti, "Avenue Loiuse 32"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Typo);
+        let top = &set.candidates[0];
+        assert_eq!(hn_of(top), "32");
+        assert_eq!(top.hit.match_type, MatchType::Typo);
+        assert_eq!(top.confidence, Confidence::FuzzyStreet);
+        assert_eq!(
+            top.fallback_reason,
+            Some(FallbackReason::StreetSpellingFuzzy)
+        );
+        assert_eq!(top.house_number_delta, Some(0));
+    }
+
+    #[test]
+    fn typo_without_number_is_street_level_with_median() {
+        let ti = louise_index();
+        let (_tmp, ms) = sentinel_mid_street(50.5, 4.5);
+        let c = ctx(&ti, ms);
+        let set = search(&parsed_query(&ti, "Avenue Loiuse"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::TypoStreet);
+        let r = resolve(&parsed_query(&ti, "Avenue Loiuse 999"), &c);
+        assert_eq!(r.confidence, Confidence::FuzzyStreet);
+        assert_eq!(r.fallback_reason, Some(FallbackReason::StreetSpellingFuzzy));
+        assert_eq!(r.house_number_delta, None);
+        let hit = r.hit.unwrap();
+        assert_eq!((hit.lat, hit.lon), (50.5, 4.5), "median coordinates");
+
+        // Street-level typo tiers obey the mid-street switch.
+        let off = SearchOptions {
+            mid_street_fallback: false,
+            ..opts(5)
+        };
+        let set = search(&parsed_query(&ti, "Avenue Loiuse"), &off, &c).unwrap();
+        assert_eq!(set.tier, Tier::None);
+    }
+
+    #[test]
+    fn typo_respects_postal_filter_and_distance() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let tier = |q: &str| search(&parsed_query(&ti, q), &opts(5), &c).unwrap().tier;
+        assert_eq!(tier("Avenue Loiuse 32 1050"), Tier::Typo);
+        assert_ne!(tier("Avenue Loiuse 32 1000"), Tier::Typo);
+        // Two edits on a 6-letter word: out of reach.
+        assert_ne!(tier("Avenue Lxiuse 32"), Tier::Typo);
+        // 5-letter word, one transposition: corrected.
+        assert_eq!(tier("Rue Piare 4"), Tier::Typo);
+        // 4-letter typed word: never corrected.
+        assert_ne!(tier("Rue Pare 4"), Tier::Typo);
+    }
+
+    #[test]
+    fn correctly_spelled_words_are_never_corrected() {
+        // "Avenue Louise 999": the strict street exists, so no typo tier
+        // may turn "louise" into the neighbouring "Avenue Louis 999".
+        let ti = louise_plus_louis();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&parsed_query(&ti, "Avenue Louise 999"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Street);
+        assert!(set.candidates.iter().all(|c| hn_of(c) != "999"));
+        // And an exact query is exact.
+        let set = search(&parsed_query(&ti, "Avenue Louis 999"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+    }
+
+    #[test]
+    fn typo_tier_strings() {
+        assert_eq!(Tier::Typo.as_str(), "typo");
+        assert_eq!(Tier::TypoStreet.as_str(), "typo_street");
+        assert!(Tier::Typo.uses_house_number());
+        assert!(!Tier::TypoStreet.uses_house_number());
+        assert_eq!(MatchType::Typo.as_str(), "typo");
     }
 }

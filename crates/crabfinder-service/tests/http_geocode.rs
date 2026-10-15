@@ -330,3 +330,15 @@ async fn postal_param_overrides_every_reading() {
         .await;
     assert!(features(&body).is_empty());
 }
+
+#[tokio::test]
+async fn typo_features_are_marked() {
+    let app = App::new(&fixtures::louise_street());
+    let body = app.ok(&geocode_uri("Avenue Loiuse 32, 1050", "")).await;
+    let f = &features(&body)[0];
+    assert_eq!(prop(f, "house_number"), "32");
+    assert_eq!(f["match_type"], "typo");
+    assert_eq!(f["confidence"], "fuzzy_street");
+    assert_eq!(f["fallback_reason"], "street_spelling_fuzzy");
+    assert_eq!(body["match_type"], "fuzzy");
+}

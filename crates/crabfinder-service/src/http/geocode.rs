@@ -59,7 +59,7 @@ pub struct FeatureCollection {
     pub query: GeocodeEcho,
     pub count: usize,
     /// "strict" if any returned building had a strict-matching member,
-    /// "fuzzy" if every one came only from the OR-token fallback.
+    /// "fuzzy" if every one came from the typo or OR-token tiers.
     pub match_type: &'static str,
     /// False when `?expand=true` was set.
     pub deduplicated: bool,

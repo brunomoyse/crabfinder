@@ -80,6 +80,9 @@ impl RawHit {
 pub enum MatchType {
     Strict,
     Fuzzy,
+    /// Typo tier (Phase 3): a misspelled street word was corrected by
+    /// edit distance.
+    Typo,
     /// Result came from /reverse (spatial nearest-neighbour), not text search.
     /// Carried so clients can rely on `match_type` always being present
     /// regardless of which endpoint produced the feature.
@@ -91,6 +94,7 @@ impl MatchType {
         match self {
             MatchType::Strict => "strict",
             MatchType::Fuzzy => "fuzzy",
+            MatchType::Typo => "typo",
             MatchType::Spatial => "spatial",
         }
     }

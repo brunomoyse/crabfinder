@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use tantivy::collector::TopDocs;
 use tantivy::query::{
-    BooleanQuery, BoostQuery, Occur, PhraseQuery, Query as TantivyQuery, TermQuery,
+    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query as TantivyQuery, TermQuery,
 };
 use tantivy::schema::IndexRecordOption;
 use tantivy::{DocId, Index, Score, SegmentReader, Term};
@@ -186,6 +186,22 @@ pub fn build_strict_query(
         clauses.push((Occur::Must, textual));
     }
 
+    push_filters(&mut clauses, parsed, schema, filters);
+
+    if clauses.is_empty() {
+        return None;
+    }
+    Some(Box::new(BooleanQuery::new(clauses)))
+}
+
+/// Must clauses shared by every tier: house number (when the reading
+/// carries one), postal code (explicit filter first) and region.
+fn push_filters(
+    clauses: &mut Vec<(Occur, Box<dyn TantivyQuery>)>,
+    parsed: &ParsedQuery,
+    schema: &CrabSchema,
+    filters: &FilterParams,
+) {
     if let Some(hn) = &parsed.house_number {
         clauses.push((Occur::Must, house_number_clause(schema, hn)));
     }
@@ -203,10 +219,89 @@ pub fn build_strict_query(
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
         clauses.push((Occur::Must, tq));
     }
+}
 
-    if clauses.is_empty() {
+/// Edit distance allowed for a typed word of `chars` characters (Phase 3):
+/// none under 5, one for 5–8, two from 9.
+pub fn typo_distance(chars: usize) -> u8 {
+    match chars {
+        0..=4 => 0,
+        5..=8 => 1,
+        _ => 2,
+    }
+}
+
+/// Whether no form of a slot exists in the searchable vocabulary — the
+/// only slots the typo tier makes fuzzy, so a correctly spelled word is
+/// never "corrected" into a neighbouring street name.
+pub fn slot_is_unknown(
+    searcher: &tantivy::Searcher,
+    field: tantivy::schema::Field,
+    forms: &[String],
+) -> bool {
+    forms.iter().all(|f| {
+        searcher
+            .doc_freq(&Term::from_field_text(field, f))
+            .map_or(true, |n| n == 0)
+    })
+}
+
+/// Typo tier (Phase 3): the strict AND-of-slots with every unknown slot
+/// replaced by a Damerau–Levenshtein `FuzzyTermQuery` on the typed form.
+/// For two-edit words a one-edit clause is added with boost 2.0, so the
+/// closer correction ranks first (Tantivy scores fuzzy hits as constants).
+///
+/// `None` when no slot is unknown (the strict tiers already cover it) or
+/// an unknown slot is too short to correct.
+pub fn build_typo_query(
+    field: tantivy::schema::Field,
+    slots: &[Vec<String>],
+    unknown: &[bool],
+    parsed: &ParsedQuery,
+    schema: &CrabSchema,
+    filters: &FilterParams,
+) -> Option<Box<dyn TantivyQuery>> {
+    if !unknown.iter().any(|u| *u) {
         return None;
     }
+    let mut clauses: Vec<(Occur, Box<dyn TantivyQuery>)> = Vec::with_capacity(slots.len() + 3);
+    for (forms, is_unknown) in slots.iter().zip(unknown) {
+        let slot_q: Box<dyn TantivyQuery> = if *is_unknown {
+            let typed = &forms[0];
+            let d = typo_distance(typed.chars().count());
+            if d == 0 {
+                return None;
+            }
+            let term = Term::from_field_text(field, typed);
+            let one: Box<dyn TantivyQuery> = Box::new(BoostQuery::new(
+                Box::new(FuzzyTermQuery::new(term.clone(), 1, true)),
+                2.0,
+            ));
+            if d == 1 {
+                one
+            } else {
+                let two: Box<dyn TantivyQuery> = Box::new(FuzzyTermQuery::new(term, 2, true));
+                Box::new(BooleanQuery::new(vec![
+                    (Occur::Should, one),
+                    (Occur::Should, two),
+                ]))
+            }
+        } else {
+            let forms_q: Vec<(Occur, Box<dyn TantivyQuery>)> = forms
+                .iter()
+                .map(|f| {
+                    let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(
+                        Term::from_field_text(field, f),
+                        IndexRecordOption::WithFreqs,
+                    ));
+                    (Occur::Should, tq)
+                })
+                .collect();
+            Box::new(BooleanQuery::new(forms_q))
+        };
+        clauses.push((Occur::Must, slot_q));
+    }
+    push_filters(&mut clauses, parsed, schema, filters);
     Some(Box::new(BooleanQuery::new(clauses)))
 }
 
@@ -394,23 +489,7 @@ pub fn build_fuzzy_query(
         clauses.push((Occur::Must, textual));
     }
 
-    if let Some(hn) = &parsed.house_number {
-        clauses.push((Occur::Must, house_number_clause(schema, hn)));
-    }
-    let postal = filters
-        .postal_code
-        .as_deref()
-        .or(parsed.postal_code.as_deref());
-    if let Some(pc) = postal {
-        let term = Term::from_field_text(schema.postal_code, pc);
-        let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        clauses.push((Occur::Must, tq));
-    }
-    if let Some(region) = filters.region.as_deref() {
-        let term = Term::from_field_text(schema.region, region);
-        let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        clauses.push((Occur::Must, tq));
-    }
+    push_filters(&mut clauses, parsed, schema, filters);
 
     if clauses.is_empty() {
         return None;
@@ -488,5 +567,57 @@ mod fuzzy_tests {
             &FilterParams::default(),
         );
         assert!(q.is_some());
+    }
+}
+
+#[cfg(test)]
+mod typo_tests {
+    use super::*;
+    use crabfinder_test_support::{TestIndex, fixtures};
+
+    fn slots(words: &[&str]) -> Vec<Vec<String>> {
+        words.iter().map(|w| vec![w.to_string()]).collect()
+    }
+
+    #[test]
+    fn distance_table() {
+        assert_eq!(
+            (0..=10).map(typo_distance).collect::<Vec<_>>(),
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2]
+        );
+    }
+
+    #[test]
+    fn unknown_slots_are_those_missing_from_the_vocabulary() {
+        let ti = TestIndex::build(&fixtures::louise_street());
+        let searcher = ti.reader.searcher();
+        let f = ti.schema.searchable;
+        assert!(!slot_is_unknown(&searcher, f, &["louise".into()]));
+        assert!(slot_is_unknown(&searcher, f, &["loiuse".into()]));
+        // One known form is enough (abbreviation expansions).
+        assert!(!slot_is_unknown(
+            &searcher,
+            f,
+            &["av".into(), "avenue".into()]
+        ));
+    }
+
+    #[test]
+    fn typo_query_needs_a_correctable_unknown_slot() {
+        let schema = CrabSchema::build();
+        let f = schema.searchable;
+        let p = ParsedQuery::default();
+        let filters = FilterParams::default();
+        let s = slots(&["avenue", "loiuse"]);
+        assert!(build_typo_query(f, &s, &[false, false], &p, &schema, &filters).is_none());
+        assert!(build_typo_query(f, &s, &[false, true], &p, &schema, &filters).is_some());
+        // "pare" (4 chars) can't be corrected → no typo tier at all.
+        let s = slots(&["rue", "pare"]);
+        assert!(build_typo_query(f, &s, &[false, true], &p, &schema, &filters).is_none());
+        // Two-edit words get both distances.
+        let s = slots(&["kloosterstrat"]);
+        let q = build_typo_query(f, &s, &[true], &p, &schema, &filters).unwrap();
+        let dbg = format!("{q:?}");
+        assert_eq!(dbg.matches("FuzzyTermQuery").count(), 2, "{dbg}");
     }
 }

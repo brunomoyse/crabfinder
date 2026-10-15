@@ -25,11 +25,18 @@ where
         zip::ZipArchive::new(file).with_context(|| format!("read zip header {zip_path:?}"))?;
 
     // Find the .xml entry's index without holding a borrow on the archive.
-    let xml_name = (0..archive.len())
-        .filter_map(|i| archive.name_for_index(i).map(|n| (i, n.to_owned())))
-        .find(|(_, n)| n.to_ascii_lowercase().ends_with(".xml"))
-        .map(|(_, n)| n)
-        .ok_or_else(|| anyhow!("no .xml entry inside {zip_path:?}"))?;
+    let mut xml_name = None;
+    for i in 0..archive.len() {
+        let Some(name) = archive.name_for_index(i) else {
+            continue;
+        };
+        let name = name.with_context(|| format!("read entry name #{i} inside {zip_path:?}"))?;
+        if name.to_ascii_lowercase().ends_with(".xml") {
+            xml_name = Some(name.into_owned());
+            break;
+        }
+    }
+    let xml_name = xml_name.ok_or_else(|| anyhow!("no .xml entry inside {zip_path:?}"))?;
 
     let entry = archive
         .by_name(&xml_name)

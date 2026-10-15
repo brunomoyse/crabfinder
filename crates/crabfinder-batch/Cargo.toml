@@ -39,4 +39,4 @@ serde_json         = { workspace = true }
 # the binary against it via std::process::Command + CARGO_BIN_EXE_*.
 # crabfinder-core, crabfinder-indexer, and serde_json are reachable through
 # [dependencies] above — we only need `tempfile` for tempdirs.
-tempfile           = "3.10"
+tempfile           = "3.27"

@@ -16,13 +16,13 @@ path = "src/main.rs"
 crabfinder-core    = { workspace = true }
 
 # XML + zip
-quick-xml          = "0.40"
-zip                = "5"
+quick-xml          = "0.42"
+zip                = "9"
 # Reprojection EPSG:31370 → EPSG:4326. Pure Rust, no system deps.
 # We feed it an explicit proj-string (not the EPSG:31370 default) so the
 # IGN-published 7-parameter Helmert is applied. See reproject.rs and
 # docs/georust-adoption-analysis.md.
-proj4rs            = "0.1.10"
+proj4rs            = "0.2.1"
 
 # Search
 tantivy            = { workspace = true }
@@ -39,7 +39,7 @@ clap               = { workspace = true }
 # Serialization
 serde              = { workspace = true }
 serde_json         = { workspace = true }
-serde_yaml         = "0.9"
+serde-saphyr       = "2"
 
 [dev-dependencies]
-tempfile           = "3.10"
+tempfile           = "3.27"

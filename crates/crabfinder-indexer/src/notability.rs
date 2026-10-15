@@ -55,7 +55,7 @@ impl NotabilityMap {
     pub fn load(path: &Path) -> Result<Self> {
         let body = fs::read_to_string(path)
             .with_context(|| format!("reading whitelist {path:?}"))?;
-        let parsed: WhitelistFile = serde_yaml::from_str(&body)
+        let parsed: WhitelistFile = serde_saphyr::from_str(&body)
             .with_context(|| format!("parsing whitelist {path:?} as YAML"))?;
 
         if parsed.version != "v1" {

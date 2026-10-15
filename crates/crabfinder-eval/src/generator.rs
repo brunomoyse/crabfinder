@@ -330,7 +330,7 @@ fn sample_bgids(
     }
     let actual_target = target.min(sorted_bgids.len());
     let chosen = sorted_bgids
-        .choose_multiple(rng, actual_target)
+        .sample(rng, actual_target)
         .map(|bgid_ref| pool[*bgid_ref])
         .collect();
     Ok(chosen)

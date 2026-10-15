@@ -11,7 +11,7 @@ GET /reverse?lat=50.8466&lng=4.3525
 
 ## Quick start
 
-Requires Rust 1.86+, ~3 GB free disk for the index, and the BeSt zip
+Requires Rust 1.90+, ~3 GB free disk for the index, and the BeSt zip
 bundle.
 
 ```bash

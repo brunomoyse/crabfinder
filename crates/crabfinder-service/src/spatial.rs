@@ -155,7 +155,7 @@ impl SpatialIndex {
             (limit * 2).max(8)
         };
 
-        for point in self.tree.nearest_neighbor_iter(&[lon, lat]) {
+        for point in self.tree.nearest_neighbor_iter([lon, lat]) {
             // Early-exit by planar cap for radius queries.
             if let Some(cap2) = planar_cap_2 {
                 if point.distance_2(&[lon, lat]) > cap2 {

@@ -86,7 +86,7 @@ impl AbbreviationMap {
     pub fn load(path: &Path, index: &Index) -> Result<Self> {
         let body = fs::read_to_string(path)
             .with_context(|| format!("reading abbreviation dictionary {path:?}"))?;
-        let parsed: YamlFile = serde_yaml::from_str(&body)
+        let parsed: YamlFile = serde_saphyr::from_str(&body)
             .with_context(|| format!("parsing {path:?} as YAML"))?;
         if parsed.version != "v1" {
             warn!(version = %parsed.version, "abbreviation dict version != v1");

@@ -3,7 +3,7 @@
 //! Every BeSt XML position is in Lambert 72 (file 11 §3); we reproject once
 //! at index time so /geocode responses can return WGS84 directly.
 //!
-//! Implementation: delegated to `proj4rs` 0.1.10 (pure Rust, no system
+//! Implementation: delegated to `proj4rs` 0.2 (pure Rust, no system
 //! libproj). We feed it an EXPLICIT proj-string that carries the IGN-
 //! published 7-parameter Helmert (`+towgs84=...`), because `crs-definitions`'
 //! shipped EPSG:31370 string omits those parameters and the result drifts by

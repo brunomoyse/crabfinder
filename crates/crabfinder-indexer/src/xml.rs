@@ -18,9 +18,10 @@ use quick_xml::events::{BytesText, Event};
 
 /// Decode BeSt-XML text. The dumps are UTF-8 (declared in the XML header) and
 /// in practice contain no HTML entity escapes — names with apostrophes are
-/// stored literally (e.g. `Braine-l'Alleud`). UTF-8 decode is sufficient.
+/// stored literally (e.g. `Braine-l'Alleud`). quick-xml already hands us
+/// UTF-8-validated `str` content, so no unescaping is needed.
 fn decode_text(t: &BytesText<'_>) -> Result<String> {
-    Ok(std::str::from_utf8(t.as_ref())?.to_owned())
+    Ok(t.as_ref().to_owned())
 }
 
 use crabfinder_core::{
@@ -58,11 +59,11 @@ fn make_reader<R: BufRead>(reader: R) -> Reader<R> {
 
 /// Compare a quick-xml element name against a literal byte string.
 fn name_is(e: &quick_xml::events::BytesStart, expected: &[u8]) -> bool {
-    e.name().as_ref() == expected
+    e.name().as_ref().as_bytes() == expected
 }
 
 fn end_is(e: &quick_xml::events::BytesEnd, expected: &[u8]) -> bool {
-    e.name().as_ref() == expected
+    e.name().as_ref().as_bytes() == expected
 }
 
 // --- Municipality -----------------------------------------------------------
@@ -86,7 +87,7 @@ pub fn read_municipalities<R: BufRead>(reader: R) -> Result<Vec<Municipality>> {
                     code = CodeFields::default();
                     names = MultilingualName::default();
                 }
-                path.push(e.name().as_ref().to_vec());
+                path.push(e.name().as_ref().as_bytes().to_vec());
             }
             Event::End(e) => {
                 path.pop();
@@ -170,7 +171,7 @@ pub fn read_postal_infos<R: BufRead>(reader: R) -> Result<Vec<PostalInfo>> {
                     code = CodeFields::default();
                     names = MultilingualName::default();
                 }
-                path.push(e.name().as_ref().to_vec());
+                path.push(e.name().as_ref().as_bytes().to_vec());
             }
             Event::End(e) => {
                 path.pop();
@@ -213,7 +214,7 @@ pub fn read_parts_of_municipality<R: BufRead>(reader: R) -> Result<Vec<PartOfMun
                     code = CodeFields::default();
                     names = MultilingualName::default();
                 }
-                path.push(e.name().as_ref().to_vec());
+                path.push(e.name().as_ref().as_bytes().to_vec());
             }
             Event::End(e) => {
                 path.pop();
@@ -262,7 +263,7 @@ pub fn read_streets<R: BufRead>(reader: R) -> Result<Vec<Street>> {
                     street_type = None;
                     assigned_by = CodeFields::default();
                 }
-                path.push(e.name().as_ref().to_vec());
+                path.push(e.name().as_ref().as_bytes().to_vec());
             }
             Event::End(e) => {
                 path.pop();
@@ -426,7 +427,7 @@ where
                 } else if in_record && name_is(&e, b"com:hasPartOfMunicipality") {
                     pom_ref = Some(CodeFields::default());
                 }
-                path.push(e.name().as_ref().to_vec());
+                path.push(e.name().as_ref().as_bytes().to_vec());
             }
             Event::End(e) => {
                 path.pop();

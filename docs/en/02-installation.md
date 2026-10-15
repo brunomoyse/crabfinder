@@ -4,7 +4,7 @@ You only do this once, then again whenever BeSt publishes a new dump (the index 
 
 ## Hardware prerequisites
 
-- **Rust 1.86 or newer** (install via `rustup`, see below).
+- **Rust 1.90 or newer** (install via `rustup`, see below).
 - **~3 GB free disk** for the Tantivy index (~2 GB) + side-tables (~50 MB) + headroom.
 - **~4 GB free RAM** during indexing (mostly to hold the dictionary join in memory). The running service uses less.
 - **Linux, macOS or Windows**. Linux and macOS are the tested paths; on Windows, WSL2 makes life simpler.
@@ -17,7 +17,7 @@ If `cargo --version` returns nothing:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Follow default prompts, then reload your shell:
 source "$HOME/.cargo/env"
-cargo --version    # should show "cargo 1.86.x" or newer
+cargo --version    # should show "cargo 1.90.x" or newer
 ```
 
 On native Windows (no WSL): use [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install) and restart your terminal.

@@ -4,7 +4,7 @@
 
 ## Pré-requis matériels
 
-- **Rust 1.86 ou plus récent** (installé via `rustup`, voir plus bas).
+- **Rust 1.90 ou plus récent** (installé via `rustup`, voir plus bas).
 - **~3 Go d'espace disque libre** pour l'index Tantivy (~2 Go) + side-tables (~50 Mo) + marge.
 - **~4 Go de RAM libre** pendant l'indexation (essentiellement pour la jointure des dictionnaires en mémoire). Le service tournant en régime stable consomme moins.
 - Un système **Linux, macOS ou Windows** (Linux et macOS sont les chemins testés ; sur Windows, utiliser WSL2 simplifie la vie).
@@ -17,7 +17,7 @@ Si `cargo --version` ne renvoie rien :
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Suivre les instructions par défaut, puis recharger le shell :
 source "$HOME/.cargo/env"
-cargo --version    # doit afficher "cargo 1.86.x" ou plus récent
+cargo --version    # doit afficher "cargo 1.90.x" ou plus récent
 ```
 
 Sur Windows sans WSL : passer par `https://www.rust-lang.org/tools/install` puis redémarrer le terminal.

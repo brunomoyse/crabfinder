@@ -158,7 +158,7 @@ impl AdversarialEvalSet {
     pub fn load(path: &Path) -> Result<Self> {
         let body = fs::read_to_string(path)
             .with_context(|| format!("reading adversarial eval set {path:?}"))?;
-        serde_yaml::from_str(&body)
+        serde_saphyr::from_str(&body)
             .with_context(|| format!("parsing adversarial eval set {path:?} as YAML"))
     }
 }

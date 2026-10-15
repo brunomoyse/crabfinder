@@ -11,6 +11,29 @@
 
 use std::collections::HashMap;
 
+use tantivy::{TantivyDocument, schema::Value};
+
+use crabfinder_indexer::index::CrabSchema;
+
+/// Over-fetch multiplier: dedup happens after Tantivy ranking, so callers
+/// fetch `limit * RAW_HIT_MULTIPLIER` raw hits, then collapse. With
+/// Brussels' per-unit modeling a single building can have 20+ units; 20×
+/// gives enough headroom for limit ≤ 100 while staying well inside
+/// Tantivy's cheap range.
+pub const RAW_HIT_MULTIPLIER: usize = 20;
+/// Hard ceiling on the over-fetch.
+pub const RAW_HIT_CAP: usize = 2000;
+
+/// Number of raw hits to fetch so that `limit` distinct buildings usually
+/// survive dedup. `expand` callers want raw rows, so no over-fetch.
+pub fn raw_limit(limit: usize, expand: bool) -> usize {
+    if expand {
+        limit
+    } else {
+        (limit * RAW_HIT_MULTIPLIER).min(RAW_HIT_CAP)
+    }
+}
+
 /// One raw Tantivy hit, already enriched with the fields dedup cares about.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawHit {
@@ -27,6 +50,30 @@ pub struct RawHit {
     /// Index into the original Vec<(score, DocAddress)> so the caller can
     /// re-hydrate the right Tantivy doc without re-doing the search.
     pub raw_index: usize,
+}
+
+impl RawHit {
+    /// Read the dedup-relevant fields (building group, box, address id) off
+    /// a stored Tantivy doc. Missing fields degrade to empty strings / `None`
+    /// rather than erroring — dedup only needs them for grouping and
+    /// tie-breaking.
+    pub fn from_doc(
+        doc: &TantivyDocument,
+        schema: &CrabSchema,
+        score: f32,
+        match_type: MatchType,
+        raw_index: usize,
+    ) -> Self {
+        let text = |f| doc.get_first(f).and_then(|v| v.as_str()).map(String::from);
+        Self {
+            score,
+            building_group_id: text(schema.building_group_id).unwrap_or_default(),
+            box_number: text(schema.box_number),
+            address_id: text(schema.best_id).unwrap_or_default(),
+            match_type,
+            raw_index,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

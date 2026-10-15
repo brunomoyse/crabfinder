@@ -97,10 +97,8 @@ fn match_house_number(tok: &str) -> Option<String> {
     }
     // At most one trailing ASCII letter (A, B, …) — common for Belgian
     // suffixes ("32A", "12B").
-    if i < bytes.len() {
-        if bytes.len() - i != 1 || !bytes[i].is_ascii_alphabetic() {
-            return None;
-        }
+    if i < bytes.len() && (bytes.len() - i != 1 || !bytes[i].is_ascii_alphabetic()) {
+        return None;
     }
     Some(tok.to_string())
 }

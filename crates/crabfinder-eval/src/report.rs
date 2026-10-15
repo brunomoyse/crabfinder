@@ -119,7 +119,7 @@ fn detail_path_for(output_json: &Path) -> PathBuf {
 
 fn render_report_md(m: &Metrics, service_url: &str, n: usize) -> String {
     let mut s = String::new();
-    s.push_str(&format!("# crabfinder eval — single report\n\n"));
+    s.push_str("# crabfinder eval — single report\n\n");
     s.push_str(&format!("- Service: `{service_url}`\n"));
     s.push_str(&format!("- Total queries: **{n}**\n"));
     s.push_str(&format!(
@@ -245,9 +245,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         baseline_path.display(),
         current_path.display()
     ));
-    s.push_str(&format!(
-        "_Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._\n\n"
-    ));
+    s.push_str("_Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._\n\n");
 
     s.push_str("## Overall (Tier A) — Δ\n\n");
     bucket_diff_table(&mut s, &baseline.metrics.overall, &current.metrics.overall);

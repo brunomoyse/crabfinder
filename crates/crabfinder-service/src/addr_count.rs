@@ -93,8 +93,10 @@ impl AddressCountIndex {
             let store = seg
                 .get_store_reader(10)
                 .context("opening store reader (Pass 2)")?;
-            let mut doc_id: u32 = 0;
-            for doc_res in store.iter::<TantivyDocument>(seg.alive_bitset()) {
+            for (doc_id, doc_res) in store
+                .iter::<TantivyDocument>(seg.alive_bitset())
+                .enumerate()
+            {
                 let doc = doc_res.context("reading doc (Pass 2)")?;
                 if let Some(bgid) = doc
                     .get_first(schema.building_group_id)
@@ -102,10 +104,9 @@ impl AddressCountIndex {
                 {
                     let key = street_key_from_bgid(bgid);
                     if let Some(&c) = street_counts.get(key) {
-                        counts[doc_id as usize] = c;
+                        counts[doc_id] = c;
                     }
                 }
-                doc_id += 1;
             }
             per_segment.insert(seg.segment_id(), Arc::new(counts));
         }

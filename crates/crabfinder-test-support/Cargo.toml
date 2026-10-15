@@ -1,0 +1,16 @@
+[package]
+name = "crabfinder-test-support"
+description = "Shared test fixtures for the crabfinder workspace (dev-dependency only)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+crabfinder-core    = { workspace = true }
+crabfinder-indexer = { workspace = true }
+tantivy            = { workspace = true }
+tempfile           = "3.27"
+zip                = "9"
+csv                = "1.4"

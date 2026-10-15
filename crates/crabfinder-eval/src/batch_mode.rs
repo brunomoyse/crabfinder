@@ -276,10 +276,10 @@ fn pick_quantile(sorted: &[f32], p: f64) -> f32 {
 }
 
 fn write_thresholds(path: &Path, t: &ConfidenceThresholdsV1) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).with_context(|| format!("creating {parent:?}"))?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).with_context(|| format!("creating {parent:?}"))?;
     }
     let body = serde_json::to_string_pretty(t).context("serialising thresholds")?;
     std::fs::write(path, body).with_context(|| format!("writing {path:?}"))?;

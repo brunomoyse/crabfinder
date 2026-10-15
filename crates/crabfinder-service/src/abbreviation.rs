@@ -198,7 +198,7 @@ impl AbbreviationMap {
                 let prefix = &token[..token.len() - abbr.len()];
                 for c in canonicals {
                     let expanded = format!("{prefix}{c}");
-                    if !out.iter().any(|x| *x == expanded) {
+                    if !out.contains(&expanded) {
                         out.push(expanded);
                     }
                 }

@@ -42,4 +42,5 @@ serde_json         = { workspace = true }
 serde-saphyr       = "2"
 
 [dev-dependencies]
+crabfinder-test-support = { workspace = true }
 tempfile           = "3.27"

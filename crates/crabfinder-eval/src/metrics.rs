@@ -70,8 +70,10 @@ pub struct Metrics {
 
 /// Compute all MVP metrics over the runner's per-query results.
 pub fn compute(results: &[QueryResult]) -> Metrics {
-    let mut m = Metrics::default();
-    m.query_count = results.len();
+    let mut m = Metrics {
+        query_count: results.len(),
+        ..Default::default()
+    };
 
     let mut overall_acc = Acc::default();
     let mut latency_samples: Vec<f64> = Vec::with_capacity(results.len());
@@ -294,7 +296,7 @@ impl Acc {
     }
 }
 
-fn compute_latency(samples: &mut Vec<f64>) -> LatencyBucket {
+fn compute_latency(samples: &mut [f64]) -> LatencyBucket {
     if samples.is_empty() {
         return LatencyBucket::default();
     }

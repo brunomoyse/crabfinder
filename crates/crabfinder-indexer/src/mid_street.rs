@@ -44,6 +44,9 @@ use crabfinder_core::{Address, Coordinates};
 pub const MID_STREET_MAGIC: &[u8; 8] = b"CRBMID7\0";
 pub const MID_STREET_FILENAME: &str = "mid-street-v1.bin";
 
+/// `(street_key, postal_code)` → every recorded `(house_number, lat, lon)`.
+type StreetGroups = HashMap<(String, String), Vec<(u32, f64, f64)>>;
+
 /// In-memory accumulator. One instance per indexer run; `record()` is called
 /// once per indexed address, `finish()` flushes to disk after Tantivy commit.
 pub struct MidStreetBuilder {
@@ -53,7 +56,7 @@ pub struct MidStreetBuilder {
     /// `parsed_house_number` filter (digit prefix only) drops box-suffix
     /// duplicates and 80%+ of the multi-unit-building rows collapse to the
     /// same number.
-    groups: HashMap<(String, String), Vec<(u32, f64, f64)>>,
+    groups: StreetGroups,
 }
 
 impl MidStreetBuilder {

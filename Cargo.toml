@@ -7,6 +7,7 @@ members = [
     "crates/crabfinder-service",
     "crates/crabfinder-eval",
     "crates/crabfinder-batch",
+    "crates/crabfinder-test-support",
 ]
 
 [workspace.package]
@@ -22,6 +23,8 @@ repository = "https://github.com/brunomoyse/crabfinder"
 crabfinder-core    = { path = "crates/crabfinder-core" }
 crabfinder-indexer = { path = "crates/crabfinder-indexer" }
 crabfinder-parser  = { path = "crates/crabfinder-parser" }
+crabfinder-service = { path = "crates/crabfinder-service" }
+crabfinder-test-support = { path = "crates/crabfinder-test-support" }
 
 # Search + IO
 tantivy            = "0.26"

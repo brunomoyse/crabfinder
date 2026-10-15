@@ -504,6 +504,7 @@ dependencies = [
  "crabfinder-core",
  "crabfinder-indexer",
  "crabfinder-service",
+ "crabfinder-test-support",
  "rayon",
  "serde",
  "serde_json",
@@ -531,6 +532,7 @@ dependencies = [
  "crabfinder-indexer",
  "crabfinder-parser",
  "crabfinder-service",
+ "crabfinder-test-support",
  "flate2",
  "futures",
  "rand",
@@ -553,6 +555,7 @@ dependencies = [
  "anyhow",
  "clap",
  "crabfinder-core",
+ "crabfinder-test-support",
  "proj4rs",
  "quick-xml",
  "serde",
@@ -581,6 +584,7 @@ dependencies = [
  "crabfinder-core",
  "crabfinder-indexer",
  "crabfinder-parser",
+ "crabfinder-test-support",
  "csv",
  "futures",
  "geo",
@@ -599,6 +603,18 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "crabfinder-test-support"
+version = "0.1.0"
+dependencies = [
+ "crabfinder-core",
+ "crabfinder-indexer",
+ "csv",
+ "tantivy",
+ "tempfile",
+ "zip",
 ]
 
 [[package]]

@@ -194,7 +194,7 @@ pub async fn run_eval(config: &RunnerConfig, queries: Vec<EvalQuery>) -> Result<
     let limit = config.limit;
     let client_arc = client.clone();
 
-    let mut results: Vec<QueryResult> = stream::iter(queries.into_iter())
+    let mut results: Vec<QueryResult> = stream::iter(queries)
         .map(|q| {
             let client = client_arc.clone();
             let base = base.clone();
@@ -309,7 +309,7 @@ pub async fn validate_eval_set(
 
     let base = config.service_url.clone();
     let client_arc = client.clone();
-    let results: Vec<(String, bool)> = stream::iter(queries.into_iter())
+    let results: Vec<(String, bool)> = stream::iter(queries)
         .map(|q| {
             let client = client_arc.clone();
             let base = base.clone();

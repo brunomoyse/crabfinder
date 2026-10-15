@@ -49,6 +49,7 @@ tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+crabfinder-test-support = { workspace = true }
 tempfile           = "3.27"
 # E2E HTTP tests drive the Axum router in-process via tower::ServiceExt::oneshot
 # (no listener, no TCP). axum 0.8 brings tower 0.5.

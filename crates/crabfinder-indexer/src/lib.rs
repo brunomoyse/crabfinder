@@ -5,6 +5,7 @@
 //! 2. Stream the Address file and resolve references against the dictionaries.
 
 pub mod bundle;
+pub mod cli;
 pub mod dict;
 pub mod index;
 pub mod meta;

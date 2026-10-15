@@ -84,10 +84,8 @@ impl SpatialIndex {
             let max_doc = seg_reader.max_doc();
             let alive = seg_reader.alive_bitset();
             for doc_id in 0..max_doc {
-                if let Some(b) = alive {
-                    if !b.is_alive(doc_id) {
-                        continue;
-                    }
+                if alive.is_some_and(|b| !b.is_alive(doc_id)) {
+                    continue;
                 }
                 let lat = match lat_col.first(doc_id) {
                     Some(v) => v,
@@ -110,9 +108,9 @@ impl SpatialIndex {
         Ok(Self { tree, point_count })
     }
 
-    /// Construct from raw points — exposed for tests so they don't need a
-    /// Tantivy index just to exercise the spatial logic.
-    #[cfg(test)]
+    /// Construct from raw points. Used by tests (no Tantivy index needed)
+    /// and by `AppState::load` to build an empty index when `/reverse` is
+    /// not needed.
     pub fn from_points(points: Vec<SpatialPoint>) -> Self {
         let point_count = points.len();
         let tree = RTree::bulk_load(points);
@@ -163,19 +161,18 @@ impl SpatialIndex {
 
         for point in self.tree.nearest_neighbor_iter([lon, lat]) {
             // Early-exit by planar cap for radius queries.
-            if let Some(cap2) = planar_cap_2 {
-                if point.distance_2(&[lon, lat]) > cap2 {
-                    break;
-                }
+            if let Some(cap2) = planar_cap_2
+                && point.distance_2(&[lon, lat]) > cap2
+            {
+                break;
             }
             let d_m = haversine_m(lat, lon, point.lat, point.lon);
-            if let Some(r) = radius_m {
-                if d_m > r {
-                    // Inside planar buffer but outside true radius — skip,
-                    // don't break (the iterator is planar-ordered, not
-                    // Haversine-ordered).
-                    continue;
-                }
+            // Inside planar buffer but outside true radius — skip, don't
+            // break (the iterator is planar-ordered, not Haversine-ordered).
+            if let Some(r) = radius_m
+                && d_m > r
+            {
+                continue;
             }
             candidates.push(SpatialHit {
                 doc_addr: point.doc_addr,

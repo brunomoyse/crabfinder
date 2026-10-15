@@ -299,8 +299,7 @@ fn build_pools(
             .get_store_reader(10)
             .context("opening store reader")?;
         let alive = seg_reader.alive_bitset();
-        let mut doc_id: u32 = 0;
-        for doc_res in store_reader.iter::<TantivyDocument>(alive) {
+        for (doc_id, doc_res) in (0u32..).zip(store_reader.iter::<TantivyDocument>(alive)) {
             let doc = doc_res?;
             let region_str = doc
                 .get_first(fields.region)
@@ -325,7 +324,6 @@ fn build_pools(
                         .or_insert(DocAddress::new(seg_ord, doc_id));
                 }
             }
-            doc_id += 1;
         }
     }
 
@@ -386,7 +384,7 @@ fn collect_boosted_crosslang(
     // Shuffle a flat list of (bgid, addr) entries from pools, then walk in
     // shuffled order picking the first `target` where cross_language fires.
     let mut candidates: Vec<(String, DocAddress)> = Vec::new();
-    for (_region, pool) in pools.iter() {
+    for pool in pools.values() {
         for (bgid, addr) in pool.iter() {
             if !chosen_bgids_random.contains(bgid) {
                 candidates.push((bgid.clone(), *addr));
@@ -584,10 +582,11 @@ pub(crate) fn build_cross_language(addr: &Address) -> Option<String> {
         if cand_lang == street_lang {
             continue;
         }
-        if let Some(cand) = pick_in_lang(&addr.municipality_name, cand_lang) {
-            if !cand.is_empty() && cand != &muni_in_street_lang {
-                return Some(format!("{} {} {}", cand, street_value, addr.house_number));
-            }
+        if let Some(cand) = pick_in_lang(&addr.municipality_name, cand_lang)
+            && !cand.is_empty()
+            && cand != &muni_in_street_lang
+        {
+            return Some(format!("{} {} {}", cand, street_value, addr.house_number));
         }
     }
     None

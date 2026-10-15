@@ -159,15 +159,11 @@ mod tests {
     #[test]
     fn version_mismatch_reports_specific_error() {
         let tmp = tempdir();
-        let stale = IndexMeta {
-            schema_version: SCHEMA_VERSION.saturating_sub(1).max(0).min(u32::MAX - 1),
-            tokenizer_name: "default".into(),
-            built_at_unix_secs: 0,
-        };
         // Force a different version regardless of SCHEMA_VERSION value.
         let stale = IndexMeta {
             schema_version: SCHEMA_VERSION + 99,
-            ..stale
+            tokenizer_name: "default".into(),
+            built_at_unix_secs: 0,
         };
         std::fs::write(
             tmp.path().join(SIDECAR_FILENAME),

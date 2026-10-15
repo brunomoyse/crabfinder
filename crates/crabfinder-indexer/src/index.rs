@@ -217,7 +217,7 @@ impl CrabIndexWriter {
         let mut doc = TantivyDocument::default();
         let s = &self.schema;
 
-        doc.add_text(s.best_id, &addr.id.to_string());
+        doc.add_text(s.best_id, addr.id.to_string());
         for value in &tokens {
             doc.add_text(s.searchable, value);
         }

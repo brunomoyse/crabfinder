@@ -36,3 +36,7 @@ Thumbs.db
 # The metrics-only report.json is committed as a baseline; the detail
 # sidecar is regeneratable from the same eval-set + service run.
 /reports/*-detail.json.gz
+
+# BeSt refreshes (scripts/refresh_best.sh)
+/best-*/
+/index-*

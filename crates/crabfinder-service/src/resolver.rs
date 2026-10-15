@@ -240,11 +240,9 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     let field = searchable_field(ctx.schema);
     let searcher = ctx.reader.searcher();
 
-    // Helper closure to run a query and return the top hit. Takes a
-    // `Box<dyn Query>` (Sized) — `Searcher::search` requires `Q: Sized`,
-    // so we hold the Box and pass it through as `&Box<dyn Query>`.
+    // Run a query and return the top hit.
     let search_top1 =
-        |q: &Box<dyn tantivy::query::Query>| -> Option<(tantivy::Score, tantivy::DocAddress)> {
+        |q: &dyn tantivy::query::Query| -> Option<(tantivy::Score, tantivy::DocAddress)> {
             let res = if ctx.notability_enabled {
                 search_with_notability(&searcher, q, 1, ctx.addr_counts.clone())
             } else {
@@ -262,7 +260,7 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     // --- Step 1: strict with house_number (Exact).
     let exact_hit = if query.house_number.is_some() {
         build_strict_query(field, &slots, &parsed_with_hn, ctx.schema, &filters)
-            .and_then(|q| search_top1(&q))
+            .and_then(|q| search_top1(q.as_ref()))
     } else {
         None
     };
@@ -286,7 +284,7 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
 
     // --- Step 2: strict WITHOUT house_number (MedianStreet).
     let median_hit = build_strict_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-        .and_then(|q| search_top1(&q));
+        .and_then(|q| search_top1(q.as_ref()));
     if let Some((score, doc_addr)) = median_hit {
         let reason = if query.house_number.is_some() {
             FallbackReason::HouseNumberOutOfRange
@@ -312,7 +310,7 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
 
     // --- Step 3: fuzzy without house_number (FuzzyStreet).
     let fuzzy_hit = build_fuzzy_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-        .and_then(|q| search_top1(&q));
+        .and_then(|q| search_top1(q.as_ref()));
     if let Some((score, doc_addr)) = fuzzy_hit {
         // Even on fuzzy, if mid_street has the centroid for the resolved
         // street, prefer that over the top fuzzy hit's individual building
@@ -341,6 +339,7 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     ResolvedAddress::not_found()
 }
 
+#[allow(clippy::too_many_arguments)] // replaced by `search` in Phase 1
 /// Materialize a doc into a `ResolvedAddress`. Returns `None` if hydration
 /// or payload deserialization fails — the caller can either fall through
 /// to a less-confident pass or return `NotFound`.
@@ -463,284 +462,166 @@ mod tests {
     use crate::abbreviation::AbbreviationMap;
     use crate::addr_count::AddressCountIndex;
     use crate::mid_street::MidStreetIndex;
-    use crabfinder_core::{
-        Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName, MunicipalityId,
-        PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
-    };
-    use crabfinder_indexer::index::{CrabIndexWriter, CrabSchema, register_tokenizers};
-    use crabfinder_indexer::meta::write_sidecar;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use tantivy::{Index, ReloadPolicy};
+    use crabfinder_test_support::{AddressBuilder, TestIndex, fixtures, write_mid_street};
 
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-
-    fn unique_tempdir() -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let p = std::env::temp_dir().join(format!(
-            "crab-resolver-test-{}-{}-{}",
-            std::process::id(),
-            nanos,
-            SEQ.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&p).unwrap();
-        p
+    /// Avenue Louise 10/11/13/20/32/40/45/50 in 1050 + Rue Paire 2/4/6.
+    fn louise_index() -> TestIndex {
+        TestIndex::build(&fixtures::louise_street())
     }
 
-    fn make_louise_addr(addr_oid: &str, house: &str, box_no: Option<&str>) -> Address {
-        let ns_addr = "https://databrussels.be/id/address".to_string();
-        let ns_street = "https://databrussels.be/id/streetname".to_string();
-        let ns_muni = "https://databrussels.be/id/municipality".to_string();
-        let ns_postal = "https://databrussels.be/id/postalinfo".to_string();
-        let street_id = StreetId::new(BestId::new(ns_street, "3919", "1"));
-        let building_group_id = BuildingGroupId::from_parts(&street_id, house);
-        Address {
-            id: AddressId::new(BestId::new(ns_addr, addr_oid, "1")),
-            street_id,
-            municipality_id: MunicipalityId::new(BestId::new(ns_muni, "21001", "1")),
-            postal_info_id: PostalInfoId::new(BestId::new(ns_postal, "1050", "1")),
-            part_of_municipality_id: None,
-            region: Region::Brussels,
-            status: Status::Current,
-            house_number: house.into(),
-            box_number: box_no.map(|s| s.into()),
-            officially_assigned: true,
-            street_name: MultilingualName {
-                fr: Some("Avenue Louise".into()),
-                nl: Some("Louizalaan".into()),
-                de: None,
-            },
-            street_type: StreetType::Streetname,
-            municipality_name: MultilingualName {
-                fr: Some("Bruxelles".into()),
-                nl: Some("Brussel".into()),
-                de: None,
-            },
-            postal_code: "1050".into(),
-            postal_name: MultilingualName::default(),
-            part_of_municipality_name: None,
-            coordinates: Coordinates::Wgs84(WgsCoord {
-                lat: 50.8345 + (house.parse::<u32>().unwrap_or(0) as f64) * 0.0001,
-                lon: 4.3567,
-            }),
-            building_group_id,
-        }
-    }
-
-    fn build_test_index_louise() -> (PathBuf, Index) {
-        let dir = unique_tempdir();
-        let mut writer = CrabIndexWriter::create(&dir).unwrap();
-        // 5 buildings on Avenue Louise: #10, #20, #32, #40, #50.
-        // Each has distinct lat so the test can tell which one was returned.
-        for hn in ["10", "20", "32", "40", "50"] {
-            writer
-                .add_address(&make_louise_addr(&format!("a{hn}"), hn, None))
-                .unwrap();
-        }
-        writer.commit().unwrap();
-        write_sidecar(&dir).unwrap();
-        let index = Index::open_in_dir(&dir).unwrap();
-        register_tokenizers(&index);
-        (dir, index)
-    }
-
-    fn build_ctx<'a>(
-        index: &'a Index,
-        reader: &'a tantivy::IndexReader,
-        schema: &'a CrabSchema,
-        mid_street: Arc<MidStreetIndex>,
-    ) -> ResolverContext<'a> {
-        let addr_counts = Arc::new(AddressCountIndex::build(reader, schema).unwrap());
-        let abbrev = Arc::new(AbbreviationMap::empty());
+    fn ctx(ti: &TestIndex, mid_street: Arc<MidStreetIndex>) -> ResolverContext<'_> {
         ResolverContext {
-            index,
-            reader,
-            schema,
-            abbrev,
-            addr_counts,
+            index: &ti.index,
+            reader: &ti.reader,
+            schema: &ti.schema,
+            abbrev: Arc::new(AbbreviationMap::empty()),
+            addr_counts: Arc::new(AddressCountIndex::build(&ti.reader, &ti.schema).unwrap()),
             notability_enabled: true,
             mid_street,
         }
     }
 
-    #[test]
-    fn resolve_exact_match_returns_address_and_confidence_exact() {
-        let (_dir, index) = build_test_index_louise();
-        let schema = CrabSchema::build();
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        let ctx = build_ctx(&index, &reader, &schema, Arc::new(MidStreetIndex::empty()));
-        let q = AddressQuery {
-            street_tokens: analyze_street_input(&index, "Avenue Louise"),
-            house_number: Some("32".into()),
-            postal_code: Some("1050".into()),
+    fn query(ti: &TestIndex, street: &str, hn: Option<&str>, pc: Option<&str>) -> AddressQuery {
+        AddressQuery {
+            street_tokens: analyze_street_input(&ti.index, street),
+            house_number: hn.map(Into::into),
+            postal_code: pc.map(Into::into),
             region_filter: None,
             focus_point: None,
-        };
-        let r = resolve(&q, &ctx);
+        }
+    }
+
+    /// A mid-street table whose only entry pins Avenue Louise / 1050 to a
+    /// sentinel coordinate, so tests can tell side-table coords apart from
+    /// a building's own.
+    fn sentinel_mid_street(lat: f64, lon: f64) -> (tempfile::TempDir, Arc<MidStreetIndex>) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mid.bin");
+        let sentinel = AddressBuilder::new("s", fixtures::LOUISE_OID, "1")
+            .postal("1050")
+            .at(lat, lon)
+            .build();
+        write_mid_street(&path, &[sentinel]);
+        let mid = Arc::new(MidStreetIndex::load(&path).unwrap());
+        (dir, mid)
+    }
+
+    #[test]
+    fn exact_match_returns_address_and_confidence_exact() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let r = resolve(&query(&ti, "Avenue Louise", Some("32"), Some("1050")), &c);
         assert_eq!(r.confidence, Confidence::Exact);
         assert_eq!(r.house_number_delta, Some(0));
         let addr = r.address.unwrap();
-        assert_eq!(addr.house_number.as_str(), "32");
-        assert_eq!(addr.postal_code.as_str(), "1050");
+        assert_eq!(addr.house_number, "32");
+        assert_eq!(addr.postal_code, "1050");
         assert!(r.fallback_reason.is_none());
+        assert!(r.street_match_score > 0.0);
     }
 
     #[test]
-    fn resolve_unknown_street_returns_not_found_or_fuzzy() {
-        let (_dir, index) = build_test_index_louise();
-        let schema = CrabSchema::build();
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        let ctx = build_ctx(&index, &reader, &schema, Arc::new(MidStreetIndex::empty()));
-        let q = AddressQuery {
-            street_tokens: analyze_street_input(&index, "Quetzalcoatl Boulevard"),
-            house_number: Some("999".into()),
-            postal_code: Some("1050".into()),
-            region_filter: None,
-            focus_point: None,
-        };
-        let r = resolve(&q, &ctx);
-        assert!(matches!(
-            r.confidence,
-            Confidence::NotFound | Confidence::FuzzyStreet
-        ));
+    fn unknown_street_is_not_found() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let r = resolve(
+            &query(&ti, "Quetzalcoatl Boulevard", Some("999"), Some("1050")),
+            &c,
+        );
+        assert_eq!(r.confidence, Confidence::NotFound);
+        assert_eq!(r.fallback_reason, Some(FallbackReason::NoMatch));
+        assert!(r.address.is_none() && r.hit.is_none());
     }
 
-    // --- Lot C: MedianStreet behaviour ----------------------------------
-
-    /// Helper: build a `MidStreetIndex` in-memory with a single entry for
-    /// Avenue Louise in 1050. The tests don't go through the side-file
-    /// loader — they construct the map directly via the public test API.
-    fn mid_street_for_louise(lat: f64, lon: f64) -> Arc<MidStreetIndex> {
-        // Build the side-file in a temp dir and load it through the normal
-        // public API. Exercises the load path, not just an in-memory map.
-        use std::io::Write;
-        let mut f = tempfile::NamedTempFile::new().unwrap();
-        f.write_all(b"CRBMID7\0").unwrap();
-        f.write_all(&1u64.to_le_bytes()).unwrap();
-        let sk = "https://databrussels.be/id/streetname|3919";
-        f.write_all(&(sk.len() as u32).to_le_bytes()).unwrap();
-        f.write_all(sk.as_bytes()).unwrap();
-        f.write_all(&4u8.to_le_bytes()).unwrap();
-        f.write_all(b"1050").unwrap();
-        f.write_all(&lat.to_le_bytes()).unwrap();
-        f.write_all(&lon.to_le_bytes()).unwrap();
-        f.flush().unwrap();
-        Arc::new(MidStreetIndex::load(f.path()).unwrap())
-    }
-
-    /// Avenue Louise has #10/#20/#32/#40/#50 in the fixture; querying #99999
-    /// (out-of-range) should drop to MedianStreet using the mid_street
-    /// coords, not the top hit's individual building coord.
     #[test]
     fn median_fallback_when_number_out_of_range() {
-        let (_dir, index) = build_test_index_louise();
-        let schema = CrabSchema::build();
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        // Mid_street pinned to a sentinel coordinate (51.0, 5.0).
-        let mid = mid_street_for_louise(51.0, 5.0);
-        let ctx = build_ctx(&index, &reader, &schema, mid);
-        let q = AddressQuery {
-            street_tokens: analyze_street_input(&index, "Avenue Louise"),
-            house_number: Some("99999".into()),
-            postal_code: Some("1050".into()),
-            region_filter: None,
-            focus_point: None,
-        };
-        let r = resolve(&q, &ctx);
-        assert_eq!(
-            r.confidence,
-            Confidence::MedianStreet,
-            "got {:?}",
-            r.confidence
+        let ti = louise_index();
+        let (_d, mid) = sentinel_mid_street(51.0, 5.0);
+        let c = ctx(&ti, mid);
+        let r = resolve(
+            &query(&ti, "Avenue Louise", Some("99999"), Some("1050")),
+            &c,
         );
+        assert_eq!(r.confidence, Confidence::MedianStreet);
         assert_eq!(
             r.fallback_reason,
             Some(FallbackReason::HouseNumberOutOfRange)
         );
         assert_eq!(r.house_number_delta, None);
-        let hit = r.hit.expect("median hit must populate HydratedHit");
-        assert!(
-            (hit.lat - 51.0).abs() < 1e-9 && (hit.lon - 5.0).abs() < 1e-9,
-            "expected sentinel mid_street coords, got ({}, {})",
-            hit.lat,
-            hit.lon
-        );
+        let hit = r.hit.unwrap();
+        assert!((hit.lat - 51.0).abs() < 1e-9 && (hit.lon - 5.0).abs() < 1e-9);
     }
 
-    /// Without a house_number in the query at all, we should land directly
-    /// in MedianStreet with reason=HouseNumberMissing.
     #[test]
     fn median_fallback_when_number_missing() {
-        let (_dir, index) = build_test_index_louise();
-        let schema = CrabSchema::build();
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        let mid = mid_street_for_louise(51.123, 5.123);
-        let ctx = build_ctx(&index, &reader, &schema, mid);
-        let q = AddressQuery {
-            street_tokens: analyze_street_input(&index, "Avenue Louise"),
-            house_number: None,
-            postal_code: Some("1050".into()),
-            region_filter: None,
-            focus_point: None,
-        };
-        let r = resolve(&q, &ctx);
+        let ti = louise_index();
+        let (_d, mid) = sentinel_mid_street(51.123, 5.123);
+        let c = ctx(&ti, mid);
+        let r = resolve(&query(&ti, "Avenue Louise", None, Some("1050")), &c);
         assert_eq!(r.confidence, Confidence::MedianStreet);
         assert_eq!(r.fallback_reason, Some(FallbackReason::HouseNumberMissing));
-        let hit = r.hit.unwrap();
-        assert!(
-            (hit.lat - 51.123).abs() < 1e-9,
-            "expected mid_street coords"
-        );
+        assert!((r.hit.unwrap().lat - 51.123).abs() < 1e-9);
     }
 
-    /// When the side-table has no entry for this (street, postal), the
-    /// resolver should still produce MedianStreet — but with the top hit's
-    /// own coordinates (graceful degradation).
     #[test]
-    fn median_falls_through_to_top_hit_coords_when_mid_street_missing() {
-        let (_dir, index) = build_test_index_louise();
-        let schema = CrabSchema::build();
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        let ctx = build_ctx(&index, &reader, &schema, Arc::new(MidStreetIndex::empty()));
-        let q = AddressQuery {
-            street_tokens: analyze_street_input(&index, "Avenue Louise"),
-            house_number: Some("99999".into()),
-            postal_code: Some("1050".into()),
-            region_filter: None,
-            focus_point: None,
-        };
-        let r = resolve(&q, &ctx);
-        assert_eq!(r.confidence, Confidence::MedianStreet);
-        // Without mid_street, the hit.lat should equal whichever top hit
-        // Tantivy returned. We just check it lies in the fixture range.
-        let hit = r.hit.unwrap();
-        assert!(
-            (50.83..=50.86).contains(&hit.lat),
-            "lat should be a fixture coord, got {}",
-            hit.lat
+    fn median_uses_top_hit_coords_when_mid_street_missing() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let r = resolve(
+            &query(&ti, "Avenue Louise", Some("99999"), Some("1050")),
+            &c,
         );
+        assert_eq!(r.confidence, Confidence::MedianStreet);
+        assert!((50.83..=50.86).contains(&r.hit.unwrap().lat));
+    }
+
+    #[test]
+    fn fuzzy_street_when_a_token_is_unknown() {
+        let ti = louise_index();
+        let (_d, mid) = sentinel_mid_street(51.0, 5.0);
+        let c = ctx(&ti, mid);
+        let r = resolve(&query(&ti, "Avenue Louise Quetzal", Some("32"), None), &c);
+        assert_eq!(r.confidence, Confidence::FuzzyStreet);
+        assert_eq!(r.fallback_reason, Some(FallbackReason::StreetSpellingFuzzy));
+        let r = resolve(&query(&ti, "Avenue Louise Quetzal", None, None), &c);
+        assert_eq!(r.confidence, Confidence::FuzzyStreet);
+        assert_eq!(r.fallback_reason, Some(FallbackReason::HouseNumberMissing));
+    }
+
+    #[test]
+    fn notability_disabled_path_resolves() {
+        let ti = louise_index();
+        let mut c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        c.notability_enabled = false;
+        let r = resolve(&query(&ti, "Rue Paire", Some("4"), None), &c);
+        assert_eq!(r.confidence, Confidence::Exact);
+        assert_eq!(r.address.unwrap().house_number, "4");
+    }
+
+    #[test]
+    fn confidence_and_reason_wire_strings() {
+        use Confidence as C;
+        let all = [
+            (C::Exact, "exact"),
+            (C::NearestSameSide, "nearest_same_side"),
+            (C::NearestAnySide, "nearest_any_side"),
+            (C::MedianStreet, "median_street"),
+            (C::FuzzyStreet, "fuzzy_street"),
+            (C::AdjacentCommune, "adjacent_commune"),
+            (C::NotFound, "not_found"),
+        ];
+        for (c, s) in all {
+            assert_eq!(c.as_str(), s);
+        }
+        use FallbackReason as F;
+        for (f, s) in [
+            (F::HouseNumberMissing, "house_number_missing"),
+            (F::HouseNumberOutOfRange, "house_number_out_of_range"),
+            (F::StreetSpellingFuzzy, "street_spelling_fuzzy"),
+            (F::PostalCodeMismatch, "postal_code_mismatch"),
+            (F::NoMatch, "no_match"),
+        ] {
+            assert_eq!(f.as_str(), s);
+        }
     }
 }

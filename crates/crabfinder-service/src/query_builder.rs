@@ -58,9 +58,9 @@ pub const ADDR_COUNT_WEIGHT: f32 = 0.005;
 /// started with `--no-notability-boost` (A/B isolation against the same
 /// physical index). Keeps the same `(Score, DocAddress)` shape as the
 /// notability path so the caller is shape-agnostic.
-pub fn search_score_only<Q: TantivyQuery>(
+pub fn search_score_only(
     searcher: &tantivy::Searcher,
-    query: &Q,
+    query: &dyn TantivyQuery,
     limit: usize,
 ) -> tantivy::Result<Vec<(tantivy::Score, tantivy::DocAddress)>> {
     let collector = TopDocs::with_limit(limit).order_by_score();
@@ -71,9 +71,9 @@ pub fn search_score_only<Q: TantivyQuery>(
 /// the rank order. Each candidate's BM25 score is multiplied by its per-doc
 /// notability multiplier (1.0 = no boost, > 1.0 = curated landmark), then
 /// combined with a log-scaled address-count popularity tiebreaker.
-pub fn search_with_notability<Q: TantivyQuery>(
+pub fn search_with_notability(
     searcher: &tantivy::Searcher,
-    query: &Q,
+    query: &dyn TantivyQuery,
     limit: usize,
     addr_counts: SharedAddressCountIndex,
 ) -> tantivy::Result<Vec<(tantivy::Score, tantivy::DocAddress)>> {

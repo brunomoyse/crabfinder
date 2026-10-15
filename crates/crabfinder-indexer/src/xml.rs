@@ -555,11 +555,11 @@ fn handle_address_text(
     // tns:address > com:position > com:pointGeometry > com:point > com:pos
     if last == Some(b"com:pos") {
         let parts: Vec<&str> = text.split_ascii_whitespace().collect();
-        if parts.len() == 2 {
-            if let (Ok(x), Ok(y)) = (parts[0].parse(), parts[1].parse()) {
-                *pos_x = Some(x);
-                *pos_y = Some(y);
-            }
+        if parts.len() == 2
+            && let (Ok(x), Ok(y)) = (parts[0].parse(), parts[1].parse())
+        {
+            *pos_x = Some(x);
+            *pos_y = Some(y);
         }
         return;
     }

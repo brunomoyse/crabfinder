@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 description = "Standalone batch geocoder CLI for crabfinder."
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "crabfinder-batch"
 path = "src/main.rs"
@@ -35,6 +38,7 @@ serde              = { workspace = true }
 serde_json         = { workspace = true }
 
 [dev-dependencies]
+crabfinder-test-support = { workspace = true }
 # Integration tests build a tiny on-disk index in a tempdir and invoke
 # the binary against it via std::process::Command + CARGO_BIN_EXE_*.
 # crabfinder-core, crabfinder-indexer, and serde_json are reachable through

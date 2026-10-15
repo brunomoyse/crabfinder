@@ -44,6 +44,10 @@ impl MidStreetIndex {
         self.map.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
     /// Open the side-file at `path`. Returns `Self::empty()` (with a warning)
     /// if the file is absent. Returns an error only on IO / format failures
     /// of an *existing* file — we never want to silently feed garbage into

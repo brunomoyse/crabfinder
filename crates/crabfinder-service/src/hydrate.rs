@@ -82,156 +82,127 @@ pub fn hydrate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crabfinder_indexer::index::{CrabIndexWriter, register_tokenizers};
-    use tantivy::{Index, IndexReader, ReloadPolicy};
+    use crabfinder_test_support::{AddressBuilder, TestIndex};
+    use tantivy::TantivyDocument;
 
-    /// Build a tiny in-RAM index with one stored doc carrying lat/lon +
-    /// a payload, so hydrate() has something realistic to chew on. We
-    /// reuse the production CrabIndexWriter to be sure the doc layout
-    /// matches what the service sees in production.
-    fn one_doc_index() -> (Index, IndexReader, CrabSchema) {
-        use crabfinder_core::{
-            Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName,
-            MunicipalityId, PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
-        };
-        let dir = tempfile::tempdir().unwrap();
-        let mut writer = CrabIndexWriter::create(dir.path()).unwrap();
+    fn louise_32() -> TestIndex {
+        TestIndex::build(&[AddressBuilder::new("100", "3919", "32")
+            .street(Some("Avenue Louise"), Some("Louizalaan"))
+            .box_no("1")
+            .postal("1050")
+            .at(50.8345, 4.3567)
+            .build()])
+    }
 
-        let ns_addr = "https://databrussels.be/id/address".to_string();
-        let ns_street = "https://databrussels.be/id/streetname".to_string();
-        let ns_muni = "https://databrussels.be/id/municipality".to_string();
-        let ns_postal = "https://databrussels.be/id/postalinfo".to_string();
-        let street_id = StreetId::new(BestId::new(ns_street, "3919", "1"));
-        let building_group_id = BuildingGroupId::from_parts(&street_id, "32");
-
-        let addr = Address {
-            id: AddressId::new(BestId::new(ns_addr, "100", "1")),
-            street_id,
-            municipality_id: MunicipalityId::new(BestId::new(ns_muni, "21001", "1")),
-            postal_info_id: PostalInfoId::new(BestId::new(ns_postal, "1050", "1")),
-            part_of_municipality_id: None,
-            region: Region::Brussels,
-            status: Status::Current,
-            house_number: "32".into(),
-            box_number: Some("1".into()),
-            officially_assigned: true,
-            street_name: MultilingualName {
-                fr: Some("Avenue Louise".into()),
-                nl: Some("Louizalaan".into()),
-                de: None,
-            },
-            street_type: StreetType::Streetname,
-            municipality_name: MultilingualName {
-                fr: Some("Bruxelles".into()),
-                nl: Some("Brussel".into()),
-                de: None,
-            },
-            postal_code: "1050".into(),
-            postal_name: MultilingualName::default(),
-            part_of_municipality_name: None,
-            coordinates: Coordinates::Wgs84(WgsCoord {
-                lat: 50.8345,
-                lon: 4.3567,
-            }),
-            building_group_id: building_group_id.clone(),
-        };
-        writer.add_address(&addr).unwrap();
-        writer.commit().unwrap();
-
-        let schema = CrabSchema::build();
-        let index = Index::open_in_dir(dir.path()).unwrap();
-        register_tokenizers(&index);
-        let reader: IndexReader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .unwrap();
-        // Keep tempdir alive by leaking it — these are tests, the dir is
-        // cleaned up by the OS later. Avoid Drop-order issues with the
-        // Tantivy Index file handles on macOS.
-        std::mem::forget(dir);
-        (index, reader, schema)
+    fn first_doc(ti: &TestIndex) -> TantivyDocument {
+        ti.reader
+            .searcher()
+            .doc(tantivy::DocAddress::new(0, 0))
+            .unwrap()
     }
 
     #[test]
-    fn hydrate_extracts_lat_lon_from_real_doc() {
-        let (_index, reader, schema) = one_doc_index();
-        let searcher = reader.searcher();
-        let doc_addr = tantivy::DocAddress::new(0, 0);
-        let doc: tantivy::TantivyDocument = searcher.doc(doc_addr).unwrap();
-
+    fn extracts_lat_lon_and_metadata() {
+        let ti = louise_32();
         let hit = hydrate(
-            &doc,
-            &schema,
+            &first_doc(&ti),
+            &ti.schema,
             42.0,
             MatchType::Strict,
-            1,
+            3,
             "bgid".into(),
             None,
         )
         .unwrap();
-
         assert!((hit.lat - 50.8345).abs() < 1e-9);
         assert!((hit.lon - 4.3567).abs() < 1e-9);
         assert_eq!(hit.score, 42.0);
         assert_eq!(hit.match_type, MatchType::Strict);
-        assert_eq!(hit.unit_count, 1);
+        assert_eq!(hit.unit_count, 3);
+        assert_eq!(hit.building_group_id, "bgid");
         assert_eq!(hit.distance_m, None);
     }
 
     #[test]
-    fn hydrate_parses_payload_json() {
-        let (_index, reader, schema) = one_doc_index();
-        let searcher = reader.searcher();
-        let doc_addr = tantivy::DocAddress::new(0, 0);
-        let doc: tantivy::TantivyDocument = searcher.doc(doc_addr).unwrap();
-
+    fn parses_payload_json() {
+        let ti = louise_32();
         let hit = hydrate(
-            &doc,
-            &schema,
+            &first_doc(&ti),
+            &ti.schema,
             1.0,
             MatchType::Strict,
             1,
-            "bgid".into(),
+            "b".into(),
             None,
         )
         .unwrap();
-
-        // The payload is the serialized Address — verify a couple of fields
-        // came through.
-        assert_eq!(
-            hit.payload.get("house_number").and_then(|v| v.as_str()),
-            Some("32")
-        );
-        assert_eq!(
-            hit.payload
-                .get("street_name")
-                .and_then(|v| v.get("fr"))
-                .and_then(|v| v.as_str()),
-            Some("Avenue Louise")
-        );
+        assert_eq!(hit.payload["house_number"], "32");
+        assert_eq!(hit.payload["street_name"]["fr"], "Avenue Louise");
     }
 
     #[test]
-    fn hydrate_propagates_distance_when_provided() {
-        // /reverse uses this: distance from the query point is computed
-        // upstream, hydrate just propagates it through.
-        let (_index, reader, schema) = one_doc_index();
-        let searcher = reader.searcher();
-        let doc_addr = tantivy::DocAddress::new(0, 0);
-        let doc: tantivy::TantivyDocument = searcher.doc(doc_addr).unwrap();
-
+    fn propagates_distance() {
+        let ti = louise_32();
         let hit = hydrate(
-            &doc,
-            &schema,
+            &first_doc(&ti),
+            &ti.schema,
             1.0,
             MatchType::Spatial,
             1,
-            "bgid".into(),
+            "b".into(),
             Some(123.45),
         )
         .unwrap();
         assert_eq!(hit.distance_m, Some(123.45));
         assert_eq!(hit.match_type, MatchType::Spatial);
+    }
+
+    #[test]
+    fn missing_coordinates_is_an_error() {
+        let ti = louise_32();
+        let err = hydrate(
+            &TantivyDocument::default(),
+            &ti.schema,
+            1.0,
+            MatchType::Strict,
+            1,
+            "b".into(),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "doc missing required field: lat");
+        let mut doc = TantivyDocument::default();
+        doc.add_f64(ti.schema.lat, 50.0);
+        let err = hydrate(
+            &doc,
+            &ti.schema,
+            1.0,
+            MatchType::Strict,
+            1,
+            "b".into(),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "doc missing required field: lon");
+    }
+
+    #[test]
+    fn unparseable_payload_falls_back_to_empty_object() {
+        let ti = louise_32();
+        let mut doc = TantivyDocument::default();
+        doc.add_f64(ti.schema.lat, 50.0);
+        doc.add_f64(ti.schema.lon, 4.0);
+        doc.add_text(ti.schema.payload, "{not json");
+        let hit = hydrate(
+            &doc,
+            &ti.schema,
+            1.0,
+            MatchType::Strict,
+            1,
+            "b".into(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(hit.payload, serde_json::json!({}));
     }
 }

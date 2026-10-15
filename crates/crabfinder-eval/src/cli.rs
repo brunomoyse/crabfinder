@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 #[command(
     name = "crabfinder-eval",
     version,
@@ -124,23 +124,27 @@ pub struct Args {
     pub diff_output: Option<PathBuf>,
 }
 
+/// Parse the process arguments and dispatch.
 pub fn run() -> Result<()> {
-    let args = Args::parse();
+    run_with(&Args::parse())
+}
 
+/// Dispatch to the mode selected by `args`.
+pub fn run_with(args: &Args) -> Result<()> {
     if args.generate_eval_set {
-        return run_generate(&args);
+        return run_generate(args);
     }
     if args.validate_eval_set {
-        return run_validate(&args);
+        return run_validate(args);
     }
     if args.baseline.is_some() && args.current.is_some() {
-        return run_diff(&args);
+        return run_diff(args);
     }
     if args.batch_mode {
-        return run_batch_mode(&args);
+        return run_batch_mode(args);
     }
     if !args.eval_sets.is_empty() {
-        return run_eval(&args);
+        return run_eval(args);
     }
     anyhow::bail!(
         "no mode selected — pass one of: --generate-eval-set, --validate-eval-set, \

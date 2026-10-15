@@ -13,6 +13,7 @@ use crate::dedup::{MatchType, RAW_HIT_CAP};
 use crate::focus::parse_focus_point;
 use crate::resolver::{AddressQuery, SearchOptions, Tier, search};
 
+use super::blocking;
 use super::error::{ApiQuery, ServiceError};
 use super::feature::{Feature, parse_lang};
 
@@ -287,8 +288,11 @@ pub async fn geocode(
         expand,
         mid_street_fallback: true,
     };
-    let set = search(&query, &opts, &s.resolver_context())
-        .map_err(|e| ServiceError::internal("Tantivy search", e))?;
+    let set = blocking(s.clone(), move |s| {
+        search(&query, &opts, &s.resolver_context())
+    })
+    .await?
+    .map_err(|e| ServiceError::internal("Tantivy search", e))?;
     if set.capped {
         warn!(
             raw_hits = set.raw_hits,

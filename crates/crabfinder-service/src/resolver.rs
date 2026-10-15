@@ -492,7 +492,8 @@ impl CandidateSet {
         (ratio >= AMBIGUITY_RATIO && !same_street, Some(1.0 - ratio))
     }
 
-    fn empty() -> Self {
+    /// No candidates (`Tier::None`).
+    pub fn empty() -> Self {
         Self {
             candidates: Vec::new(),
             raw_hits: 0,
@@ -512,6 +513,18 @@ impl CandidateSet {
 /// `alternatives`; only when no reading matches strictly do the OR tiers
 /// run, on the query itself.
 pub fn search(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<CandidateSet> {
+    let set = search_readings(query, opts, ctx)?;
+    crate::telemetry::record_search(&set);
+    Ok(set)
+}
+
+/// `search` without the metrics: locality step, every reading's strict
+/// tiers, locality-suffix readings, then the OR tiers.
+fn search_readings(
     query: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,

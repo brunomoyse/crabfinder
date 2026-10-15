@@ -20,5 +20,6 @@ pub mod query_builder;
 pub mod resolver;
 pub mod spatial;
 pub mod state;
+pub mod telemetry;
 
 pub use state::{AppState, LoadOptions, chrono_lite};

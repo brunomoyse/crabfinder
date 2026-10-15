@@ -13,6 +13,9 @@ pub enum ServiceError {
     BadQuery(String),
     #[error("internal: {0}")]
     Internal(anyhow::Error),
+    /// Overloaded or too slow (the request guard's deadline): 503.
+    #[error("unavailable: {0}")]
+    Unavailable(String),
 }
 
 impl ServiceError {
@@ -25,6 +28,7 @@ impl IntoResponse for ServiceError {
     fn into_response(self) -> Response {
         let (code, msg) = match &self {
             ServiceError::BadQuery(s) => (StatusCode::BAD_REQUEST, s.clone()),
+            ServiceError::Unavailable(s) => (StatusCode::SERVICE_UNAVAILABLE, s.clone()),
             ServiceError::Internal(e) => {
                 error!(error=%e, "internal");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())

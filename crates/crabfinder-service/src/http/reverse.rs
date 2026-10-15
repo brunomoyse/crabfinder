@@ -4,10 +4,13 @@ use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
 use tantivy::TantivyDocument;
 
+use crabfinder_core::Language;
+
 use crate::AppState;
 use crate::dedup::{MatchType, RawHit, group_by_building, raw_limit};
 use crate::spatial::SpatialHit;
 
+use super::blocking;
 use super::error::{ApiQuery, ServiceError};
 use super::feature::{Feature, hydrate_feature, parse_lang};
 
@@ -58,14 +61,42 @@ pub async fn reverse(
     let lang = parse_lang(params.lang.as_deref())?;
     let limit = params.limit.clamp(1, 100);
 
+    let (lat, lng, radius_m) = (params.lat, params.lng, params.radius_m);
+    let (features, raw_hit_count) = blocking(s, move |s| {
+        nearest_features(&s, (lat, lng), radius_m, limit, lang)
+    })
+    .await??;
+
+    Ok(Json(ReverseCollection {
+        kind: "FeatureCollection",
+        query: ReverseEcho {
+            lat: params.lat,
+            lng: params.lng,
+            limit,
+            radius_m: params.radius_m,
+        },
+        count: features.len(),
+        deduplicated: true,
+        raw_hits: raw_hit_count,
+        note: "Phase 4: nearest-neighbour by great-circle distance; collapsed by building_group_id.",
+        features,
+    }))
+}
+
+/// The `limit` buildings nearest to `(lat, lng)` (within `radius_m`),
+/// nearest first, and the raw spatial hit count.
+fn nearest_features(
+    s: &AppState,
+    (lat, lng): (f64, f64),
+    radius_m: Option<f64>,
+    limit: usize,
+    lang: Option<Language>,
+) -> Result<(Vec<Feature>, usize), ServiceError> {
     // Oversearch so dedup can find `limit` distinct buildings; a dense city
     // block can have hundreds of units sharing very close coordinates.
-    let spatial_hits = s.spatial.nearest(
-        params.lat,
-        params.lng,
-        raw_limit(limit, false),
-        params.radius_m,
-    );
+    let spatial_hits = s
+        .spatial
+        .nearest(lat, lng, raw_limit(limit, false), radius_m);
     let raw_hit_count = spatial_hits.len();
 
     // Score = -distance_m so dedup's max-score semantics resolve to
@@ -114,21 +145,7 @@ pub async fn reverse(
             .map(|f| f.labelled(lang))
         })
         .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(Json(ReverseCollection {
-        kind: "FeatureCollection",
-        query: ReverseEcho {
-            lat: params.lat,
-            lng: params.lng,
-            limit,
-            radius_m: params.radius_m,
-        },
-        count: features.len(),
-        deduplicated: true,
-        raw_hits: raw_hit_count,
-        note: "Phase 4: nearest-neighbour by great-circle distance; collapsed by building_group_id.",
-        features,
-    }))
+    Ok((features, raw_hit_count))
 }
 
 fn validate(p: &ReverseParams) -> Result<(), ServiceError> {

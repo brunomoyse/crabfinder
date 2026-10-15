@@ -47,6 +47,8 @@ anyhow             = { workspace = true }
 thiserror          = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
+metrics = { version = "0.24.6", default-features = false }
+metrics-exporter-prometheus = { version = "0.18.3", default-features = false }
 
 [dev-dependencies]
 crabfinder-test-support = { workspace = true }
@@ -56,3 +58,5 @@ tempfile           = "3.27"
 tower              = { version = "0.5", features = ["util"] }
 http-body-util     = "0.1"
 insta              = { workspace = true, features = ["json"] }
+# Paused-clock tests of the request deadline (Phase 8).
+tokio              = { workspace = true, features = ["test-util"] }

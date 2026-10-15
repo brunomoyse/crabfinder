@@ -12,10 +12,11 @@ Tu as construit l'index avec une version antérieure du binaire `crabfinder-inde
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+    --notability-whitelist data/notability-whitelist-v1.yaml \
+    --places data/osm-places-be-v1.csv
 ```
 
-L'opération écrase l'index existant. Compter ~2-3 min sur un dump complet.
+L'opération écrase l'index existant. Compter ~1,5-3 min sur un dump complet. Ou lance `scripts/refresh_best.sh`, qui télécharge aussi un dump à jour (voir [`02-installation.md`](02-installation.md#mettre-à-jour-les-données)).
 
 ### « index at … is missing .crab-meta.json »
 
@@ -66,14 +67,15 @@ Possibles raisons :
 
 ## Recherche : résultats étranges
 
-### « Avenu Louise » (faute de frappe) ne trouve rien
+### Une rue mal orthographiée n'est pas trouvée
 
-crabfinder a un fallback fuzzy mais il n'est pas omnipotent. La passe stricte exige que **chaque token** de la requête matche au moins un token indexé. Si la faute est sur un token court (« Avenu » au lieu de « Avenue »), l'analyzer ne les rapproche pas — pas de stemming.
+Les fautes de frappe sont corrigées : un mot de rue qui n'existe pas dans l'index est rapproché du mot existant le plus proche, à 1 lettre près pour les mots de 5 à 8 lettres et 2 lettres pour les plus longs. « Avenu Louise 32 1050 », « Avenue Loiuse 32 1050 » et « Rue Beliard 71 1040 » reviennent tous justes, en `fuzzy_street` / `match_type=typo`. Les accents et la casse ne comptent jamais comme des fautes.
 
-Solutions :
-- Côté requête : retirer le token fautif, laisser la passe stricte trouver via les autres (`Louise 32 1050` matche).
-- Vérifier l'orthographe en amont si tu géocodes en batch.
-- Le score `fuzzy_street` quand la passe fuzzy retombe sur une rue marche bien sur des fautes mineures (« Etterbeek » vs « Étterbeek », gérée par l'AsciiFoldingFilter).
+Ce qui n'est pas corrigé :
+- Une faute dans un mot de 4 lettres ou moins (« Rua ») : les mots courts doivent être bien écrits. Les autres mots peuvent quand même trouver la rue (« Rua de la Loi 16 1000 » revient juste, mais en `match_type=fuzzy`, moins fiable).
+- Plus de 2 lettres fausses dans un mot, ou deux mots collés (« AvenueLouise 32 1050 » ne trouve rien).
+
+Solutions : retirer le mot cassé et laisser les autres faire le travail (`Louise 32 1050` matche), ou vérifier l'orthographe en amont si tu géocodes en batch.
 
 ### Les recherches « Avenue Louise » sans CP retournent du bruit
 
@@ -102,11 +104,11 @@ Solution :
 ### Le top-1 n'est pas la bonne réponse
 
 C'est rare mais ça arrive. Causes typiques :
-- Requête ambiguë (« Rue de la Gare ») → préciser CP ou région.
+- Requête ambiguë (« Kerkstraat 1 » existe dans des dizaines de communes) → la réponse indique `ambiguous: true` ; préciser CP, `region` ou `focus_point`.
 - Toponyme local non boosté en notabilité (Whitelist ne couvre pas tout). Tu peux ajouter une entrée dans `data/notability-whitelist-v1.yaml` puis ré-indexer.
 - Faute de frappe : la passe fuzzy peut remonter un mauvais candidat.
 
-Inspecter `parsed.street_tokens`, `parsed.house_number`, `parsed.postal_code` dans la réponse `/geocode` : si le parser a mal coupé la requête, le reste suit. Augmenter `limit` pour voir si la bonne réponse est dans le top-3 ou top-5.
+Inspecter `query.parsed` (`street_tokens`, `house_number`, `box_number`, `postal_code`) et `query.reading` dans la réponse `/geocode` : si le parser a mal coupé la requête, le reste suit. Augmenter `limit` pour voir si la bonne réponse est dans le top-3 ou top-5.
 
 ## Batch : performance et qualité
 
@@ -128,17 +130,17 @@ Vérifier dans l'ordre :
 
 ### `median_street` est très fréquent dans mon résultat
 
-Tu as beaucoup de lignes sans `house_number`, c'est attendu. Sur l'eval Tier A, ~38% des lignes basculent en `median_street`. Si c'est un comportement non voulu (tes données ont des numéros que crabfinder ne reconnaît pas), inspecter quelques lignes :
+Tu as beaucoup de lignes sans `house_number`, c'est attendu. Si c'est un comportement non voulu (tes données ont des numéros que crabfinder ne reconnaît pas), inspecter quelques lignes :
 
 ```bash
-awk -F, '$11=="house_number_out_of_range" {print}' geocodees.csv | head -20
+grep ',house_number_out_of_range,' geocodees.csv | head -20
 ```
 
-Cas typiques : numéros avec lettres de boîte intégrées (« 32 bte 1 ») non séparés, suffixes inhabituels, numéros à plus de 4 chiffres.
+Un numéro qui n'existe pas revient en général en `nearest_same_side` / `nearest_any_side` (un numéro voisin) ; `median_street` avec `house_number_out_of_range` signifie qu'aucun numéro existant n'était assez proche (`Avenue Louise 9999`), ou que la rue n'a pas d'adresse numérotée à ce code postal. Les boîtes écrites dans le numéro (`32 bte 1`, `32/1`) ne posent pas de problème : elles sont séparées automatiquement.
 
-### Désactiver le fallback médian
+### Désactiver les replis au niveau de la rue
 
-Si tu préfères que les lignes sans numéro exact ressortent `not_found` plutôt que `median_street` :
+Si tu préfères que les lignes sans numéro utilisable ressortent `not_found` plutôt que `median_street` (ou un `fuzzy_street` au niveau de la rue) :
 
 ```bash
 # CLI
@@ -148,6 +150,8 @@ Si tu préfères que les lignes sans numéro exact ressortent `not_found` plutô
 curl -X POST .../batch/geocode -H "Content-Type: application/json" \
      -d '{"addresses":[...],"options":{"mid_street_fallback":false}}'
 ```
+
+Les résultats au numéro voisin (`nearest_*`) sont conservés : ce sont de vraies adresses voisines, pas des approximations à la rue.
 
 ## Multi-process et partage d'index
 
@@ -161,7 +165,7 @@ Oui, même raison. Utile si tu veux paralléliser sur plusieurs machines partage
 
 ### Puis-je ré-indexer pendant que le service tourne ?
 
-**Non, à éviter.** L'indexer ouvre l'index en écriture exclusive ; un service qui lit en parallèle peut servir des résultats incohérents le temps que les nouveaux segments soient committés. Workflow propre :
+**Non, à éviter.** L'indexer ouvre l'index en écriture exclusive ; un service qui lit en parallèle peut servir des résultats incohérents le temps que les nouveaux segments soient committés. Construis le nouvel index dans un autre dossier : `scripts/refresh_best.sh` fait exactement ça (`index-<date>/`, puis bascule du lien `index-current` ; redémarre ensuite le service sur `index-current`). À la main :
 
 ```bash
 # 1. Construire le nouvel index dans un autre dossier
@@ -184,21 +188,21 @@ rm -rf ./index-belgium-old
 
 ### Comment je sais si un nouveau dump BeSt est disponible ?
 
-Pas de notification automatique. BeSt publie sur [opendata.bosa.be](https://opendata.bosa.be/) à un rythme typiquement mensuel. Le sidecar `.crab-meta.json` de ton index contient `built_at_unix_secs` qui te dit quand tu as indexé pour la dernière fois.
+Pas de notification automatique. BeSt publie sur [opendata.bosa.be](https://opendata.bosa.be/) à un rythme typiquement mensuel. Le sidecar `.crab-meta.json` de ton index contient `built_at_unix_secs` qui te dit quand tu as indexé pour la dernière fois ; un service en marche l'affiche dans `/health` (`index_built_at_unix_secs`). Un cron mensuel de `scripts/refresh_best.sh` te garde à jour.
 
 ### Comment je sais quel dump BeSt est dans mon index ?
 
-Le sidecar contient un timestamp d'**indexation**, pas la date du dump source. Si tu as besoin de tracer ça, garde une convention de nommage des archives BeSt et/ou note la date dans ta procédure de refresh.
+Le sidecar contient un timestamp d'**indexation**, pas la date du dump source. Le script de mise à jour nomme les dossiers d'après la date de téléchargement (`best-2026-10-15/`, `index-2026-10-15/`), et `readlink index-current` te dit lequel est en service.
 
 ### Mise à jour incrémentale ?
 
-Non. crabfinder reconstruit l'index intégralement à chaque refresh. ~2-3 min sur dump complet. Pas de delta.
+Non. crabfinder reconstruit l'index intégralement à chaque refresh. ~1,5-3 min sur dump complet. Pas de delta.
 
 ## Mémoire et empreinte disque
 
 ### Combien de RAM consomme le service en régime ?
 
-Au démarrage : pic ~3-4 Go (construction du R-tree spatial + adresses count). En régime : ~500 Mo à 1 Go (mmap de l'index, ne compte pas vraiment comme « consommée » — c'est du cache OS). Le R-tree à 6,8M points ajoute ~400 Mo de heap effectif.
+Au démarrage : pic ~3-4 Go (construction du R-tree spatial + adresses count). En régime : ~500 Mo à 1 Go (mmap de l'index, ne compte pas vraiment comme « consommée » — c'est du cache OS). Le R-tree à 6,9M points ajoute ~400 Mo de heap effectif.
 
 ### Combien de RAM consomme la CLI batch ?
 
@@ -206,7 +210,7 @@ Variable selon `--parallel N` et la taille du CSV chargé en RAM. À 8 cœurs et
 
 ### Combien de disque ?
 
-Index Tantivy : ~2 Go pour la Belgique complète. Side-tables (mid_street) : < 1 Mo. Sidecar : quelques octets. Au total : compter 2,5 Go généreusement.
+Index Tantivy : ~2,2 Go pour la Belgique complète. Fichiers annexes (`mid-street-v1.bin`, `localities-v1.json`) : ~13 Mo. Sidecar : quelques octets. Au total : compter 2,5 Go généreusement, le double pendant une mise à jour (ancien et nouvel index côte à côte).
 
 ## Logs et observabilité
 
@@ -238,11 +242,19 @@ RUST_LOG=info ./target/release/crabfinder-service ... 2>&1 \
 
 (Pas de flag explicite pour le moment ; le format JSON peut être ajouté via une variable d'env si besoin — ouvrir une issue.)
 
+### Monitoring
+
+Chaque requête est journalisée au niveau `info` avec son statut et sa latence. Pour des tableaux de bord et des alertes, scrape `GET /metrics` (format Prometheus) : nombre de requêtes et latence par route, `503`, et le résultat de chaque recherche par `confidence` — voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#métriques). `--no-metrics` désactive l'endpoint.
+
+### Le service répond `503`
+
+Une requête a attendu plus que `--request-timeout-ms` (10 s par défaut), attente d'une place comprise : le service est surchargé (plus de `--max-concurrency` requêtes simultanées, 256 par défaut) ou la machine swappe. Augmente les limites, ajoute de la RAM, ou répartis la charge (plusieurs services peuvent partager un même index).
+
 ## Tu n'as pas trouvé ta réponse
 
 Vérifie :
 - Que tu as bien lu [`02-installation.md`](02-installation.md) si c'est un souci de setup.
-- Que ton index est en `schema_version=7` (`cat ./index-belgium/.crab-meta.json`).
+- Que ton index est en `schema_version=9` (`cat ./index-belgium/.crab-meta.json`, ou `/health`).
 - Que les binaires sont en release (`./target/release/...`, pas `./target/debug/...`).
 
 Ensuite, capturer :

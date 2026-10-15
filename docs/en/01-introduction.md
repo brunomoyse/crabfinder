@@ -2,13 +2,13 @@
 
 ## What crabfinder does
 
-crabfinder turns Belgian addresses into geographic coordinates (latitude / longitude WGS84) and vice versa. It uses the official **BeSt Address** dataset, covering all three regions and ~6.8M addresses (as of the 2026-05 dump). Everything is local: no third-party calls, no quota, no data leaving your machine.
+crabfinder turns Belgian addresses into geographic coordinates (latitude / longitude WGS84) and vice versa. It uses the official **BeSt Address** dataset, covering all three regions and ~6.9M addresses (as of the 2026-10 dump). Everything is local: no third-party calls, no quota, no data leaving your machine.
 
 There are two concrete ways to use it:
 
 ### Mode 1 — online search (interactive)
 
-A user types an address into a form. The service replies with a top-N ranked by relevance, in GeoJSON. Typical latency under 20 ms.
+A user types an address into a form. The service replies with a top-N ranked by relevance, in GeoJSON. Typical latency a few milliseconds (p95 ~7 ms).
 
 ```text
 Query:  "Grand-Place 1 1000 Bruxelles"
@@ -17,11 +17,11 @@ Reply:  top 10 candidate addresses, the actual Brussels Grand-Place
         municipality, postal code, BeSt identifiers).
 ```
 
-This is the right mode for an autocomplete or an interactive map. See [`04-online-search.md`](04-online-search.md).
+This is the right mode for a search box or an interactive map (search on submit: crabfinder doesn't complete half-typed words). See [`04-online-search.md`](04-online-search.md).
 
 ### Mode 2 — batch geocoding (list processing)
 
-A CSV file with clean column headers (`id`, `street`, `house_number`, `postal_code`). An enriched CSV out with lat/lng and quality flags per row, **same row count, same order** as the input.
+A CSV file, either with split columns (`id`, `street`, `house_number`, `postal_code`) or with one free-text `address` column. An enriched CSV (or GeoJSON) out with lat/lng and quality flags per row, **same row count, same order** as the input.
 
 ```text
 addresses.csv (3 rows)         →  addresses-geocoded.csv (3 rows)
@@ -38,10 +38,10 @@ This is the right mode for enriching an existing database, geocoding an Excel ex
 Worth knowing before adopting it:
 
 - **No countries beyond Belgium.** The index is fixed on BeSt Address. No France, no Luxembourg, no Netherlands even across the border.
-- **No geocoding of non-addressed places.** No POIs, no station names, no building landmark names. Searching for "Atomium" will match its postal address if it's in BeSt — not the Atomium-as-a-monument.
+- **No POIs.** No station names, no shops, no landmark names. Searching for "Atomium" will match its postal address if it's in BeSt — not the Atomium-as-a-monument. Place names *are* understood: municipalities, parts of municipalities, postal areas, and villages and hamlets from OpenStreetMap ("Maredsous", "Spontin").
 - **No public hosted API.** crabfinder is a binary you install and run yourself. No SaaS.
 - **No authentication.** The service listens on `127.0.0.1:8080` by default. To expose it on the internet, front it with a reverse proxy + auth. Local or intra-LAN use is fine as-is.
-- **No automatic data refresh.** When BeSt publishes a new dump, you download the new archives and rebuild the index (~2-3 min).
+- **No automatic data refresh.** When BeSt publishes a new dump, you run `scripts/refresh_best.sh` (download, rebuild ~1.5-3 min, check, swap) and restart the service.
 
 ## Spatial precision: what you actually get
 
@@ -50,11 +50,13 @@ Depending on the case, crabfinder returns coordinates at different precision lev
 | Level | When | `confidence` field |
 |---|---|---|
 | Exact building | House number present in BeSt | `exact` |
-| Street centroid (median) | House number absent or unknown | `median_street` |
-| Exact building, fuzzy-matched street | Typo on the street name | `fuzzy_street` |
-| No coordinates | Neither street nor postal code matched | `not_found` |
+| Neighbouring building | House number absent from BeSt, a close number exists | `nearest_same_side`, `nearest_any_side` |
+| Street centroid (median) | No house number, or none close enough | `median_street` |
+| Exact building, approximately matched street | Typo or partial match on the street name | `fuzzy_street` |
+| Village / municipality centre | The query only names a place | `locality` |
+| No coordinates | Nothing plausible | `not_found` |
 
-The recipient of a geocoded CSV can therefore sort rows by confidence and inspect the tail manually.
+The recipient of a geocoded CSV can therefore sort rows by confidence and inspect the tail manually. Two more flags complete the picture: `ambiguous` (another, almost as good answer exists elsewhere) and `position_source` (whether the point was published by BeSt or estimated from the neighbours, for the ~140k Walloon addresses BeSt publishes without a position).
 
 ## Multilingual coverage
 

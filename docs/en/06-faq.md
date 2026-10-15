@@ -12,10 +12,11 @@ You built the index with an older `crabfinder-indexer`, or you updated the code 
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+    --notability-whitelist data/notability-whitelist-v1.yaml \
+    --places data/osm-places-be-v1.csv
 ```
 
-The operation overwrites the existing index. Expect ~2-3 min on a full dump.
+The operation overwrites the existing index. Expect ~1.5-3 min on a full dump. Or run `scripts/refresh_best.sh`, which also downloads a fresh dump (see [`02-installation.md`](02-installation.md#refreshing-the-data)).
 
 ### "index at … is missing .crab-meta.json"
 
@@ -66,14 +67,15 @@ Likely reasons:
 
 ## Search: surprising results
 
-### "Avenu Louise" (typo) finds nothing
+### A misspelled street isn't found
 
-crabfinder has a fuzzy fallback but it's not omnipotent. The strict pass requires **every query token** to match at least one indexed token. If the typo is on a short token ("Avenu" instead of "Avenue"), the analyzer doesn't bridge them — no stemming.
+Typos are corrected: a street word that doesn't exist in the index is matched to the closest existing word, within 1 letter for words of 5–8 letters and 2 letters for longer ones. "Avenu Louise 32 1050", "Avenue Loiuse 32 1050" and "Rue Beliard 71 1040" all come back right, as `fuzzy_street` / `match_type=typo`. Accents and case never count as mistakes.
 
-Workarounds:
-- Query-side: drop the typoed token, let the strict pass find via the others (`Louise 32 1050` matches).
-- Spell-check upstream if you geocode in batch.
-- The `fuzzy_street` score works well on minor typos (`Etterbeek` vs `Étterbeek`, handled by AsciiFoldingFilter).
+What isn't corrected:
+- A typo in a word of 4 letters or fewer ("Rua"): short words must be spelled right. The other words may still find the street ("Rua de la Loi 16 1000" comes back right, but as a less reliable `match_type=fuzzy`).
+- More than 2 wrong letters in one word, or two words glued together ("AvenueLouise 32 1050" finds nothing).
+
+Workarounds: drop the broken word and let the others do the work (`Louise 32 1050` matches), or spell-check upstream if you geocode in batch.
 
 ### Searching "Avenue Louise" without a PC returns noise
 
@@ -102,11 +104,11 @@ Fix:
 ### Top-1 isn't the correct answer
 
 Rare but happens. Typical causes:
-- Ambiguous query ("Rue de la Gare") → add PC or region.
+- Ambiguous query ("Kerkstraat 1" exists in dozens of municipalities) → the response says `ambiguous: true`; add PC, `region` or `focus_point`.
 - A local toponym not boosted in notability (the whitelist doesn't cover everything). You can add an entry to `data/notability-whitelist-v1.yaml` and re-index.
 - Typo: the fuzzy pass can surface a wrong candidate.
 
-Inspect `parsed.street_tokens`, `parsed.house_number`, `parsed.postal_code` in the `/geocode` response: if the parser carved the query wrong, everything downstream is off. Bump `limit` to check whether the correct answer is in the top-3 or top-5.
+Inspect `query.parsed` (`street_tokens`, `house_number`, `box_number`, `postal_code`) and `query.reading` in the `/geocode` response: if the parser carved the query wrong, everything downstream is off. Bump `limit` to check whether the correct answer is in the top-3 or top-5.
 
 ## Batch: performance and quality
 
@@ -128,17 +130,17 @@ Check, in order:
 
 ### `median_street` is very frequent in my output
 
-You have many rows without `house_number` — expected. On the Tier A eval, ~38% of rows fall into `median_street`. If that's unintended (your data has numbers crabfinder doesn't recognize), inspect a few rows:
+You have many rows without `house_number` — expected. If that's unintended (your data has numbers crabfinder doesn't recognize), inspect a few rows:
 
 ```bash
-awk -F, '$11=="house_number_out_of_range" {print}' geocoded.csv | head -20
+grep ',house_number_out_of_range,' geocoded.csv | head -20
 ```
 
-Typical cases: box numbers merged into the house_number field ("32 bte 1") instead of separated, unusual suffixes, numbers exceeding 4 digits.
+A number that doesn't exist usually comes back as `nearest_same_side` / `nearest_any_side` (a neighbouring number); `median_street` with `house_number_out_of_range` means no existing number was close enough (`Avenue Louise 9999`), or the street has no numbered addresses at that postal code. Box numbers written into the house number (`32 bte 1`, `32/1`) are fine: they're split off automatically.
 
-### Turn off the median fallback
+### Turn off the street-level fallbacks
 
-If you'd rather have rows without an exact number come out as `not_found` instead of `median_street`:
+If you'd rather have rows without a usable number come out as `not_found` instead of `median_street` (or a street-level `fuzzy_street`):
 
 ```bash
 # CLI
@@ -148,6 +150,8 @@ If you'd rather have rows without an exact number come out as `not_found` instea
 curl -X POST .../batch/geocode -H "Content-Type: application/json" \
      -d '{"addresses":[...],"options":{"mid_street_fallback":false}}'
 ```
+
+Nearest-number results (`nearest_*`) are kept: they are real neighbouring addresses, not street approximations.
 
 ## Multi-process and index sharing
 
@@ -161,7 +165,7 @@ Yes, same reason. Useful if you want to parallelize across machines sharing a co
 
 ### Can I re-index while the service is running?
 
-**No, avoid.** The indexer opens the index for exclusive writing; a service reading in parallel may serve inconsistent results while new segments are being committed. Clean workflow:
+**No, avoid.** The indexer opens the index for exclusive writing; a service reading in parallel may serve inconsistent results while new segments are being committed. Build the new index in another folder: `scripts/refresh_best.sh` does exactly that (`index-<date>/`, then the `index-current` symlink is swapped; restart the service against `index-current`). By hand:
 
 ```bash
 # 1. Build the new index in a different folder
@@ -184,21 +188,21 @@ rm -rf ./index-belgium-old
 
 ### How do I know when a new BeSt dump is out?
 
-No automatic notification. BeSt publishes on [opendata.bosa.be](https://opendata.bosa.be/) typically monthly. Your index's `.crab-meta.json` sidecar carries `built_at_unix_secs` telling you when you last indexed.
+No automatic notification. BeSt publishes on [opendata.bosa.be](https://opendata.bosa.be/) typically monthly. Your index's `.crab-meta.json` sidecar carries `built_at_unix_secs` telling you when you last indexed; a running service shows it in `/health` (`index_built_at_unix_secs`). A monthly cron of `scripts/refresh_best.sh` keeps you current.
 
 ### How do I know which BeSt dump is in my index?
 
-The sidecar stores an **indexing** timestamp, not the dump source date. If you need to trace this, keep a naming convention for the BeSt archives and/or note the date in your refresh procedure.
+The sidecar stores an **indexing** timestamp, not the dump source date. The refresh script names folders after the download date (`best-2026-10-15/`, `index-2026-10-15/`), and `readlink index-current` tells you which one is live.
 
 ### Incremental refresh?
 
-No. crabfinder rebuilds the index in full at each refresh. ~2-3 min on a full dump. No delta.
+No. crabfinder rebuilds the index in full at each refresh. ~1.5-3 min on a full dump. No delta.
 
 ## Memory and disk footprint
 
 ### How much RAM does the service eat?
 
-At startup: peak ~3-4 GB (spatial R-tree build + address-count). In steady state: ~500 MB to 1 GB (mmap of the index — not really "consumed", OS page cache). The 6.8M-point R-tree adds ~400 MB of effective heap.
+At startup: peak ~3-4 GB (spatial R-tree build + address-count). In steady state: ~500 MB to 1 GB (mmap of the index — not really "consumed", OS page cache). The 6.9M-point R-tree adds ~400 MB of effective heap.
 
 ### How much RAM does the batch CLI eat?
 
@@ -206,7 +210,7 @@ Variable with `--parallel N` and the input CSV size held in RAM. At 8 cores and 
 
 ### How much disk?
 
-Tantivy index: ~2 GB for full Belgium. Side tables (mid_street): < 1 MB. Sidecar: a few bytes. All in: count 2.5 GB generously.
+Tantivy index: ~2.2 GB for full Belgium. Side files (`mid-street-v1.bin`, `localities-v1.json`): ~13 MB. Sidecar: a few bytes. All in: count 2.5 GB generously, twice that during a refresh (old and new index side by side).
 
 ## Logs and observability
 
@@ -238,11 +242,19 @@ RUST_LOG=info ./target/release/crabfinder-service ... 2>&1 \
 
 (No explicit flag at the moment; JSON format can be added via env var if needed — open an issue.)
 
+### Monitoring
+
+Every request is logged at `info` with its status and latency. For dashboards and alerts, scrape `GET /metrics` (Prometheus format): request counts and latency per route, `503`s, and the outcome of every search by `confidence` — see [`04-online-search.md`](04-online-search.md#metrics). `--no-metrics` turns the endpoint off.
+
+### The service answers `503`
+
+A request waited longer than `--request-timeout-ms` (default 10 s), slot wait included: the service is overloaded (more than `--max-concurrency` requests at once, default 256) or the machine is swapping. Raise the limits, add RAM, or spread the load (several services can share one index).
+
 ## You didn't find your answer
 
 Check:
 - That you've read [`02-installation.md`](02-installation.md) if it's a setup problem.
-- That your index is `schema_version=7` (`cat ./index-belgium/.crab-meta.json`).
+- That your index is `schema_version=9` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
 - That the binaries are release builds (`./target/release/...`, not `./target/debug/...`).
 
 Then capture:

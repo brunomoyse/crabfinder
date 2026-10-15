@@ -2,10 +2,10 @@
 
 Cas d'usage : tu as une liste d'adresses (CSV, export Excel, requête SQL) et tu veux en sortir un fichier enrichi avec lat / lng et une indication de qualité par ligne.
 
-Deux façons d'attaquer ce besoin, **avec exactement la même logique de résolution derrière** :
+Deux façons d'attaquer ce besoin, **avec exactement la même logique de résolution derrière** (le même résolveur que `/geocode`) :
 
-- **CLI `crabfinder-batch`** — pas de serveur, pas de port, tu lances un binaire, tu lui donnes un CSV, tu récupères un CSV. Privilégié pour les pipelines de data, les scripts cron, les exports ponctuels.
-- **Endpoint HTTP `POST /batch/geocode`** — le service tourne déjà, tu pousses un CSV par requête HTTP, tu reçois un CSV streamé. Privilégié pour les intégrations applicatives (un backend qui géocode à la demande).
+- **CLI `crabfinder-batch`** — pas de serveur, pas de port, tu lances un binaire, tu lui donnes un CSV, tu récupères un CSV (ou du GeoJSON). Privilégié pour les pipelines de data, les scripts cron, les exports ponctuels.
+- **Endpoint HTTP `POST /batch/geocode`** — le service tourne déjà, tu pousses un CSV par requête HTTP, tu reçois un CSV (ou du GeoJSON) streamé. Privilégié pour les intégrations applicatives (un backend qui géocode à la demande).
 
 Si tu hésites : la CLI est plus simple à démarrer. Va à la section [CLI](#cli--crabfinder-batch).
 
@@ -13,59 +13,128 @@ Si tu hésites : la CLI est plus simple à démarrer. Va à la section [CLI](#cl
 
 ## Format d'entrée
 
-**Un seul format supporté en v1** : CSV avec colonnes nommées et séparées. Le header est obligatoire.
+CSV avec une ligne d'en-tête. Les colonnes sont reconnues **par leur nom**, dans n'importe quel ordre ; les colonnes inconnues sont ignorées. Deux formes sont acceptées — prends celle que tes données ont déjà.
+
+### Colonnes séparées
 
 ```csv
-id,street,house_number,postal_code
-1,Avenue Louise,32,1050
-2,Rue Belliard,71,1040
-3,Grand-Place,,1000
-4,Stationsstraat,5,2000
-5,Rue Inexistante du Test,99,1000
+id,street,house_number,postal_code,box_number
+1,Avenue Louise,32,1050,
+2,Rue Belliard,71,1040,
+3,Grand-Place,,1000,
+4,Avenue Louise,33,1050,
+5,Some Nonexistent Street,99,1000,
 ```
 
-Règles :
+### Texte libre : une colonne `address`
 
-| Colonne | Type | Obligatoire | Notes |
-|---|---|---|---|
-| `id` | chaîne | oui | Identifiant libre. Recopié tel quel en sortie pour permettre la jointure avec ta source de données. |
-| `street` | chaîne | oui | Nom de rue. Peut contenir des accents, des tirets, plusieurs mots. Pas besoin de normaliser. |
-| `house_number` | chaîne | non | Numéro de bâtiment. Vide accepté. Les suffixes alphabétiques (`32A`, `12B`) sont conservés. |
-| `postal_code` | chaîne | non | Code postal belge à 4 chiffres. Vide accepté (mais fortement déconseillé : sans CP, les rues homonymes ne sont pas désambiguïsées). |
+```csv
+id;address;postal_code
+1;Av. Louise 32, B-1050 Ixelles;
+2;Rue de la Loi 16 bte 3, 1000 Bruxelles;
+3;Grote Markt 1 Antwerpen;
+4;Spontin;
+5;Chaussée de Waterloo 1357 1180 Uccle;
+6;Rue Neuve 1;1000
+```
 
-**Encodage** : UTF-8. Si ton CSV est en `windows-1252` (export Excel français/néerlandais), convertis-le d'abord :
+Chaque `address` est découpée exactement comme `/geocode?q=` (code postal, numéro, boîte, formats belges — voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#ce-que-le-parseur-comprend)). Une ligne avec une `address` non vide ignore ses colonnes `street` / `house_number` / `box_number`. Une colonne `postal_code` l'emporte quand même sur le code postal lu dans le texte (ligne 6 ci-dessus). Les deux formes peuvent cohabiter dans un même fichier : les lignes dont `address` est vide utilisent les colonnes séparées.
+
+### Colonnes
+
+| Colonne | Obligatoire | Notes |
+|---|---|---|
+| `id` | oui | Identifiant libre. Recopié tel quel en sortie pour que tu puisses rejoindre tes données d'origine. |
+| `street` | `street` **ou** `address` | Nom de rue. Accents, tirets, plusieurs mots, l'une ou l'autre langue : aucune normalisation requise. |
+| `address` | `street` **ou** `address` | L'adresse complète en texte libre. |
+| `house_number` | non | Numéro du bâtiment. Les suffixes alphabétiques (`32A`, `12b`) sont acceptés. |
+| `postal_code` | non | Code postal belge à 4 chiffres. Fortement recommandé : sans lui, les rues homonymes (« Rue de la Gare », « Kerkstraat ») ne peuvent pas être départagées. |
+| `box_number` | non | Boîte / unité. Ne filtre jamais : si le bâtiment a une unité avec cette boîte (écrite comme dans BeSt, par ex. `b002`), c'est elle qui donne le `best_id` et le `label` de la ligne (`Avenue Louise 32 bte b002, 1050 Ixelles`) ; une boîte inconnue est simplement ignorée. |
+
+L'en-tête doit contenir `street` ou `address` ; sinon la CLI s'arrête avec ``csv header has neither a `street` nor an `address` column`` (HTTP : `400`).
+
+**Encodage** : UTF-8. Si ton CSV est en `windows-1252` (export Excel français/néerlandais typique), convertis-le d'abord :
 
 ```bash
 iconv -f WINDOWS-1252 -t UTF-8 adresses-export.csv > adresses.csv
 ```
 
-**Délimiteur** : virgule (`,`) ou point-virgule (`;`). Détection automatique sur la première ligne ; en cas de doute, force avec `--delimiter ';'` côté CLI.
+**Délimiteur** : virgule (`,`) ou point-virgule (`;`). Détecté automatiquement sur la première ligne ; force-le avec `--delimiter ';'` côté CLI en cas de doute.
 
-**Lignes vides** : ignorées. **Lignes mal formées** : la CLI s'arrête avec un message d'erreur indiquant le numéro de ligne. L'endpoint HTTP renvoie un 400 avec le même message.
+**Lignes vides** : ignorées. **Lignes malformées** : la CLI s'arrête avec une erreur indiquant le numéro de ligne. L'endpoint HTTP renvoie un 400 avec le même message.
 
 ## Format de sortie
 
-15 colonnes, dans cet ordre (toujours) :
+### CSV
+
+19 colonnes, toujours dans cet ordre. Les 15 premières sont celles de la v1 ; les 4 dernières ont été ajoutées en v2 à la fin, pour que les scripts qui lisent les colonnes par position continuent de fonctionner.
 
 ```csv
-id,street,house_number,postal_code,matched_street,matched_house_number,matched_postal_code,lat,lng,confidence,fallback_reason,house_number_delta,street_match_score,building_group_id,best_id
+id,street,house_number,postal_code,matched_street,matched_house_number,matched_postal_code,lat,lng,confidence,fallback_reason,house_number_delta,street_match_score,building_group_id,best_id,address,label,position_source,ambiguous
 ```
 
-| Colonne | Sémantique |
+| Colonne | Signification |
 |---|---|
-| `id`, `street`, `house_number`, `postal_code` | **Recopiés de l'entrée**, audit trail. |
-| `matched_street`, `matched_house_number`, `matched_postal_code` | Ce que crabfinder a effectivement trouvé dans BeSt. Permet de voir les divergences (fuzzy_street, etc.). |
-| `lat`, `lng` | WGS84 (EPSG:4326). Vides en cas de `not_found`. |
-| `confidence` | Une des sept étiquettes : `exact`, `median_street`, `fuzzy_street`, `nearest_same_side`, `nearest_any_side`, `adjacent_commune`, `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
-| `fallback_reason` | Vide si `confidence == exact`. Sinon une étiquette parmi `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `no_match`. |
-| `house_number_delta` | Vide pour `exact` (delta = 0 implicite) et pour les confiances rue-only. Rempli quand un numéro voisin a été retenu. |
-| `street_match_score` | Score BM25 brut. Indication de qualité du match texte. Plus c'est élevé, plus la rue trouvée est probante. Vide si `not_found`. |
-| `building_group_id` | Identifiant synthétique du bâtiment dans crabfinder. Stable d'un dump à l'autre tant que BeSt ne change pas le `street_id`. |
-| `best_id` | Identifiant officiel BeSt de l'adresse retenue (`namespace/object_identifier/version`). Permet de remonter à la source authoritative. |
+| `id`, `street`, `house_number`, `postal_code` | **Recopiés de l'entrée**, pour l'audit (`street` vide sur les lignes en texte libre). |
+| `matched_street`, `matched_house_number`, `matched_postal_code` | Ce que crabfinder a réellement trouvé dans BeSt. Montre les écarts (faute corrigée, numéro voisin…). |
+| `lat`, `lng` | WGS84 (EPSG:4326). Vides si `not_found`. |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `locality` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
+| `fallback_reason` | Vide si `confidence == exact`. Sinon `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `street_missing` ou `no_match`. |
+| `house_number_delta` | Numéro trouvé moins numéro demandé : `0` quand le numéro demandé existe, par ex. `26` quand on demande le 33 et que le 59 est renvoyé. Vide pour les résultats au niveau de la rue ou d'un lieu. |
+| `street_match_score` | Score BM25 brut. Indicateur de qualité du match textuel. Plus haut = meilleur match. Vide si `not_found`. |
+| `building_group_id` | Identifiant de bâtiment de crabfinder (`{identifiant de rue}|{numéro}`). Stable d'un dump à l'autre tant que l'identifiant de rue BeSt ne change pas. |
+| `best_id` | Identifiant BeSt officiel de l'adresse retenue (`namespace/object_identifier/version`). |
+| `address` | Le texte libre d'entrée, recopié (vide sur les lignes en colonnes séparées). |
+| `label` | L'adresse trouvée sur une ligne, par ex. `Avenue Louise 32, 1050 Ixelles`, dans la langue de l'adresse ou celle demandée avec `--lang` / `lang`. |
+| `position_source` | D'où viennent les coordonnées : `measured` (publiées par BeSt) ou une imputation (`same_number`, `interpolated`, `street`, `locality`). Voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#doù-viennent-les-coordonnées--position_source). |
+| `ambiguous` | `true` quand une autre réponse presque aussi bonne se trouve dans une autre rue ou une autre commune. À vérifier. |
 
-**Garantie 1-in-1-out** : autant de lignes en sortie qu'en entrée, dans le même ordre. Une ligne non géocodée sort avec `confidence=not_found` et les colonnes `lat,lng,matched_*` vides — **pas** supprimée du fichier.
+Sortie réelle pour l'exemple en colonnes séparées ci-dessus (`street_match_score` et identifiants raccourcis) :
 
-**Déduplication interne** : si ton CSV contient deux fois la même adresse (même triplet `street, house_number, postal_code`), crabfinder résout une seule fois et propage le résultat. Optimisation transparente, ne change pas le format de sortie.
+```csv
+id,street,house_number,postal_code,matched_street,matched_house_number,matched_postal_code,lat,lng,confidence,fallback_reason,house_number_delta,...,label,position_source,ambiguous
+1,Avenue Louise,32,1050,Avenue Louise,32,1050,50.83451422165412,4.356695401146948,exact,,0,...,"Avenue Louise 32, 1050 Ixelles",measured,false
+2,Rue Belliard,71,1040,Rue Belliard,71,1040,50.84121570632554,4.374046595229909,exact,,0,...,"Rue Belliard 71, 1040 Bruxelles",measured,false
+3,Grand-Place,,1000,Grand-Place,2,1000,50.846228509839484,4.353010703511631,median_street,house_number_missing,,...,"Grand-Place 2, 1000 Bruxelles",measured,false
+4,Avenue Louise,33,1050,Avenue Louise,59,1050,50.83310464460224,4.357281635827657,nearest_same_side,house_number_out_of_range,26,...,"Avenue Louise 59, 1050 Bruxelles",measured,false
+5,Some Nonexistent Street,99,1000,,,,,,not_found,no_match,,...,,,false
+```
+
+Ligne 4 : le 33 n'existe pas en 1050, crabfinder renvoie donc le numéro impair le plus proche sur cette rue (`nearest_same_side`, `house_number_delta=26`).
+
+**Lignes de lieu** : une ligne qui ne nomme qu'un lieu (`Spontin`, `Maredsous`, `Han-sur-Lesse 5580`) ressort avec `confidence=locality`, `fallback_reason=street_missing`, les coordonnées du centre du lieu et un label comme `5530 Spontin` ; `matched_street`, `building_group_id` et `best_id` restent vides puisqu'aucune adresse précise n'a été choisie.
+
+**Garantie 1-in-1-out** : même nombre de lignes, même ordre en entrée et en sortie. Une ligne non géocodée sort avec `confidence=not_found` et des `lat,lng,matched_*` vides — elle n'est **pas** retirée du fichier.
+
+**Déduplication interne** : si ton CSV contient deux fois la même adresse, crabfinder la résout une seule fois et recopie le résultat. Optimisation transparente, sans effet sur la sortie.
+
+### GeoJSON
+
+Avec `--format geojson` (CLI) ou `format=geojson` (HTTP), la sortie est une `FeatureCollection` GeoJSON : un feature `Point` par ligne d'entrée, dans l'ordre d'entrée (`geometry: null` pour les lignes `not_found`), dont les `properties` sont les 19 colonnes du CSV.
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [4.356695401146948, 50.83451422165412] },
+      "properties": {
+        "id": "1",
+        "matched_street": "Avenue Louise",
+        "matched_house_number": "32",
+        "confidence": "exact",
+        "house_number_delta": 0,
+        "label": "Avenue Louise 32, 1050 Ixelles",
+        "position_source": "measured",
+        "ambiguous": false
+      }
+    }
+  ]
+}
+```
+
+(Propriétés raccourcies.) Les coordonnées sont en `[lng, lat]`, selon la convention GeoJSON. Le fichier s'ouvre directement dans QGIS.
 
 ---
 
@@ -76,23 +145,26 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 ```bash
 ./target/release/crabfinder-batch \
     --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
     --input adresses.csv \
     --output adresses-geocodees.csv
 ```
 
-Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le résultat. Aucun port HTTP. Aucun service à démarrer. Le service `crabfinder-service` peut tourner en parallèle sur le même index — Tantivy supporte la lecture multi-process.
+Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le résultat. Pas de port HTTP. Pas de service à démarrer. Le `crabfinder-service` peut tourner en parallèle sur le même index — Tantivy supporte les lectures multi-processus.
 
 ### Tous les flags
 
 | Flag | Défaut | Description |
 |---|---|---|
-| `--index PATH` | — (obligatoire) | Dossier de l'index Tantivy. Variable d'env : `CRABFINDER_INDEX`. |
-| `--abbreviation-dict PATH` | (aucun) | YAML d'abréviations. Sans, les requêtes type « Av. Louise » ne se déploient pas en « Avenue Louise ». **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
-| `-i, --input PATH` | `stdin` | CSV d'entrée. `-` = stdin. |
-| `-o, --output PATH` | `stdout` | CSV de sortie. `-` = stdout. |
-| `--delimiter ,` ou `;` | auto | Force le délimiteur d'entrée (sinon détection auto). |
-| `--no-mid-street` | désactivé (=> fallback médian actif) | Désactive le fallback `median_street`. Les lignes sans numéro retournent `not_found` au lieu d'un centroïde de rue. |
-| `--parallel N` | nombre de cœurs | Threads de résolution. `--parallel 1` pour un profiling déterministe. |
+| `--index CHEMIN` | — (obligatoire) | Dossier de l'index Tantivy. Variable d'environnement : `CRABFINDER_INDEX`. |
+| `--abbreviation-dict CHEMIN` | (aucun) | YAML des abréviations. Sans lui, « Av. Louise » n'est pas étendu en « Avenue Louise ». **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
+| `-i, --input CHEMIN` | `stdin` | CSV d'entrée. `-` = stdin. |
+| `-o, --output CHEMIN` | `stdout` | Fichier de sortie. `-` = stdout. |
+| `--delimiter ,` ou `;` | auto | Force le délimiteur d'entrée (sinon détecté). |
+| `--format csv` ou `geojson` | `csv` | Format de sortie. |
+| `--lang fr`, `nl` ou `de` | langue de chaque adresse | Langue de la colonne `label`. Une adresse sans nom dans cette langue garde la sienne. |
+| `--no-mid-street` | désactivé | Désactive les replis au niveau de la rue (voir plus bas). |
+| `--parallel N` | tous les cœurs | Threads de travail. `--parallel 1` pour un profilage déterministe. |
 
 ### Exemples concrets
 
@@ -104,18 +176,39 @@ iconv -f WINDOWS-1252 -t UTF-8 export-excel.csv \
         --index ./index-belgium \
         --abbreviation-dict data/street-type-abbreviations-v1.yaml \
         --delimiter ';' \
-        --output geocodees.csv
+        --output geocode.csv
+```
+
+#### Adresses en texte libre, labels en néerlandais
+
+```bash
+./target/release/crabfinder-batch \
+    --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
+    --input texte-libre.csv --lang nl
+```
+
+Sur l'exemple en texte libre ci-dessus, la ligne 1 (`Av. Louise 32, B-1050 Ixelles`) sort `exact` avec le label `Louizalaan 32, 1050 Elsene`, et la ligne 2 (`Rue de la Loi 16 bte 3, 1000 Bruxelles`) avec `Wetstraat 16, 1000 Brussel`.
+
+#### Directement dans QGIS
+
+```bash
+./target/release/crabfinder-batch --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
+    --input adresses.csv --format geojson --output adresses.geojson
 ```
 
 #### En streaming, sans fichier intermédiaire
 
 ```bash
-psql -c "COPY (SELECT id, street, hn AS house_number, cp AS postal_code FROM clients) TO STDOUT CSV HEADER" \
+psql -c "COPY (SELECT id, rue AS street, num AS house_number, cp AS postal_code FROM clients) TO STDOUT CSV HEADER" \
   | ./target/release/crabfinder-batch \
         --index ./index-belgium \
         --abbreviation-dict data/street-type-abbreviations-v1.yaml \
-  > clients-geocodees.csv
+  > clients-geocodes.csv
 ```
+
+Ou, si ta table n'a qu'une colonne d'adresse : `SELECT id, adresse_complete AS address FROM clients`.
 
 #### Estimer un débit
 
@@ -127,22 +220,22 @@ time ./target/release/crabfinder-batch \
     --output /tmp/out.csv
 ```
 
-Ordre de grandeur : ~1500 lignes/s par cœur sur laptop dev en lecture in-process. Pour 100k lignes sur 8 cœurs : ~10 s.
+Ordre de grandeur : ~1500 lignes/s par cœur en lecture in-process sur un portable de développement. Pour 100k lignes sur 8 cœurs : ~10 s.
 
 ### Codes de retour
 
-- `0` : tout est passé.
-- `non-0` : erreur (CSV invalide, index introuvable, sidecar de mauvaise version, ...). Le message d'erreur sort sur `stderr` ; `stdout` reste « propre » (utile en pipe).
+- `0` : tout s'est bien passé.
+- différent de `0` : erreur (CSV invalide, pas de colonne `street`/`address`, index absent, mauvaise version du sidecar…). Le message d'erreur part sur `stderr` ; `stdout` reste propre (utile dans un pipe).
 
 ---
 
 ## Endpoint HTTP — `POST /batch/geocode`
 
-Prérequis : le service `crabfinder-service` tourne (voir [`02-installation.md`](02-installation.md) §6).
+Prérequis : `crabfinder-service` tourne (voir [`02-installation.md`](02-installation.md) §6).
 
 ### Trois variantes de body
 
-Le handler dispatche selon le `Content-Type`.
+Le handler choisit selon le `Content-Type`. Les trois acceptent les deux formes d'entrée (colonnes séparées ou `address`).
 
 #### Variante 1 — multipart/form-data (recommandé pour les gros fichiers)
 
@@ -153,7 +246,7 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
      -o adresses-geocodees.csv
 ```
 
-Capacité : jusqu'à **50 Mo de body** par requête (limite serveur par défaut). À ~500 octets/ligne, ça plafonne à ~100k lignes.
+Capacité : jusqu'à **50 Mo de body** par requête. À ~500 octets par ligne, ça fait ~100k lignes.
 
 #### Variante 2 — application/json (recommandé pour les petits lots, intégrations applicatives)
 
@@ -163,69 +256,87 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
      -d '{
        "addresses": [
          {"id": "1", "street": "Avenue Louise", "house_number": "32", "postal_code": "1050"},
-         {"id": "2", "street": "Grand-Place", "postal_code": "1000"}
+         {"id": "2", "address": "Grand-Place 1, 1000 Bruxelles"}
        ],
-       "options": {"mid_street_fallback": true}
+       "options": {"mid_street_fallback": true, "lang": "nl"}
      }' \
      -o lot.csv
 ```
 
-Capacité : jusqu'à **10 000 adresses** par requête (HTTP 413 au-delà — passer en multipart).
+Capacité : jusqu'à **10 000 adresses** par requête (HTTP 413 au-delà — passe au multipart).
 
 #### Variante 3 — body CSV brut (Content-Type quelconque, simple à câbler)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/batch/geocode \
+curl -X POST "http://127.0.0.1:8080/batch/geocode?format=geojson&lang=nl" \
      -H "Content-Type: text/csv" \
      --data-binary @adresses.csv \
-     -o adresses-geocodees.csv
+     -o adresses.geojson
 ```
 
-C'est le chemin le plus dépouillé, utile pour tester avec un client minimal.
+C'est le chemin le plus léger, pratique pour tester avec un client minimal.
 
-### Options du body JSON / multipart
+### Options
+
+Les options vont dans le body JSON / la partie multipart `options`, **ou dans la query string** (`?format=geojson&lang=nl&mid_street_fallback=false`) — pratique pour la variante CSV brut. La query string l'emporte quand les deux sont fournies.
 
 | Option | Type | Défaut | Effet |
 |---|---|---|---|
-| `mid_street_fallback` | bool | `true` | Quand `false`, désactive le fallback `median_street` (mêmes effets que `--no-mid-street` côté CLI). |
-| `format` | string | `"csv"` | Réservé pour de futurs formats (GeoJSON). Seul `"csv"` est supporté en v1. |
+| `mid_street_fallback` | bool | `true` | À `false`, désactive les replis au niveau de la rue (même effet que `--no-mid-street` côté CLI). |
+| `format` | string | `"csv"` | `"csv"` ou `"geojson"`. Toute autre valeur donne un 400. |
+| `lang` | string | langue de chaque adresse | `"fr"`, `"nl"` ou `"de"` : langue de la colonne `label`. Toute autre valeur donne un 400. |
 
 ### Réponse
 
-`Content-Type: text/csv`, **streamée ligne par ligne**. Le premier octet sort dès que les premiers résultats sont prêts, ce qui change la perception utilisateur sur les gros fichiers (TTFB en quelques centaines de ms au lieu de plusieurs secondes en mode bufferisé).
+`text/csv; charset=utf-8` (ou `application/geo+json`), **streamé**. Les premiers octets partent dès que les premières lignes sont résolues — ça compte sur les gros fichiers.
 
 ### Codes HTTP
 
-- `200` : réponse CSV (peut être vide si le CSV d'entrée n'avait que le header).
-- `400` : CSV mal formé, JSON mal formé, content-type incohérent.
+- `200` : réponse CSV / GeoJSON (une entrée réduite à l'en-tête donne un corps CSV vide, ou une FeatureCollection vide).
+- `400` : CSV ou JSON malformé, pas de colonne `street`/`address`, `format` ou `lang` inconnu. Message en texte brut, par ex. `unknown format 'xml' (expected csv or geojson)`.
 - `413` : payload JSON > 10 000 adresses.
-- `500` : erreur interne (à signaler ; pas censé arriver).
+- `503` : la réponse n'a pas commencé dans le délai `--batch-timeout-secs` (600 s par défaut). Corps JSON `{"error": "..."}`.
+- `500` : erreur interne (à signaler ; ne devrait pas arriver).
 
 ---
+
+## Désactiver les replis au niveau de la rue
+
+Par défaut, une ligne dont le numéro ne peut pas être trouvé reçoit quand même des coordonnées sur sa rue (`median_street`, ou un `fuzzy_street` au niveau de la rue). Si tu préfères des coordonnées vides plutôt qu'une approximation à la rue, utilise `--no-mid-street` (CLI) ou `mid_street_fallback=false` (HTTP) : ces lignes sortent alors en `not_found`.
+
+```bash
+./target/release/crabfinder-batch --index ./index-belgium -i adresses.csv --no-mid-street
+```
+
+Sur l'exemple en colonnes séparées, la ligne 3 (`Grand-Place`, sans numéro) devient `not_found, no_match`. La ligne 4 (`Avenue Louise 33`) reste `nearest_same_side` : le numéro voisin est une vraie adresse, pas une approximation à la rue, il est donc conservé.
 
 ## Cas particuliers
 
 ### Adresses sans code postal
 
-Fonctionne, mais qualité fortement dégradée. crabfinder ne peut plus filtrer sur le CP, donc les rues homonymes (« Rue de la Gare » présente dans des centaines de communes) reviennent dans un ordre indéterminé. **Toujours fournir le CP si tu l'as**.
+Ça fonctionne, mais la qualité baisse nettement. crabfinder ne peut pas filtrer par CP, donc les rues homonymes (« Kerkstraat » existe dans des centaines de communes) reviennent dans un ordre non déterminé — ces lignes sont en général marquées `ambiguous=true`. **Fournis toujours le CP quand tu l'as.**
 
-### Adresses avec uniquement un nom de commune (pas de rue)
+### Adresses avec seulement un nom de lieu (pas de rue)
 
-Non supporté en v1. Le champ `street` est obligatoire. Si tu veux juste géocoder « Bruxelles 1000 », passe par le mode recherche en ligne avec `q=Bruxelles 1000`.
+Supporté, sous les deux formes : `address=Spontin`, ou `street=Maredsous` avec un `house_number` vide. Quand tout le texte est un nom de lieu connu (commune, section de commune, zone postale, village ou hameau OpenStreetMap), tu obtiens une ligne `locality` au centre du lieu (`5537 Maredsous`).
+
+### Numéros de boîte
+
+Utilise la colonne `box_number`, ou écris la boîte avec le numéro — dans `house_number` (`32 bte b002`, `32/b002`) ou dans le texte libre (`bte 3`, `bus 3`, `box 3`, `12/3`). La boîte n'empêche jamais un match : le bâtiment est trouvé dans tous les cas, la boîte décide seulement laquelle de ses unités apparaît dans `best_id` / `label`. Écris la boîte comme BeSt l'écrit (Bruxelles utilise souvent des formes comme `b002`) ; une boîte qui ne correspond à aucune unité est ignorée.
 
 ### Doublons dans l'entrée
 
-Préservés en sortie (1-in-1-out). En interne, crabfinder dédoublonne le travail : seules les adresses uniques sont résolues, le résultat est propagé sur toutes les occurrences. Aucune action de ta part nécessaire.
+Conservés en sortie (1-in-1-out). En interne, crabfinder ne résout que les adresses uniques et propage le résultat à chaque occurrence.
 
 ### Taille recommandée d'un lot
 
-- CLI : pas de limite. 1M de lignes passent (mémoire ~quelques centaines de Mo en pic).
-- HTTP multipart : 50 Mo max (~100k lignes).
-- HTTP JSON : 10 000 adresses max.
+- CLI : pas de limite. 1M de lignes passe (pic mémoire de quelques centaines de Mo).
+- HTTP multipart : plafond de 50 Mo (~100k lignes).
+- HTTP JSON : plafond de 10 000 adresses.
 
-Pour aller au-delà via HTTP, découpe en plusieurs requêtes côté client. Ou bascule sur la CLI.
+Pour aller au-delà en HTTP, découpe côté client. Ou passe à la CLI.
 
 ## Et après ?
 
-- Comprendre les colonnes `confidence` / `fallback_reason` → [`05-comprendre-resultats.md`](05-comprendre-resultats.md).
-- Un comportement bizarre → [`06-faq.md`](06-faq.md).
+- Comprendre les colonnes `confidence` / `fallback_reason` / `position_source` → [`05-comprendre-resultats.md`](05-comprendre-resultats.md).
+- Un comportement étrange → [`06-faq.md`](06-faq.md).

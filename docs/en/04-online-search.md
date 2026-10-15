@@ -1,6 +1,6 @@
 # 4. Online search (HTTP API)
 
-Use case: you're integrating crabfinder into an application (form, autocomplete, map) where an end user types one query at a time. Each HTTP call is short (~20 ms) and the service runs continuously.
+Use case: you're integrating crabfinder into an application (form, map, back-office tool) where a user types one query at a time. Each HTTP call is short (p50 ~1.5 ms, p95 ~7 ms on the evaluation set) and the service runs continuously.
 
 > Looking for batch mode? See [`03-batch.md`](03-batch.md).
 
@@ -26,6 +26,7 @@ The service listens on **IPv4 only** on `127.0.0.1:8080` by default. Always quer
 | `GET` | `/reverse` | Reverse geocoding (coordinates → address) |
 | `GET` | `/building/{id}/units` | List all units in a building |
 | `POST` | `/batch/geocode` | See [`03-batch.md`](03-batch.md) |
+| `GET` | `/metrics` | Prometheus metrics (unless started with `--no-metrics`) |
 
 ## `GET /health` — service health
 
@@ -37,27 +38,34 @@ curl "http://127.0.0.1:8080/health"
 {
   "status": "ok",
   "index_path": "./index-belgium",
-  "index_docs": 6841382,
-  "uptime_secs": 1234
+  "index_docs": 6886637,
+  "uptime_secs": 1234,
+  "schema_version": 9,
+  "index_built_at_unix_secs": 1792100762,
+  "version": "0.1.0"
 }
 ```
 
-Use this from a load balancer / monitoring to verify the service responds. `index_docs` should be around 6.8M for a full Belgium index — if much lower, indexing partially failed.
+Use this from a load balancer / monitoring to verify the service responds. `index_docs` should be around 6.9M for a full Belgium index — if much lower, indexing partially failed. `index_built_at_unix_secs` tells you when the index was built (handy to spot a forgotten refresh).
 
 ## `GET /geocode` — address search
 
-The main endpoint. Free text in, ranked top-N out as **GeoJSON**.
+The main endpoint. One address in — as free text **or** as separate fields — ranked top-N out as **GeoJSON**.
 
 ### Parameters
 
 | Param | Type | Default | Effect |
 |---|---|---|---|
-| `q` | string | **required** | The user query ("Avenue Louise 32 1050", "grand place bruxelles"…) |
+| `q` | string | — | Free-text query ("Avenue Louise 32 1050", "grand place bruxelles"…). |
+| `street`, `housenumber`, `box`, `postcode`, `city` | string | — | Structured query, instead of `q` (see below). |
 | `limit` | int | `10` | Max results. Min 1, max 100. |
+| `lang` | string | each address's own | `fr`, `nl` or `de`: language of `properties.label`. |
 | `expand` | bool | `false` | If `true`, returns one feature per BeSt row without building-level dedup. Useful for listing boxes in a single building. |
 | `region` | string | — | Hard filter: `brussels`, `flanders`, `wallonia` (or `BE-BRU`, `BE-VLG`, `BE-WAL`, or variants `bruxelles`, `vlaanderen`, `wallonie`...). |
 | `postal_code` | string | — | Hard filter on postal code (4 digits). Wins over any postal code parsed from `q`. |
-| `focus_point` | string | — | `"lat,lng"` WGS84. Soft re-rank: candidates close to the point move up. Half-life 25 km. |
+| `focus_point` | string | — | `"lat,lng"` WGS84 inside Belgium. Soft re-rank: candidates close to the point move up. Half-life 25 km. |
+
+Give either `q` or the structured fields, not both.
 
 ### Examples
 
@@ -65,15 +73,118 @@ The main endpoint. Free text in, ranked top-N out as **GeoJSON**.
 # Basic search
 curl "http://127.0.0.1:8080/geocode?q=Avenue+Louise+32+1050&limit=3"
 
-# Region-restricted
-curl "http://127.0.0.1:8080/geocode?q=Rue+de+la+Gare&region=flanders&limit=5"
+# Belgian formats: box, B- prefix, comma
+curl "http://127.0.0.1:8080/geocode?q=Rue+de+la+Loi+16+bte+3,+B-1000"
 
-# Geographic disambiguation (Liège centre)
-curl "http://127.0.0.1:8080/geocode?q=Rue+de+la+Gare&focus_point=50.6326,5.5797"
+# Typo
+curl "http://127.0.0.1:8080/geocode?q=Avenue+Loiuse+32+1050"
+
+# Structured, with Dutch labels
+curl "http://127.0.0.1:8080/geocode?street=Grote+Markt&housenumber=1&city=Antwerpen&lang=nl"
+
+# A hamlet
+curl "http://127.0.0.1:8080/geocode?q=Maredsous"
+
+# Region-restricted
+curl "http://127.0.0.1:8080/geocode?q=Rue+de+la+Loi&region=wallonia&limit=5"
+
+# Geographic disambiguation (Ghent centre)
+curl "http://127.0.0.1:8080/geocode?q=Kerkstraat+1&focus_point=51.0543,3.7174"
 
 # Cross-language: same address found via its NL name
 curl "http://127.0.0.1:8080/geocode?q=Louizalaan+32+1050"
 ```
+
+### What the parser understands
+
+`q` is split into street words, house number, box and postal code. Every row below is a real `/geocode` result:
+
+| You type | Parsed as | Result |
+|---|---|---|
+| `Rue de la Loi 16 bte 3, B-1000` | street `Rue de la Loi`, number `16`, box `3`, PC `1000` | Rue de la Loi 16, 1000 Bruxelles |
+| `Louizalaan 32 bus 2 1050` | box markers `bte`, `boîte`, `bt`, `bus`, `box`, `b` | Avenue Louise 32, 1050 Ixelles |
+| `Rue Belliard 71/2 1040` | `71/2` = number 71, box 2 | Rue Belliard 71, 1040 Bruxelles |
+| `Avenue Louise 32-34 1050` | a range keeps its first number | Avenue Louise 32, 1050 Ixelles |
+| `1050-Ixelles Avenue Louise 32` | `1050-Ixelles` = PC + word; `B1050`, `BE-1050` work too | Avenue Louise 32, 1050 Ixelles |
+| `Chaussée de Waterloo 1357 1180 Uccle` | two 4-digit numbers: the last is the PC, the other the house number | Chaussée de Waterloo 1357, 1180 Uccle |
+| `Rue du 11 Novembre 5 1040` | of several numbers the **last** is the house number; `11` stays in the street name | street words `Rue du 11 Novembre`, number `5` |
+
+When a query can be read more than one way, the parser also tries the other readings, in order, and the response says which one won (`query.reading`, `0` = the first). Two common cases:
+
+- `Rue du 11 Novembre` (no other number): read first with house number 11, then with `11` as part of the street name.
+- `Han-sur-Lesse 5580`, `Grand-Place 1000`: a lone 4-digit number is read first as the postal code, then as a house number.
+
+House numbers are case-insensitive (`32a` = `32A`). The `query.parsed` object in the response shows how your query was split — the first thing to check when a result looks wrong.
+
+### Typos
+
+A street word that doesn't exist in the index is matched to the closest existing words: within 1 edit for words of 5–8 letters, 2 edits for 9 letters and more. Words of 4 letters or fewer must be spelled right. A correctly spelled word is never "corrected" into another street.
+
+```
+q = Avenue Loiuse 32 1050
+→ Avenue Louise 32, 1050 Ixelles   confidence=fuzzy_street  fallback_reason=street_spelling_fuzzy  match_type=typo
+```
+
+Accents and case never count as typos (`etterbeek` = `Etterbeek`, `chaussee` = `Chaussée`).
+
+### Structured parameters
+
+When your data is already split, send the fields instead of `q`:
+
+| Param | Effect |
+|---|---|
+| `street` | Street name, either language. |
+| `housenumber` | House number (`12`, `12A`). |
+| `box` | Box / unit. Never a filter: it picks which unit of the building is returned. |
+| `postcode` | 4-digit postal code, hard filter. Anything else is a 400. |
+| `city` | Municipality or locality name, matched together with the street words. |
+
+At least one of `street`, `city` or `postcode` is required.
+
+```bash
+curl "http://127.0.0.1:8080/geocode?street=Avenue+Louise&housenumber=32&box=b002&postcode=1050"
+# → "label": "Avenue Louise 32 bte b002, 1050 Ixelles"
+```
+
+### Labels and languages
+
+Every feature carries `properties.label`, the address on one line: `"{street} {number}[ {box marker} {box}], {postal code} {municipality}"`, with `bte` / `bus` / `Bfk.` as box marker in French / Dutch / German.
+
+Without `lang`, each address is labelled in its own language: French in Wallonia, Dutch in Flanders, French in Brussels, German in the German-speaking municipalities (postal codes 4700–4791). With `lang=nl` (or `fr`, `de`), the label uses that language when the address has a name in it, and its own language otherwise:
+
+```
+q=Rue de la Loi 16&lang=nl   → "Wetstraat 16, 1000 Brussel"
+q=Klosterstraße 1 4700       → "Klosterstraße 1, 4700 Eupen"
+q=Grand-Place 1000&lang=de   → "Grand-Place 2, 1000 Bruxelles"   (no German name: own language)
+```
+
+`lang` only changes the label. Search always works across languages.
+
+### Place names: villages, hamlets, municipalities
+
+A query that is only a place name — a municipality, a part of municipality, a postal area, or an OpenStreetMap village or hamlet — returns the addresses around that place, plus a top-level `locality` object describing it:
+
+```bash
+curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
+```
+
+```jsonc
+{
+  "locality": {
+    "kind": "hamlet",            // municipality, part_of_municipality, postal_area, village, hamlet, locality, isolated_dwelling
+    "name": { "fr": "Maredsous", "nl": null, "de": null },
+    "postal_codes": ["5537"],
+    "coordinates": [4.769483, 50.304636]   // [lng, lat] of the place
+  },
+  "features": [
+    { "properties": { "label": "Rue des Abbayes 20, 5537 Anhée", ... },
+      "match_type": "spatial", "confidence": "locality", "fallback_reason": "street_missing", ... },
+    { "properties": { "label": "Rue des Abbayes 37, 5537 Anhée", ... }, ... }
+  ]
+}
+```
+
+A street plus a place name also works when the place isn't the address's official municipality: `Rue de la Loi 17, 1040 Etterbeek` finds `Rue de la Loi 17, 1040 Bruxelles` (that stretch of 1040 belongs to the City of Brussels) as `exact`.
 
 ### Response shape
 
@@ -82,27 +193,33 @@ curl "http://127.0.0.1:8080/geocode?q=Louizalaan+32+1050"
   "type": "FeatureCollection",
   "query": {
     "q": "Avenue Louise 32 1050",
-    "limit": 3,
+    "limit": 2,
     "expand": false,
     "parsed": {
       "street_tokens": ["Avenue", "Louise"],
       "house_number": "32",
+      "box_number": null,
       "postal_code": "1050"
-    }
+    },
+    "reading": 0                    // which reading of the query won (see above)
   },
-  "count": 3,
-  "match_type": "strict",          // "strict" if at least one feature is strict; else "fuzzy"
-  "deduplicated": true,            // false when expand=true
-  "raw_hits": 24,                  // BeSt rows considered before building-level collapse
+  "count": 1,
+  "ambiguous": false,               // see "Ambiguous queries"
+  // "score_gap": 0.42,             // present when there are 2+ results
+  "match_type": "strict",           // "strict" if at least one feature is strict; else "fuzzy"
+  "deduplicated": true,             // false when expand=true
+  "raw_hits": 11,                   // BeSt rows considered before building-level collapse
   "_note": "...",
+  // "locality": { ... },           // only for place-name queries
   "features": [
     {
       "type": "Feature",
       "geometry": {
         "type": "Point",
-        "coordinates": [4.371, 50.825]    // [lng, lat] per GeoJSON convention
+        "coordinates": [4.356695401146948, 50.83451422165412]   // [lng, lat] per GeoJSON convention
       },
       "properties": {
+        "label":         "Avenue Louise 32, 1050 Ixelles",
         "street_name":   { "fr": "Avenue Louise", "nl": "Louizalaan", "de": null },
         "house_number":  "32",
         "box_number":    null,
@@ -110,35 +227,56 @@ curl "http://127.0.0.1:8080/geocode?q=Louizalaan+32+1050"
         "municipality_name": { "fr": "Ixelles", "nl": "Elsene", "de": null },
         "region":        "brussels",
         "status":        "current",
-        "coordinates":   { "crs": "EPSG:4326", "lat": 50.825, "lon": 4.371 },
+        "coordinates":   { "crs": "EPSG:4326", "lat": 50.8345, "lon": 4.3567 },
         "id":            { "namespace": "...", "object_identifier": "...", "version_identifier": "..." }
-        // ... (all BeSt metadata)
+        // ... (all BeSt metadata; "position_source" appears when the position was imputed)
       },
-      "score": 30.04,                    // BM25 × notability × ln(addr_count)
-      "match_type": "strict",            // "strict" or "fuzzy"
-      "unit_count": 4,                   // 4 boxes in this building
-      "building_group_id": "..."
+      "score": 186.87859,
+      "match_type": "strict",
+      "unit_count": 11,               // 11 BeSt rows (boxes) in this building
+      "building_group_id": "https://databrussels.be/id/streetname|3919|32",
+      "confidence": "exact",          // same vocabulary as the batch column
+      "house_number_delta": 0         // matched minus requested number, when a number was honoured
+      // "fallback_reason": "...",    // present when confidence isn't exact
     }
-    // ... 2 more features
   ]
 }
 ```
+
+`confidence`, `fallback_reason` and `house_number_delta` mean exactly what they mean in batch mode — see [`05-understanding-results.md`](05-understanding-results.md). Asking `Avenue Louise 33 1050`, for instance, returns `Avenue Louise 59` with `confidence=nearest_same_side`, `house_number_delta=26`.
 
 ### Understanding `match_type`
 
 | Value | Meaning |
 |---|---|
-| `strict` | Every query token matched via the main AND pipeline (the "happy path"). |
-| `fuzzy` | The strict pass returned zero, the service fell back to OR-of-tokens. Looser match, worth inspecting. |
+| `strict` | Every query word matched (the "happy path"). |
+| `typo` | A misspelled street word was corrected (see [Typos](#typos)). |
+| `fuzzy` | The strict pass returned zero; the service fell back to "any of the words". Looser match, worth inspecting. |
+| `spatial` | Found by position, not by text: `/reverse`, and addresses around a place for a place-name query. |
 
-The top-level `match_type` is `strict` if **at least one** returned feature is strict. If every feature is fuzzy, it's `fuzzy`.
+The top-level `match_type` is `strict` if **at least one** returned feature is strict, `fuzzy` otherwise.
+
+### Ambiguous queries
+
+`ambiguous` is `true` when the second result scores at least 90% of the first **and** lies on a different street or municipality — typically a street name that exists in many municipalities, without postal code. `score_gap` (`1 − score₂/score₁`, present when there are at least two results) tells you how close the call was: `0` = tie.
+
+```
+q = Kerkstraat 1          → ambiguous=true,  score_gap=0.004
+                            Kerkstraat 1, 8370 BLANKENBERGE/Uitkerke
+                            Kerkstraat 1, 8420 DE HAAN/Klemskerke/Wenduine …
+q = Kerkstraat 1 &focus_point=51.0543,3.7174
+                          → ambiguous=false, score_gap=0.45
+                            Kerkstraat 1, 9050 Gentbrugge/Ledeberg
+```
+
+When `ambiguous` is `true`, ask the user to pick, or add a postal code, `region` or `focus_point`.
 
 ### Turning off building-level dedup
 
-By default, multiple boxes in the same building are collapsed into one feature with `unit_count > 1`. To get each box separately (e.g. you want all 12 boxes of 32 Avenue Louise on a map):
+By default, multiple boxes in the same building are collapsed into one feature with `unit_count > 1`. To get each box separately:
 
 ```bash
-curl "http://127.0.0.1:8080/geocode?q=Avenue+Louise+32&expand=true"
+curl "http://127.0.0.1:8080/geocode?q=Avenue+Louise+32+1050&expand=true"
 ```
 
 You get one feature per BeSt row (up to `limit`), no collapse.
@@ -150,7 +288,8 @@ Cleaner alternative: use `/building/{id}/units` (below) with the `building_group
 Use case: a user clicks on a map, you want the closest address.
 
 ```bash
-curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&limit=1"
+curl "http://127.0.0.1:8080/reverse?lat=50.8467&lng=4.3525&limit=1&lang=nl"
+# → "label": "Grote Markt 29, 1000 Brussel", "distance_m": 37.3
 ```
 
 ### Parameters
@@ -161,34 +300,38 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&limit=1"
 | `lng` | float | required | WGS84 longitude |
 | `limit` | int | `1` | Max results. Max 100. |
 | `radius_m` | float | — | If set, drops results beyond `radius_m` metres. |
+| `lang` | string | each address's own | Language of `properties.label`. |
 
 ### Response
 
-Same envelope as `/geocode`, plus a `distance_m` field (great-circle distance in metres) on each feature. Sorted ascending by distance, then deduplicated by building.
+Same envelope as `/geocode`, plus a `distance_m` field (great-circle distance in metres) on each feature, `match_type: "spatial"`. Sorted ascending by distance, then deduplicated by building.
 
 ```jsonc
 {
   "type": "FeatureCollection",
-  "query": { "lat": 50.8466, "lng": 4.3525, "limit": 1 },
+  "query": { "lat": 50.8467, "lng": 4.3525, "limit": 1 },
   "count": 1,
   "features": [
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [4.3525, 50.8466] },
+      "geometry": { "type": "Point", "coordinates": [4.352720289567735, 50.84700502224868] },
       "properties": {
-        "street_name":   { "fr": "Grand-Place", "nl": "Grote Markt" },
-        "house_number":  "1",
-        "postal_code":   "1000",
-        "municipality_name": { "fr": "Bruxelles", "nl": "Brussel" }
+        "label": "Grote Markt 29, 1000 Brussel",
+        "street_name": { "fr": "Grand-Place", "nl": "Grote Markt" },
+        "house_number": "29",
+        "postal_code": "1000"
         // ...
       },
-      "distance_m": 4.23,             // 4.23 m from the queried point
+      "distance_m": 37.28,
+      "match_type": "spatial",
       "unit_count": 1,
       "building_group_id": "..."
     }
   ]
 }
 ```
+
+Only addresses with a building-accurate position are candidates: the few thousand addresses that only got a street or village position (see [`05-understanding-results.md`](05-understanding-results.md#where-the-coordinates-come-from-position_source)) never come out of `/reverse`.
 
 ### Restricting to a useful radius
 
@@ -204,13 +347,13 @@ Use case: you have a `building_group_id` (from a prior `/geocode` call) and want
 
 ```bash
 # The building_group_id contains / and | which need URL-encoding.
-BGID="https://databrussels.be/id/streetname/3919/1|32"
+BGID="https://databrussels.be/id/streetname|3919|32"
 ENCODED=$(printf '%s' "$BGID" | jq -sRr @uri)
 
 curl "http://127.0.0.1:8080/building/${ENCODED}/units"
 ```
 
-Response: a flat `FeatureCollection` (no top-N envelope), one feature per box, sorted by `house_number` then `box_number` ascending.
+Response: a `FeatureCollection` with `building_group_id`, `count` and one feature per unit (each with its `label`), sorted by box number (the unit without a box first). An unknown id returns `count: 0`.
 
 ## Filters and disambiguation strategies
 
@@ -229,22 +372,51 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&postal_code=1050"
 
 ### When to use `focus_point`
 
-You have the user's location (from the browser, GPS, IP): passing `focus_point=lat,lng` softly re-ranks nearby candidates without excluding distant ones. Half-life 25 km.
+You have the user's location (from the browser, GPS, IP): passing `focus_point=lat,lng` softly re-ranks nearby candidates without excluding distant ones. Half-life 25 km: a candidate 25 km away keeps half its score.
 
-**Caveat**: `focus_point` only helps if the candidate pool already contains close addresses. If you search "Rue de la Gare" and a single big city dominates BM25 with 200 identical results, focus_point has no one to lift in the pool. In that case, adding `region` or `postal_code` helps more.
+**Caveat**: `focus_point` re-ranks the candidates the text search found; it doesn't search around the point. Without a house number, a common street name ("Rue de la Gare") falls back to street level on the best-scoring street, and focus has little to work with. Adding a house number, `postal_code` or `region` helps more.
 
 ## CORS
 
-The service responds with `Access-Control-Allow-Origin: *` by default, so a JS frontend in a browser can hit the API directly. No auth — always assume the service runs locally or behind a trusted reverse proxy.
+The service answers with `Access-Control-Allow-Origin: *` by default, so a JS frontend in a browser can hit the API directly. To restrict it, start the service with `--cors-origin https://app.example.org` (repeatable). No auth — always assume the service runs locally or behind a trusted reverse proxy.
+
+## Deadlines and load
+
+Each request has a deadline (`--request-timeout-ms`, default 10 s), time waiting for a free slot included; at most `--max-concurrency` requests (default 256) are handled at once, the others wait. A request past its deadline gets a `503`. In practice a geocode takes a few milliseconds: a `503` means the service is overloaded.
+
+## Metrics
+
+`GET /metrics` serves Prometheus text format:
+
+| Series | Content |
+|---|---|
+| `crabfinder_http_requests_total{route,method,status}` | Requests per route and status. |
+| `crabfinder_http_request_duration_seconds{route}` | Latency histogram per route. |
+| `crabfinder_http_rejected_total{route,reason}` | Requests answered `503` by the deadline. |
+| `crabfinder_search_total{tier,confidence,match_type}` | One per search (each `/geocode`, each batch row), by outcome. |
+| `crabfinder_search_capped_total` | Searches with so many candidates that the tail of the result may miss buildings. |
+
+The `confidence` breakdown is a cheap quality monitor: a jump in `not_found` or `fuzzy_street` usually means an upstream data issue.
 
 ## Errors
 
+Every error body is JSON: `{"error": "<message>"}`.
+
 | Code | Cause |
 |---|---|
-| `400 Bad Request` | Missing or malformed parameter (unknown `region`, out-of-range `lat`/`lng`, malformed `focus_point`…) |
-| `503 Service Unavailable` | Startup not complete (spatial R-tree builds ~3 s at startup) |
+| `400 Bad Request` | Missing or malformed parameter: no `q` nor structured field, `q` combined with structured fields, `postcode` not 4 digits, unknown `region` or `lang`, out-of-range `lat`/`lng`, malformed `focus_point`… |
+| `404 Not Found` | Unknown path (empty body). |
+| `503 Service Unavailable` | Deadline exceeded (`request timed out after 10000 ms`). |
 
-Error bodies are `text/plain` (not JSON). For structured errors, front the service with a gateway.
+Examples:
+
+```
+GET /geocode?q=x&street=y   → 400 {"error":"q cannot be combined with street, housenumber, box, postcode or city"}
+GET /geocode?q=x&lang=en    → 400 {"error":"unknown lang 'en' (expected fr, nl or de)"}
+GET /reverse?lat=95&lng=4   → 400 {"error":"lat out of range [-90, 90]: 95"}
+```
+
+The service only accepts connections once the index is fully loaded, so there is no "starting up" error.
 
 ## What's next
 

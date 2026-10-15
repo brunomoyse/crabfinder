@@ -1,32 +1,54 @@
 # crabfinder
 
 A Belgium-only geocoder, written in Rust. Indexes the federal **BeSt
-Address** open dataset (6.8M addresses, three regions) into a single
-Tantivy index and serves geocoding + reverse geocoding over HTTP.
+Address** open dataset (6.9M addresses, three regions) into a single
+Tantivy index and serves forward, reverse and batch geocoding over HTTP
+and from the command line.
 
 ```
-GET /geocode?q=Avenue Louise 32 1050 Ixelles
-GET /reverse?lat=50.8466&lng=4.3525
+GET /geocode?q=Rue de la Loi 16 bte 3, B-1000 Bruxelles
+GET /geocode?street=Grote Markt&housenumber=1&city=Antwerpen&lang=nl
+GET /reverse?lat=50.8466&lng=4.3525&lang=de
+POST /batch/geocode            (CSV in, CSV or GeoJSON out)
 ```
+
+What it handles:
+
+- **Belgian address formats** — `B-1050`, `1050-Ixelles`, box numbers
+  (`bte`, `bus`, `box`, `12/3`), ranges (`12-14`), 4-digit house numbers
+  (`Chaussée de Waterloo 1357 1180 Uccle`), streets with numbers in their
+  name (`Rue du 11 Novembre 5`).
+- **Cross-language queries** — FR/NL/DE names are interchangeable
+  (`Anvers Grote Markt`, `Wetstraat 16 Bruxelles`).
+- **Typos** — edit-distance matching on unknown street words
+  (`Avenue Loiuse 32`).
+- **Missing house numbers** — the nearest existing number on the same
+  side of the street, else the street itself, with an explicit
+  `confidence` and `house_number_delta`.
+- **Hamlets and villages** — OpenStreetMap places (`Maredsous`,
+  `Spontin`) resolve to the locality when no street is named.
+- **Positions for every address** — the ~140k Walloon addresses BeSt
+  ships without coordinates are imputed (same number, interpolation,
+  locality centroid) and flagged with `position_source`.
+- **Labels in any language** — `lang=fr|nl|de` and a ready-to-print
+  `label` on every result.
+- **Operations** — request deadlines, a concurrency limit, CORS,
+  Prometheus `/metrics`, and a one-command BeSt refresh.
 
 ## Quick start
 
-Requires Rust 1.90+, ~3 GB free disk for the index, and the BeSt zip
-bundle.
+Requires Rust 1.90+ and ~3 GB free disk.
 
 ```bash
 # 1. Build everything (release mode — debug is too slow for Tantivy)
 cargo build --release
 
-# 2. Index the full Belgian dump (~2.3 min, ~2 GB)
-./target/release/crabfinder-indexer \
-    --best-dir ./best-full-latest \
-    --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+# 2. Download BeSt, build index-<date>, validate it, point index-current at it
+scripts/refresh_best.sh
 
 # 3. Start the HTTP service
 ./target/release/crabfinder-service \
-    --index ./index-belgium \
+    --index ./index-current \
     --abbreviation-dict data/street-type-abbreviations-v1.yaml \
     --port 8080 &
 
@@ -34,16 +56,43 @@ cargo build --release
 curl "http://127.0.0.1:8080/health"
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000+Bruxelles&limit=3"
 curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&limit=1"
+
+# 5. Batch a CSV (id,street,house_number,postal_code — or id,address)
+./target/release/crabfinder-batch --index ./index-current -i in.csv -o out.csv
 ```
 
-The service binds IPv4-only, so always hit it with `127.0.0.1` (not
-just `localhost`, which may resolve to IPv6 first on some platforms).
+To index a bundle you already have:
+
+```bash
+./target/release/crabfinder-indexer --best-dir ./best-full-latest --output ./index-belgium \
+    --notability-whitelist data/notability-whitelist-v1.yaml \
+    --places data/osm-places-be-v1.csv          # ~1.5 min
+```
+
+The service binds IPv4 loopback by default (`--host 0.0.0.0` in
+containers), so hit it with `127.0.0.1`, not `localhost`. It accepts
+connections once the reverse-geocoding R-tree is built (~5 s).
 
 ## Quality
 
-Tier A recall@1 ≈ 0.93, recall@10 ≈ 0.99 on the synthetic eval set
-(2700 queries across Brussels + Flanders + Wallonia, 6 variant families
-including cross-language). p99 /geocode latency ~20 ms HTTP loopback.
+From [`reports/v2-baseline.md`](reports/v2-baseline.md) (BeSt dump of
+2026-10-15; 3,840 queries: 3,742 synthetic across 10 query variants + 98
+hand-written adversarial cases):
+
+| | v1 (pre-v2 baseline) | v2 |
+|---|---|---|
+| recall@1 | 0.842 | **0.967** |
+| recall@10 | 0.910 | **0.991** |
+| typo variant recall@1 | 0.366 | **0.988** |
+| 4-digit house numbers | 0.158 | **1.000** |
+| messy punctuation (`Street, 10, B-1150, City`) | 0.884 | **0.998** |
+| hamlets (adversarial) | 0.667 | **1.000** |
+| p95 / p99 `/geocode` latency | 19.0 / 51.1 ms | **7.4 / 11.5 ms** |
+
+Latency is HTTP loopback, 8 concurrent clients. The `minimal` variant
+(street + number, no postal code or municipality: 0.778) is bounded by
+genuine ambiguity — most Belgian street names exist in several
+municipalities.
 
 Run an eval yourself: see [`docs/eval.md`](docs/eval.md).
 
@@ -58,38 +107,48 @@ Technical references:
 
 | Doc | What |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Crate layout, Tantivy schema, query pipeline, scoring |
-| [docs/api.md](docs/api.md) | HTTP endpoints reference |
+| [docs/architecture.md](docs/architecture.md) | Crate layout, index schema, query pipeline, scoring |
+| [docs/api.md](docs/api.md) | HTTP endpoints, parameters, response fields, flags |
 | [docs/eval.md](docs/eval.md) | Eval methodology + how to run |
-
-In addition to `GET /geocode` and `GET /reverse`, crabfinder ships a
-batch geocoding stack: `POST /batch/geocode` (HTTP) and the standalone
-`crabfinder-batch` binary (CLI). Both consume a clean-columns CSV
-(`id,street,house_number,postal_code`) and emit an enriched CSV with
-per-row `confidence` + `fallback_reason`. See
-[docs/en/03-batch.md](docs/en/03-batch.md) /
-[docs/fr/03-batch.md](docs/fr/03-batch.md).
 
 ## Inputs
 
-- **BeSt zip bundle** — the federal Belgian address dataset. Drop the
-  `BrusselsAddress*.zip`, `FlandersAddress*.zip`, `WalloniaAddress*.zip`
-  files (plus their `Municipality*`, `PostalInfo*`, `StreetName*`,
-  `PartOfMunicipality*` siblings) into one directory and pass it via
-  `--best-dir`.
+- **BeSt zip bundle** — the federal Belgian address dataset, downloaded
+  by `scripts/refresh_best.sh` (or drop the `*Address*.zip`,
+  `Municipality*`, `PostalInfo*`, `StreetName*`, `PartOfMunicipality*`
+  zips into one directory and pass `--best-dir`).
+- **OSM places** (`data/osm-places-be-v1.csv`) — hamlets, villages and
+  localities extracted from OpenStreetMap by
+  `scripts/build_osm_places.py`; powers locality queries.
 - **Notability whitelist** (`data/notability-whitelist-v1.yaml`) — a
   curated `building_group_id → multiplier` map that lifts iconic
-  toponyms (Grand-Place, Atomium, …) above look-alikes in lesser
-  cities.
+  toponyms (Grand-Place, Atomium, …) above look-alikes elsewhere.
 - **Abbreviation dictionary** (`data/street-type-abbreviations-v1.yaml`)
   — expands user-typed abbreviations at query time
   (`Av. Louise` → `Avenue Louise`, `Stationsstr.` → `Stationsstraat`).
 
-Both extra inputs are optional. Without them the engine still runs;
-just expect lower scores on notability-sensitive and abbreviated
+All three extra inputs are optional; without them the engine still runs,
+with lower scores on locality, notability-sensitive and abbreviated
 queries.
+
+## Development
+
+```bash
+cargo test --workspace                          # unit + end-to-end, no BeSt data needed
+cargo clippy --workspace --all-targets -- -D warnings
+scripts/coverage.sh                             # line coverage, gate 95 %
+```
 
 ## License
 
-MIT OR Apache-2.0. BeSt address data is © the Belgian federal
-authorities; redistribute per their open-data license.
+MIT OR Apache-2.0.
+
+Data:
+
+- BeSt address data is © the Belgian federal and regional authorities;
+  redistribute per their open-data licence.
+- `data/osm-places-be-v1.csv` contains data from © OpenStreetMap
+  contributors, available under the
+  [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
+  Indices built with `--places` contain derived data under the same
+  licence.

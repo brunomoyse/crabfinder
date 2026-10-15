@@ -6,12 +6,12 @@ Bienvenue. Cette documentation est écrite pour un utilisateur qui veut **utilis
 
 ## crabfinder en une phrase
 
-Un service de géocodage belge basé sur les données fédérales **BeSt Address** (6,8 millions d'adresses Bruxelles + Flandre + Wallonie). Deux usages :
+Un service de géocodage belge basé sur les données fédérales **BeSt Address** (6,9 millions d'adresses Bruxelles + Flandre + Wallonie). Deux usages :
 
 1. **Recherche en ligne** — une requête, un top-N classé. Pour intégrer dans une application interactive (formulaire, carte).
-2. **Géocodage batch** — un CSV en entrée, un CSV enrichi en sortie. Pour traiter une liste d'adresses d'un coup.
+2. **Géocodage batch** — un CSV en entrée, un CSV ou du GeoJSON enrichi en sortie. Pour traiter une liste d'adresses d'un coup.
 
-Tout tourne en local. Pas d'appel externe. Index unique d'environ 2 Go sur disque.
+Tout tourne en local. Pas d'appel externe. Index unique d'environ 2,2 Go sur disque.
 
 ## Quickstart
 
@@ -19,11 +19,12 @@ Tout tourne en local. Pas d'appel externe. Index unique d'environ 2 Go sur disqu
 # 1. Construire les binaires (release impératif)
 cargo build --release
 
-# 2. Construire l'index (~2-3 min, ~2 Go disque)
+# 2. Construire l'index (~1,5-3 min, ~2,2 Go disque)
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+    --notability-whitelist data/notability-whitelist-v1.yaml \
+    --places data/osm-places-be-v1.csv
 
 # 3a. Recherche en ligne — démarrer le service
 ./target/release/crabfinder-service \
@@ -47,10 +48,10 @@ Si l'une de ces commandes ne tourne pas chez toi, va directement à [`02-install
 | Fichier | Contenu | Lire quand |
 |---|---|---|
 | [01-introduction.md](01-introduction.md) | Ce que fait crabfinder, ce qu'il ne fait pas | Avant de l'installer |
-| [02-installation.md](02-installation.md) | Installer Rust, récupérer BeSt, construire l'index | Au premier setup |
+| [02-installation.md](02-installation.md) | Installer Rust, récupérer BeSt, construire l'index, options du service, mise à jour | Au premier setup |
 | [03-batch.md](03-batch.md) | Géocoder un CSV (CLI + endpoint HTTP) | Cas d'usage principal pour traitement de listes |
-| [04-recherche-en-ligne.md](04-recherche-en-ligne.md) | API HTTP : `/geocode`, `/reverse`, `/building/{id}/units` | Pour intégrer crabfinder dans une appli |
-| [05-comprendre-resultats.md](05-comprendre-resultats.md) | Lire les sorties : `confidence`, `fallback_reason`, `score` | Avant d'exploiter un CSV géocodé |
+| [04-recherche-en-ligne.md](04-recherche-en-ligne.md) | API HTTP : `/geocode`, `/reverse`, `/building/{id}/units`, `/metrics` | Pour intégrer crabfinder dans une appli |
+| [05-comprendre-resultats.md](05-comprendre-resultats.md) | Lire les sorties : `confidence`, `fallback_reason`, `position_source`, `ambiguous`, `score` | Avant d'exploiter un CSV géocodé |
 | [06-faq.md](06-faq.md) | Erreurs courantes, performance, dépannage | En cas de pépin |
 
 ## Conventions de cette doc
@@ -62,4 +63,4 @@ Si l'une de ces commandes ne tourne pas chez toi, va directement à [`02-install
 
 ## Licence
 
-Code crabfinder : MIT OR Apache-2.0. Données BeSt Address : © autorités fédérales belges, licence open data (à redistribuer selon leurs conditions).
+Code crabfinder : MIT OR Apache-2.0. Données BeSt Address : © autorités fédérales belges, licence open data (à redistribuer selon leurs conditions). `data/osm-places-be-v1.csv` : © les contributeurs d'OpenStreetMap, ODbL 1.0.

@@ -2,13 +2,13 @@
 
 ## Ce que crabfinder fait
 
-crabfinder transforme des adresses belges en coordonnées géographiques (latitude / longitude WGS84) et inversement. Il utilise les données officielles **BeSt Address**, qui couvrent les trois régions du pays et représentent environ 6,8 millions d'adresses (état dump 2026-05). Tout est local : pas d'appel à un service tiers, pas de quota, pas de fuite de données.
+crabfinder transforme des adresses belges en coordonnées géographiques (latitude / longitude WGS84) et inversement. Il utilise les données officielles **BeSt Address**, qui couvrent les trois régions du pays et représentent environ 6,9 millions d'adresses (état dump 2026-10). Tout est local : pas d'appel à un service tiers, pas de quota, pas de fuite de données.
 
 Il y a deux façons concrètes de l'utiliser :
 
 ### Mode 1 — recherche en ligne (interactif)
 
-Un utilisateur tape une adresse dans un formulaire. Le service répond avec un top-N classé par pertinence, en GeoJSON. Latence typique sous 20 ms.
+Un utilisateur tape une adresse dans un formulaire. Le service répond avec un top-N classé par pertinence, en GeoJSON. Latence typique de quelques millisecondes (p95 ~7 ms).
 
 ```text
 Question : « Grand-Place 1 1000 Bruxelles »
@@ -17,11 +17,11 @@ Réponse  : top 10 adresses candidates, la Grand-Place de Bruxelles en première
            commune, code postal, identifiants BeSt).
 ```
 
-C'est le mode idéal pour intégrer une autocomplétion ou une carte interactive. Voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md).
+C'est le mode idéal pour un champ de recherche ou une carte interactive (recherche à la validation : crabfinder ne complète pas les mots à moitié tapés). Voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md).
 
 ### Mode 2 — géocodage batch (traitement de liste)
 
-Un fichier CSV en entrée avec des colonnes propres (`id`, `street`, `house_number`, `postal_code`). Un fichier CSV enrichi en sortie avec lat/lng et indicateurs de confiance pour chaque ligne, **dans le même ordre, avec le même nombre de lignes** que l'entrée.
+Un fichier CSV en entrée, soit en colonnes séparées (`id`, `street`, `house_number`, `postal_code`), soit avec une seule colonne `address` en texte libre. Un fichier CSV (ou GeoJSON) enrichi en sortie avec lat/lng et indicateurs de confiance pour chaque ligne, **dans le même ordre, avec le même nombre de lignes** que l'entrée.
 
 ```text
 adresses.csv (3 lignes)        →  adresses-geocodees.csv (3 lignes)
@@ -38,10 +38,10 @@ C'est le mode pertinent pour enrichir une base de données existante, géocoder 
 À savoir avant de l'adopter, pour éviter les surprises :
 
 - **Pas d'autres pays que la Belgique.** L'index est figé sur BeSt Address. Pas de France, pas de Luxembourg, pas de Pays-Bas même limitrophes.
-- **Pas de géocodage de lieux non-adressés.** Pas de POI, pas de noms de gare, pas de noms de bâtiments. Si tu cherches « Atomium », ça matchera l'adresse postale officielle de l'Atomium si elle est dans BeSt — pas l'objet « Atomium » en tant que tel.
+- **Pas de POI.** Pas de noms de gare, pas de commerces, pas de noms de monuments. Si tu cherches « Atomium », ça matchera l'adresse postale officielle de l'Atomium si elle est dans BeSt — pas l'objet « Atomium » en tant que tel. Les noms de lieux, eux, *sont* compris : communes, sections de commune, zones postales, et villages et hameaux OpenStreetMap (« Maredsous », « Spontin »).
 - **Pas d'API publique en ligne.** crabfinder est un binaire que tu installes et fais tourner toi-même. Pas de SaaS.
 - **Pas d'authentification.** Le service écoute sur `127.0.0.1:8080` par défaut. Si tu veux l'exposer sur Internet, mets un reverse-proxy + auth devant. Pour un usage local ou intra-LAN, c'est sans souci.
-- **Pas de mise à jour automatique des données.** Quand BeSt publie un nouveau dump, tu télécharges les nouvelles archives et tu reconstruis l'index (~2-3 min).
+- **Pas de mise à jour automatique des données.** Quand BeSt publie un nouveau dump, tu lances `scripts/refresh_best.sh` (téléchargement, reconstruction ~1,5-3 min, vérification, bascule) et tu redémarres le service.
 
 ## Précision spatiale : ce que tu obtiens vraiment
 
@@ -50,11 +50,13 @@ Selon le cas, crabfinder retourne des coordonnées à plusieurs niveaux de préc
 | Niveau | Quand | Champ `confidence` |
 |---|---|---|
 | Bâtiment exact | Numéro de rue présent dans BeSt | `exact` |
-| Centroïde de rue (médian) | Numéro absent ou inconnu | `median_street` |
-| Bâtiment exact, rue approchée | Faute de frappe sur le nom de rue | `fuzzy_street` |
-| Pas de coordonnées | Ni la rue ni le code postal ne matchent | `not_found` |
+| Bâtiment voisin | Numéro absent de BeSt, un numéro proche existe | `nearest_same_side`, `nearest_any_side` |
+| Centroïde de rue (médian) | Pas de numéro, ou aucun assez proche | `median_street` |
+| Bâtiment exact, rue approchée | Faute de frappe ou match partiel sur le nom de rue | `fuzzy_street` |
+| Centre du village / de la commune | La requête ne nomme qu'un lieu | `locality` |
+| Pas de coordonnées | Rien de plausible | `not_found` |
 
-Le destinataire d'un CSV géocodé peut donc trier ses lignes par confiance et inspecter manuellement la queue.
+Le destinataire d'un CSV géocodé peut donc trier ses lignes par confiance et inspecter manuellement la queue. Deux indicateurs complètent le tableau : `ambiguous` (une autre réponse presque aussi bonne existe ailleurs) et `position_source` (le point a-t-il été publié par BeSt ou estimé à partir des voisines, pour les ~140k adresses wallonnes que BeSt publie sans position).
 
 ## Couverture multilingue
 

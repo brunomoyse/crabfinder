@@ -25,8 +25,9 @@ Per-region random sample:
 | Flanders | 250 |
 | Wallonia | 150 |
 | Boosted cross-language | 200 |
+| Boosted high house number (≥ 1000) | 100 |
 
-Each random bgid generates 4–6 query variants:
+Each random bgid generates 6–9 query variants:
 
 - `canonical` — `Street HN, Postal Muni`
 - `minimal` — `Street HN`
@@ -36,8 +37,16 @@ Each random bgid generates 4–6 query variants:
   alias (e.g. FR municipality + NL street name)
 - `abbreviated` — emitted when the street type matches the abbreviation
   map (`Avenue Louise` → `Av. Louise`)
+- `typo` — one edit (substitution, deletion, transposition or insertion)
+  on the longest street word of 5+ characters, seeded per address
+- `messy_punctuation` — commas between every part and a `B-` postal
+  prefix (`Franciskanenlaan, 10, B-1150, Sint-Pieters-Woluwe`)
+- `box_number` — emitted when the address has a box, with the box keyword
+  of the street's language (`Floréallaan 154 bus 1, 1180 Ukkel`)
 
-The boosted pool emits the `cross_language` variant only.
+The boosted pools emit only their own variant (`cross_language`,
+`high_house_number`). The current set is
+`eval/belgium-2026-10-15-v2.json` (seed 1, 3,742 queries).
 
 Use `--scale N` to multiply all per-region targets uniformly (e.g.
 `--scale 4.0` gives ~2800 bgids → ~11k queries). Useful for tightening
@@ -57,15 +66,27 @@ Hand-curated entries in `eval/adversarial-belgium-v1.yaml`:
 | `special_chars` | Apostrophes, hyphens, mixed casing |
 | `known_failure` | Entries the system fails on by design — tracked separately, excluded from aggregates |
 
+Each entry is scored at a `match_level` (default `address`):
+
+| `match_level` | Correct when |
+|---|---|
+| `address` | The top feature is `expected_best_id` (else, when none is pinned, `expected_building_group_id`) |
+| `building` | Any unit of an expected building — landmarks that can't name a unit |
+| `street` | Any building on an expected building's street — queries without a house number |
+| `locality` | Any building within `within_m` (default 1500 m) of `expected_point` `[lat, lon]` — bare place names |
+
+The report shows the levels scored next to each category, e.g.
+`hamlet (locality, street)`.
+
 ## Generating an eval set
 
 ```bash
 ./target/release/crabfinder-eval --generate-eval-set --mvp \
   --index ./index-belgium \
-  --output eval/belgium-2026-05-21-mvp-v1.json \
+  --output eval/belgium-2026-10-15-v2.json \
   --seed 1 \
   --scale 1.0 \
-  --dump-date 2026-05-21
+  --dump-date 2026-10-15
 ```
 
 Reproducible — same `--seed` + same index emits the same eval set.
@@ -74,13 +95,19 @@ Reproducible — same `--seed` + same index emits the same eval set.
 
 ```bash
 ./target/release/crabfinder-eval \
-  --eval-set eval/belgium-2026-05-21-mvp-v1.json \
+  --eval-set eval/belgium-2026-10-15-v2.json \
   --eval-set eval/adversarial-belgium-v1.yaml \
   --service http://127.0.0.1:8080 \
   --parallel 8 \
   --output reports/post-foo.json \
   --output-md reports/post-foo.md
 ```
+
+Besides the JSON and Markdown, a full run writes
+`reports/post-foo-detail.json.gz`: one row per query with the top-1
+building, best id, match type, latency, error and `level_rank` (the
+1-based rank of the first correct feature at the query's match level,
+0 = missed). Compare two detail files to find per-query regressions.
 
 `--dry-run` runs the first 50 queries and projects the full-run wall
 time, useful for sanity-checking a fresh eval set before the full run.
@@ -89,28 +116,35 @@ time, useful for sanity-checking a fresh eval set before the full run.
 
 ```bash
 ./target/release/crabfinder-eval \
-  --baseline reports/mvp-v1-baseline.json \
+  --baseline reports/v2-baseline.json \
   --current  reports/post-foo.json \
   --diff-output reports/diff-foo.md
 ```
 
 The diff focuses on Tier A overall metrics, per-region, per-variant,
-adversarial categories, and the cross-language §3.2 contract. Per-query
-regression list is intentionally out of scope at MVP.
+adversarial categories, the cross-language §3.2 contract and
+known-failure state changes. For per-query regressions, compare the two
+`-detail.json.gz` files.
 
 ## Validating an eval set after a BeSt refresh
 
 ```bash
 ./target/release/crabfinder-eval --validate-eval-set \
-  --eval-set eval/belgium-2026-05-21-mvp-v1.json \
+  --eval-set eval/belgium-2026-10-15-v2.json \
+  --eval-set eval/adversarial-belgium-v1.yaml \
   --service http://127.0.0.1:8080 \
   --max-missing-pct 5.0
 ```
 
-Verifies that every `expected_*` id in the set still resolves in the
-top-50 against the running service. Aborts if more than
-`--max-missing-pct` of entries don't resolve — the signal that the
-eval set is stale and needs regenerating.
+Looks every expected building up directly
+(`GET /building/{building_group_id}/units`) rather than searching for
+it, so ranking changes can't mask a stale id. An entry passes when one
+of its expected buildings exists and, for `address`-level entries that
+pin a `best_id`, that address is one of the building's units.
+`locality`-level entries and entries with nothing expected pass. Aborts
+if more than `--max-missing-pct` of entries fail — the signal that the
+eval set is stale and needs regenerating. `scripts/refresh_best.sh` runs
+this on every fresh index before switching `index-current`.
 
 ## Metrics
 
@@ -146,13 +180,19 @@ behavior.
 
 ## Baseline
 
-`reports/mvp-v1-baseline.json` is the current promoted baseline. Generated
-with seed 1, schema v6, full notability whitelist, full abbreviation dict.
+`reports/v2-baseline.json` is the current promoted baseline: BeSt dump of
+2026-10-15, schema v9, `eval/belgium-2026-10-15-v2.json` +
+`eval/adversarial-belgium-v1.yaml`, OSM places, full notability
+whitelist, full abbreviation dict. `reports/pre-v2-baseline.json` is the
+v1 code on the same data — the comparison point for the v2 work
+(`reports/v2-vs-pre-v2.md`). `reports/mvp-v1-baseline.json` is the
+original MVP baseline on the 2026-05-19 dump; per-phase v2 diffs are in
+`reports/archive/v2-phases/`.
 
 To promote a new baseline:
 
 ```bash
 # After validating the new report is at least as good as the baseline,
-mv reports/mvp-v1-baseline.json reports/archive/$(date -I)-baseline.json
-cp reports/post-newfeature.json reports/mvp-v1-baseline.json
+mv reports/v2-baseline.json reports/archive/$(date -I)-baseline.json
+cp reports/post-newfeature.json reports/v2-baseline.json
 ```

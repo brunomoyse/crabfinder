@@ -1,11 +1,11 @@
 # 2. Installation
 
-You only do this once, then again whenever BeSt publishes a new dump (the index is frozen against the dump used at build time).
+You only do this once, then again whenever BeSt publishes a new dump (the index is frozen against the dump used at build time). For refreshes, `scripts/refresh_best.sh` automates steps 4 and 5 — see [Refreshing the data](#refreshing-the-data).
 
 ## Hardware prerequisites
 
 - **Rust 1.90 or newer** (install via `rustup`, see below).
-- **~3 GB free disk** for the Tantivy index (~2 GB) + side-tables (~50 MB) + headroom.
+- **~3 GB free disk** for the Tantivy index (~2.2 GB) + side-files (~13 MB) + headroom. A refresh keeps the previous index next to the new one until you delete it: plan ~5 GB if you use the refresh script.
 - **~4 GB free RAM** during indexing (mostly to hold the dictionary join in memory). The running service uses less.
 - **Linux, macOS or Windows**. Linux and macOS are the tested paths; on Windows, WSL2 makes life simpler.
 
@@ -89,31 +89,38 @@ ls best-full-latest/      # check the ~10 ZIPs are there
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+    --notability-whitelist data/notability-whitelist-v1.yaml \
+    --places data/osm-places-be-v1.csv
 ```
 
-Typical output:
+Typical output (2026-10-15 dump, Apple Silicon laptop):
 
 ```
-INFO crabfinder-indexer starting; output="./index-belgium"
-INFO regions selected; regions=[Brussels, Flanders, Wallonia]
-INFO === ingesting region === Brussels
-...
 ====== indexing summary ======
-   Brussels: pass1=  450ms  pass2=  18430ms  parsed=234567 emitted=233834 ...
-   Flanders: pass1=  890ms  pass2=  85420ms  ...
-   Wallonia: pass1=  720ms  pass2=  42100ms  ...
-      TOTAL: parsed=6864321 emitted=6841382 ...
-   commit: 14820ms
-   wall-clock total: 162145ms (2.7 min)
-   index size on disk: 2123456789 bytes (2024.6 MB / 1.98 GB)
+  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=845464 skipped_status=3361 ... places_attached=414804
+  Flanders: pass1=  265ms  pass2=  52383ms  parsed=4218617 emitted=3933743 skipped_status=284874 ... places_attached=3014584
+  Wallonia: pass1=  192ms  pass2=  25818ms  parsed=2107430 emitted=2107430 skipped_status=0 ... missing_position=140263 ...
+     TOTAL: parsed=7174872 emitted=6886637 skipped_status=288235 skipped_unresolved=0 missing_position=140263 ...
+  mid_street entries: 145123
+  imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
+  localities: 16045 (OSM places loaded: 12980)
+  commit: 856ms
+  wall-clock total: 91279ms (1.5 min)
+  index size on disk: 2312810065 bytes (2205.7 MB / 2.15 GB)
 ```
+
+How to read it:
+
+- `skipped_status`: retired / proposed addresses, deliberately left out (only current addresses are indexed).
+- `missing_position` / `imputed positions`: BeSt publishes some Walloon addresses (140,263 in this dump) without a position yet (Lambert 72 `0 0`, which would land in France). The indexer gives them a position from their neighbours instead, and records how in `position_source` — see [`05-understanding-results.md`](05-understanding-results.md#where-the-coordinates-come-from-position_source).
+- `localities`: municipalities, parts of municipalities, postal areas and OpenStreetMap villages/hamlets the service can answer for a place-name query ("Maredsous", "Spontin").
 
 The `./index-belgium/` folder now contains:
 
-- Tantivy segment tree files (`*.idx`, `*.pos`, `*.term`, etc.).
-- A `.crab-meta.json` sidecar identifying the schema version.
-- A `mid-street-v1.bin` file (~300-500 KB) used by the batch median fallback.
+- Tantivy segment files (`*.idx`, `*.pos`, `*.term`, etc.).
+- A `.crab-meta.json` sidecar with the schema version (currently **9**) and the build time.
+- `mid-street-v1.bin` (~10 MB): the street-level points used by the `median_street` fallback.
+- `localities-v1.json` (~3 MB): the place names and centres used by locality queries.
 
 **The BeSt dump used is frozen into the index.** When a new dump comes out, redo step 4 (replace the ZIPs) then step 5 (rebuild). This is not an incremental migration.
 
@@ -124,8 +131,13 @@ The `./index-belgium/` folder now contains:
 | `--region brussels` (or `flanders` / `wallonia`) | Tests, or you only need one region |
 | `--limit 1000` | Quick smoke test (1000 addresses per region) |
 | `--print-samples 5` | Print 5 parsed addresses before indexing to eyeball-check |
+| `--notability-whitelist PATH` | Ranking boost for iconic places (see below) |
+| `--places PATH` | OpenStreetMap villages and hamlets (see below) |
 
-Without `--notability-whitelist`, everything still works but iconic toponyms (Grand-Place, Atomium…) no longer get a notability boost in the ranking. The file ships in `data/`, so might as well keep it.
+Both data files ship in `data/`, so might as well use them:
+
+- Without `--notability-whitelist`, everything still works but iconic toponyms (Grand-Place, Atomium…) no longer get a notability boost in the ranking.
+- Without `--places`, place-name queries only know BeSt municipalities, parts of municipalities and postal areas: a hamlet such as "Maredsous" (part of Anhée, no BeSt entity of its own) is no longer found. The CSV is derived from OpenStreetMap (© OpenStreetMap contributors, ODbL 1.0, see `data/README.md`).
 
 ## Step 6 — Start the HTTP service (for online search)
 
@@ -141,21 +153,42 @@ If you'll only use the batch CLI, skip this.
 Expected output:
 
 ```
-INFO starting crabfinder-service; index="./index-belgium" port=8080
-INFO index sidecar OK; schema_version=7 tokenizer="crab"
-INFO spatial index built; points=6841382 elapsed_ms=3420
-INFO address-count index built; ...
+INFO starting crabfinder-service index=./index-belgium port=8080
+INFO index sidecar OK schema_version=9 tokenizer=crab
+INFO spatial index built points=6878576 elapsed_ms=1605
+INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
+INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
+INFO mid_street side-file loaded path=./index-belgium/mid-street-v1.bin entries=145123
+INFO localities loaded entries=16045
 INFO listening at http://127.0.0.1:8080
 ```
+
+The service only starts listening once everything is loaded (~20 s on a laptop), so the first request always sees a ready index. After that, every request is logged with its status and latency (`RUST_LOG=warn` silences that).
 
 Quick test from another terminal:
 
 ```bash
 curl "http://127.0.0.1:8080/health"
-# {"status":"ok","index_path":"./index-belgium","index_docs":6841382,"uptime_secs":12}
+# {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
+#  "schema_version":9,"index_built_at_unix_secs":1792100762,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```
+
+### Service flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--index PATH` | — (required) | Index directory. |
+| `--host IP` | `127.0.0.1` | Address to bind. `0.0.0.0` to listen on every interface (containers). |
+| `--port N` | `8080` | TCP port. |
+| `--abbreviation-dict PATH` | (none) | `av` → `avenue` expansion. **Recommended**: `data/street-type-abbreviations-v1.yaml`. |
+| `--request-timeout-ms N` | `10000` | Deadline of a request, time waiting for a free slot included. Past it the service answers `503` with a JSON error. |
+| `--batch-timeout-secs N` | `600` | Same for `POST /batch/geocode`, until the response starts streaming. |
+| `--max-concurrency N` | `256` | Requests handled at once; the others wait for a slot (within their deadline). |
+| `--cors-origin URL` | any (`*`) | Allowed browser origin. Repeat the flag (or separate with commas) for several. |
+| `--no-metrics` | off | Don't serve Prometheus metrics at `/metrics`. |
+| `--no-notability-boost` | off | Rank without the notability boost (A/B testing). |
 
 To stop: `Ctrl+C` in the running terminal.
 
@@ -173,7 +206,7 @@ To stop: `kill $(cat crabfinder.pid)`.
 
 ## Environment variables (alternative to flags)
 
-`--index`, `--host`, `--port`, `--abbreviation-dict` all accept env-var equivalents, handy for systemd/Docker setups:
+Every service flag has an env-var equivalent (`CRABFINDER_` + the flag name in capitals: `CRABFINDER_REQUEST_TIMEOUT_MS`, `CRABFINDER_MAX_CONCURRENCY`, `CRABFINDER_CORS_ORIGIN`, `CRABFINDER_NO_METRICS`…), handy for systemd/Docker setups:
 
 ```bash
 export CRABFINDER_INDEX=./index-belgium
@@ -206,7 +239,31 @@ curl "http://127.0.0.1:8080/health"
 docker run --rm -i -v crabfinder-index:/index crabfinder crabfinder-batch < input.csv > output.csv
 ```
 
-Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured.
+Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured. The OpenStreetMap places CSV is not bundled: to index hamlets, mount `data/` and add `--places`:
+
+```bash
+docker run --rm -v ./best-full-latest:/best:ro -v ./data:/data:ro -v crabfinder-index:/index crabfinder \
+    crabfinder-indexer --best-dir /best --output /index \
+    --notability-whitelist /usr/share/crabfinder/notability-whitelist-v1.yaml \
+    --places /data/osm-places-be-v1.csv
+```
+
+## Refreshing the data
+
+`scripts/refresh_best.sh` does a full refresh in one go:
+
+1. downloads the BeSt bundle (`best-full-latest.zip` from opendata.bosa.be) into `best-<date>/` and unpacks it;
+2. builds the release binaries and indexes into `index-<date>/` (with the whitelist, and `--places` when `data/osm-places-be-v1.csv` is present);
+3. starts a temporary service on port 18080 and runs `crabfinder-eval --validate-eval-set`: every address the evaluation set expects must still exist (the script stops if more than 5% are missing);
+4. points the `index-current` symlink at the new index, atomically.
+
+```bash
+scripts/refresh_best.sh
+# [refresh] index-current -> index-2026-10-15
+# [refresh] restart the service with: crabfinder-service --index ./index-current
+```
+
+The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `BEST_URL=…` to use another download URL. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
 
 ## Uninstall
 

@@ -1,163 +1,380 @@
 # HTTP API
 
-Base URL: `http://127.0.0.1:8080` (default; configurable via `--host` / `--port`).
+Base URL: `http://127.0.0.1:8080` (default; `--host` / `--port`). The
+service binds IPv4 only, and accepts connections once the index and the
+R-tree are loaded (~5–6 s on the full index).
 
-All responses are JSON. CORS is permissive (any origin, any method, any
-header). There is no authentication — bind to localhost or front this
-with your own gateway in production.
+There is no authentication — bind to localhost or front this with your
+own gateway in production. CORS allows any origin unless `--cors-origin`
+is set (any method, any header).
+
+| Route | Purpose |
+|---|---|
+| `GET /health` | Readiness probe + index metadata |
+| `GET /geocode` | Free text or structured fields → ranked addresses |
+| `GET /reverse` | Coordinates → nearest addresses |
+| `GET /building/{building_group_id}/units` | Every BeSt row of one building |
+| `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row |
+| `GET /metrics` | Prometheus text exposition (unless `--no-metrics`) |
+
+## Service flags
+
+| Flag | Env | Default | Notes |
+|---|---|---|---|
+| `--index` | `CRABFINDER_INDEX` | required | Tantivy index directory (schema must match the binary) |
+| `--host` | `CRABFINDER_HOST` | `127.0.0.1` | `0.0.0.0` in containers |
+| `--port` | `CRABFINDER_PORT` | `8080` | |
+| `--abbreviation-dict` | `CRABFINDER_ABBREVIATION_DICT` | — | `data/street-type-abbreviations-v1.yaml`; without it, no `av` → `avenue` expansion |
+| `--no-notability-boost` | `CRABFINDER_NO_NOTABILITY_BOOST` | off | Plain BM25 (A/B the boost on the same index) |
+| `--request-timeout-ms` | `CRABFINDER_REQUEST_TIMEOUT_MS` | `10000` | Deadline per request, queueing included → 503 |
+| `--batch-timeout-secs` | `CRABFINDER_BATCH_TIMEOUT_SECS` | `600` | Deadline of `/batch/geocode` until its response starts streaming |
+| `--max-concurrency` | `CRABFINDER_MAX_CONCURRENCY` | `256` | Requests served at once (all routes); the rest wait for a slot |
+| `--cors-origin` | `CRABFINDER_CORS_ORIGIN` | any | Repeatable or comma-separated; `*` = any |
+| `--no-metrics` | `CRABFINDER_NO_METRICS` | off | Don't serve `/metrics` |
+
+Request logs (one span per request, with status and latency) go to
+stderr at `info`; set `RUST_LOG` to change the level.
+
+## Errors
+
+Every error from `/geocode`, `/reverse`, `/building` and `/health` is
+JSON:
+
+```json
+{"error":"q cannot be combined with street, housenumber, box, postcode or city"}
+```
+
+| Status | When |
+|---|---|
+| `400` | Missing / malformed parameter (`unknown lang 'en' (expected fr, nl or de)`, `lat out of range [-90, 90]: 99`, `postcode must be 4 digits, got '105'`, …) |
+| `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included |
+| `500` | Internal error (Tantivy failure) |
+
+`/batch/geocode` errors are `text/plain` (`csv: csv header has neither a
+`street` nor an `address` column`, `unknown format 'xml' (expected csv
+or geojson)`): `400` for bad input or options, `413` for a JSON payload
+over 10 000 addresses.
 
 ## `GET /health`
-
-Readiness probe.
-
-**Response**
 
 ```json
 {
   "status": "ok",
-  "index_path": "./index-belgium",
-  "index_docs": 6841382,
-  "uptime_secs": 42
+  "index_path": "./index-current",
+  "index_docs": 6886637,
+  "uptime_secs": 42,
+  "schema_version": 9,
+  "index_built_at_unix_secs": 1792100762,
+  "version": "0.1.0"
 }
 ```
 
+`schema_version` and `index_built_at_unix_secs` come from the index's
+`.crab-meta.json`; `version` is the binary's.
+
 ## `GET /geocode`
 
-Free-text → ranked address features.
+### Parameters
 
-**Query params**
+Either free text (`q`) **or** structured fields — not both (400), and
+not neither (400).
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `q` | string | required | The user query |
-| `limit` | int | 10 | Max features returned (after dedup) |
-| `expand` | bool | false | When true, returns one feature per BeSt address row (no dedup) |
-| `region` | string | — | Hard filter: `brussels`/`flanders`/`wallonia` or `BE-BRU`/`BE-VLG`/`BE-WAL`. Aliases accepted: `bruxelles`, `brussel`, `vlaanderen`, `flandre`, `wallonie` |
-| `postal_code` | string | — | Hard filter: Belgian 4-digit postal. Overrides any postal parsed out of `q` |
-| `focus_point` | string | — | `"lat,lng"` (WGS84, inside Belgium). Soft re-rank: closer candidates outrank further ones. Half-life is 25 km |
+| `q` | string | — | Free text: `Rue de la Loi 16 bte 3, B-1000 Bruxelles` |
+| `street` | string | — | Structured: street name |
+| `housenumber` | string | — | Structured: `12`, `12A` |
+| `box` | string | — | Structured: box/unit; picks the unit shown, never filters |
+| `postcode` | string | — | Structured: 4 digits (else 400); a hard filter |
+| `city` | string | — | Structured: municipality or locality, matched like street words |
+| `limit` | int | 10 | Features returned after dedup, clamped to 1–100 |
+| `expand` | bool | false | One feature per BeSt row instead of per building |
+| `region` | string | — | Hard filter: `BE-BRU`/`BE-VLG`/`BE-WAL`, or `brussels`/`bruxelles`/`brussel`/`bru`, `flanders`/`vlaanderen`/`flandre`/`vlg`, `wallonia`/`wallonie`/`wal` |
+| `postal_code` | string | — | Hard filter; overrides a postal code parsed from `q` (a 4-digit token in `q` is then read as the house number) |
+| `focus_point` | string | — | `lat,lng` inside Belgium: soft re-rank, scores × `exp(-d / 25 km)` |
+| `lang` | string | — | `fr`, `nl` or `de` for `properties.label`; default: the address's own language (Brussels/Wallonia fr, Flanders nl, 4700–4791 de) |
 
-**Behavior**
+A structured query needs at least one of `street`, `city`, `postcode`.
 
-The handler tokenises `q` via the same `crab` analyzer the index uses,
-expands abbreviations (`av` → `avenue`, `stationsstr` → `stationsstraat`),
-and builds a phrase-first AND-of-tokens query. Strict-match results are
-ranked by
+### What the parser understands
 
-```
-BM25 × notability × (1 + 0.005 × ln(1 + addr_count_on_street))
-```
+`B-1050` / `B1050`, `1050-Ixelles`, commas and semicolons, box markers
+(`bte`, `boîte`, `bt`, `bus`, `box`, `b`, `12/3`), ranges (`12-14` → 12),
+a 4-digit house number next to a postal code (`Chaussée de Waterloo 1357
+1180 Uccle`), numbers inside street names (`Rue du 11 Novembre 5`). When
+a query is ambiguous the parser keeps alternative readings, tried in
+order (`query.parsed.alternatives`; `query.reading` says which one won).
 
-If the strict pipeline returns zero hits, the handler falls back to an
-OR-of-tokens query and marks the results `match_type: "fuzzy"`.
+### How results are found
 
-When `focus_point=lat,lng` is set, each candidate's score is then
-multiplied by `exp(-distance_m / 25000)` before dedup, so closer
-matches outrank further ones without filtering distant matches out
-entirely. **Caveat:** focus_point only re-ranks candidates already in
-the over-fetch pool. If one street dominates BM25 (e.g. a large town
-with 200 identically-scored addresses on `Rue de la Gare`), the
-candidate pool can be monoculture and focus_point has nothing to lift.
-Use `region` as a hard filter in those cases.
+The search tries, in order, and the first step with hits wins:
 
-Results are over-fetched (`limit × 20`, capped at 2000), then collapsed
-by `building_group_id`. `score` on the returned feature is the
-maximum score among collapsed members.
+1. **Locality** — the query only names a place (`Spontin`, `Celles
+   Houyet`, `Han-sur-Lesse 5580`): buildings around its centre
+   (`confidence: locality`).
+2. **Strict tiers**, for each parser reading: exact street + number →
+   typo-corrected street + number → nearest existing number on the
+   street → street without the number → typo-corrected street without
+   the number.
+3. **Street + locality** — `<street> <place>` where the place isn't the
+   street's municipality (an OSM hamlet, a neighbouring commune): the
+   street searched inside that place's area.
+4. **OR fallback** — any query word, with then without the number.
 
-**Response shape**
+Strict ranking is `BM25 × notability × (1 + 0.005 × ln(1 + addresses on
+the street))`, with a bonus for adjacent word pairs. Results are
+over-fetched (`limit × 20`, at most 2000; none with `expand`), then
+collapsed by `building_group_id`; a feature's `score` is the best of its
+units.
+
+### Response
+
+`Rue de la Loi 300 1040` (trimmed; `properties` holds the full BeSt
+address):
 
 ```jsonc
 {
   "type": "FeatureCollection",
   "query": {
-    "q": "Avenue Louise 32 1050 Ixelles",
-    "limit": 10,
+    "q": "Rue de la Loi 300 1040",       // absent for a structured query
+    "limit": 1,
     "expand": false,
     "parsed": {
-      "street_tokens": ["Avenue", "Louise", "Ixelles"],
-      "house_number": "32",
-      "postal_code": "1050"
-    }
+      "street_tokens": ["Rue", "de", "la", "Loi"],
+      "house_number": "300",
+      "box_number": null,
+      "postal_code": "1040"
+      // "alternatives": [ … ]           // other readings, when any
+    },
+    "reading": 0                         // 0 = parsed, n = alternatives[n-1]
   },
-  "count": 10,                        // == features.length
-  "match_type": "strict",             // "strict" if any feature is strict; else "fuzzy"
-  "deduplicated": true,               // false when ?expand=true
-  "raw_hits": 234,                    // raw rows considered before dedup
-  "_note": "Phase 3: results collapsed by building_group_id; score = max(member.score). Use ?expand=true for raw rows.",
+  "count": 1,
+  "ambiguous": false,
+  // "score_gap": 0.004,                 // see below
+  "match_type": "strict",
+  "deduplicated": true,
+  "raw_hits": 44,
+  "_note": "…",
+  // "locality": { … },                  // see below
   "features": [
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [4.371, 50.825] },
+      "geometry": { "type": "Point", "coordinates": [4.38593, 50.84216] },
       "properties": {
-        "id":                 { "namespace": "...", "object_identifier": "...", "version_identifier": "..." },
-        "street_id":          { ... },
-        "municipality_id":    { ... },
-        "postal_info_id":     { ... },
-        "building_group_id":  "https://databrussels.be/id/streetname|...|...",
-        "house_number":       "32",
-        "box_number":         null,
-        "postal_code":        "1050",
-        "street_name":        { "fr": "Avenue Louise", "nl": "Louizalaan", "de": null },
-        "municipality_name":  { "fr": "Ixelles",       "nl": "Elsene",     "de": null },
-        "postal_name":        { ... },
-        "part_of_municipality_name": null,
-        "street_type":        "streetname",
-        "region":             "brussels",
-        "status":             "current",
-        "officially_assigned": true,
-        "coordinates":        { "crs": "EPSG:4326", "lat": 50.825, "lon": 4.371 }
+        "id": { "namespace": "https://databrussels.be/id/address", "object_identifier": "…", "version_identifier": "…" },
+        "street_name": { "fr": "Rue de la Loi", "nl": "Wetstraat", "de": null },
+        "house_number": "248",
+        "box_number": null,
+        "postal_code": "1040",
+        "municipality_name": { "fr": "Bruxelles", "nl": "Brussel", "de": null },
+        "region": "brussels",
+        "status": "current",
+        "coordinates": { "crs": "EPSG:4326", "lat": 50.84216, "lon": 4.38593 },
+        // … street_id, municipality_id, postal_info_id, postal_name,
+        //   part_of_municipality_*, officially_assigned, street_type,
+        //   building_group_id; place_name (OSM) and position_source
+        //   only when set
+        "label": "Rue de la Loi 248, 1040 Bruxelles"
       },
-      "score": 30.04,
+      "score": 44.0,
       "match_type": "strict",
-      "unit_count": 4,                // count of underlying BeSt rows in this building
-      "building_group_id": "https://databrussels.be/id/streetname|...|..."
+      "unit_count": 1,
+      "building_group_id": "https://databrussels.be/id/streetname|1679|248",
+      "confidence": "nearest_same_side",
+      "fallback_reason": "house_number_out_of_range",
+      "house_number_delta": -52
     }
   ]
 }
 ```
 
+Top-level fields:
+
+| Field | Meaning |
+|---|---|
+| `count` | `features.length` |
+| `ambiguous` | The two best features lie on different streets (or municipalities) with `score₂/score₁ ≥ 0.9`: the query doesn't say which one. `Rue de la Station 1` → Charleroi vs La Louvière, `ambiguous: true` |
+| `score_gap` | `1 − score₂/score₁`; absent with fewer than two features or when scores aren't text relevance (nearest-number, locality answers) |
+| `match_type` | `strict` if any feature is strict, else `fuzzy` (empty result: `strict`) |
+| `deduplicated` | `false` with `expand=true` |
+| `raw_hits` | Raw BeSt rows the winning step considered, before dedup |
+| `locality` | Only when the query names a place: `{kind, name, postal_codes, coordinates}`; `kind` is `municipality`, `part_of_municipality`, `postal_area`, `village`, `hamlet`, `locality` or `isolated_dwelling`, `coordinates` is `[lon, lat]` |
+
+Per-feature fields:
+
+| Field | Meaning |
+|---|---|
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `locality` (see table below) |
+| `fallback_reason` | Absent when `exact`; else `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `street_missing` |
+| `house_number_delta` | Matched − requested number when a number was honoured (`0` = exact); absent otherwise |
+| `match_type` | `strict` (every street word matched), `typo` (edit-distance corrected), `fuzzy` (OR fallback), `spatial` (nearest buildings to a locality centre) |
+| `unit_count` | BeSt rows collapsed into this feature (1 with `expand`) |
+| `building_group_id` | `{street namespace}\|{street id}\|{house number}`; pass it to `/building/…/units` |
+| `properties.label` | The address on one line in `lang` (`Wetstraat 16 bus 3, 1000 Brussel`) |
+| `properties.position_source` | Only when the position is not BeSt's own: `same_number`, `interpolated`, `street` or `locality` (~140k Walloon addresses BeSt publishes at Lambert `0 0`) |
+
+| `confidence` | The point is… |
+|---|---|
+| `exact` | the requested address |
+| `nearest_same_side` | the closest existing number with the same parity (≤ max(50, n/2) away) |
+| `nearest_any_side` | the closest number on the other side (the street has no number of that parity) |
+| `median_street` | the street (median house number); number missing or too far |
+| `fuzzy_street` | a typo-corrected or OR-fallback street match (with the number when it exists) |
+| `locality` | a building near the centre of the place the query names |
+
+More examples: `Avenue Loiuse 32 Ixelles` → Avenue Louise 32,
+`match_type: typo`, `confidence: fuzzy_street`, `fallback_reason:
+street_spelling_fuzzy`. `Spontin` →
+
+```json
+"locality": {"kind": "part_of_municipality", "name": {"fr": "Spontin", "nl": null, "de": null},
+             "postal_codes": ["5530"], "coordinates": [5.006949, 50.322619]},
+"features": [{"properties": {"label": "Chaussée de Dinant 18, 5530 Yvoir", "…": "…"},
+              "match_type": "spatial", "confidence": "locality", "fallback_reason": "street_missing", "…": "…"}]
+```
+
+`?street=Grote Markt&housenumber=1&city=Antwerpen` → `Grote Markt 1,
+2000 ANTWERPEN`, `confidence: exact`.
+
+`focus_point` only re-ranks the over-fetched pool; when one street name
+dominates nationally, use `region` or `postal_code` as a hard filter.
+
 ## `GET /reverse`
-
-Coordinates → nearest features by great-circle distance.
-
-**Query params**
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `lat` | float | required | WGS84 latitude |
-| `lng` | float | required | WGS84 longitude |
-| `limit` | int | 1 | Max features (after dedup) |
-| `radius_m` | float | — | If set, results outside `radius_m` are dropped |
+| `lat` | float | required | WGS84, −90…90 |
+| `lng` | float | required | WGS84, −180…180 |
+| `limit` | int | 1 | Buildings returned, clamped to 1–100 |
+| `radius_m` | float | — | Drop results farther than this (non-negative) |
+| `lang` | string | — | As for `/geocode` |
 
-Same response envelope as `/geocode` plus a `distance_m` field on each
-feature. Results are sorted ascending by `distance_m`, then dedup'd by
-`building_group_id`.
+```jsonc
+// /reverse?lat=50.8467&lng=4.3525&lang=nl
+{
+  "type": "FeatureCollection",
+  "query": { "lat": 50.8467, "lng": 4.3525, "limit": 1 },
+  "count": 1,
+  "deduplicated": true,
+  "raw_hits": 20,
+  "_note": "…",
+  "features": [{
+    "type": "Feature",
+    "geometry": { "type": "Point", "coordinates": [4.35272, 50.84701] },
+    "properties": { "label": "Grote Markt 29, 1000 Brussel", "…": "…" },
+    "score": -37.28,                // −distance_m
+    "match_type": "spatial",
+    "unit_count": 1,
+    "building_group_id": "https://databrussels.be/id/streetname|3281|29",
+    "distance_m": 37.28
+  }]
+}
+```
+
+Nearest first, collapsed by building. Only addresses with a point-accurate
+position (BeSt's own, or imputed from the same number / interpolation)
+are candidates; street- and locality-level guesses are skipped.
 
 ## `GET /building/{building_group_id}/units`
 
-Enumerate every BeSt row in a building. `building_group_id` is the
-canonical string returned by `/geocode` and `/reverse`, percent-encoded
-in the URL path (it contains slashes and pipes).
+Every BeSt row of one building. Percent-encode `building_group_id` in
+the path (it contains `/` and `|`).
 
-Response is a flat array of address features (no top-level FeatureCollection
-envelope). Order is stable: house number ascending, box number ascending.
-Empty array if the building isn't found.
+```jsonc
+// /building/https%3A%2F%2Fdatabrussels.be%2Fid%2Fstreetname%7C3919%7C32/units
+{
+  "type": "FeatureCollection",
+  "building_group_id": "https://databrussels.be/id/streetname|3919|32",
+  "count": 11,
+  "_note": "…",
+  "features": [ { "type": "Feature", "properties": { "box_number": null, "label": "Avenue Louise 32, 1050 Ixelles", "…": "…" },
+                  "match_type": "strict", "unit_count": 1, "…": "…" } ]
+}
+```
 
-## Match-type semantics
+Order: box number ascending (no box first, lexicographic), then address
+id. An unknown building gives `count: 0` and no features.
 
-| Value | Meaning |
+## `POST /batch/geocode`
+
+Strictly one output row per input row, in input order. Identical input
+rows are resolved once.
+
+### Input
+
+By `Content-Type`:
+
+- `text/csv` (or anything else): the body is the CSV.
+- `multipart/form-data`: a `file` part (the CSV, up to 50 MiB) and an
+  optional `options` part (JSON).
+- `application/json`: `{"addresses": [ {row}, … ], "options": {…}}`,
+  at most 10 000 addresses (413 above).
+
+CSV delimiter `,` or `;` (sniffed from the first line). Columns, matched
+by header name:
+
+| Column | Notes |
 |---|---|
-| `strict` | Every query token matched the doc through the strict AND pipeline (phrase or AND-of-tokens) |
-| `fuzzy` | Fallback path — at least one token didn't match strictly; the feature comes from the OR-fallback query |
+| `id` | Required; echoed |
+| `street`, `house_number`, `postal_code` | Clean columns |
+| `box_number` | Optional; picks the unit, never filters |
+| `address` | Free text, parsed like `/geocode?q=`; when present `street` / `house_number` / `box_number` are ignored, `postal_code` still overrides |
 
-The top-level `match_type` in the FeatureCollection is `strict` if any
-returned feature is strict; `fuzzy` only when every returned feature is
-fuzzy.
+The header must contain `street` or `address` (else 400).
 
-## Error responses
+### Options
 
-- `400 Bad Request` — missing or malformed query parameter
-- `503 Service Unavailable` — startup not yet complete (spatial index
-  build in progress)
+In the JSON body / `options` part, or as query-string parameters (which
+win): `?format=geojson&lang=nl`.
 
-There are no 4xx/5xx responses with a JSON body — error responses are
-`text/plain`. Add a gateway in front if you need structured errors.
+| Option | Default | Notes |
+|---|---|---|
+| `format` | `csv` | `csv` or `geojson` (else 400) |
+| `lang` | — | `fr`/`nl`/`de` for the `label` column (else 400) |
+| `mid_street_fallback` | `true` | `false`: rows whose number can't be matched come back `not_found` instead of a street-level answer |
+
+### Output
+
+CSV (`text/csv`), columns in this order: `id, street, house_number,
+postal_code, matched_street, matched_house_number, matched_postal_code,
+lat, lng, confidence, fallback_reason, house_number_delta,
+street_match_score, building_group_id, best_id, address, label,
+position_source, ambiguous`. The last four were appended in v2; the
+first fifteen are unchanged from v1.
+
+```
+$ curl -X POST -H 'Content-Type: text/csv' --data-binary @in.csv '127.0.0.1:8080/batch/geocode?lang=nl'
+id,street,house_number,postal_code,matched_street,…,confidence,fallback_reason,house_number_delta,…,address,label,position_source,ambiguous
+1,,,,Rue de la Loi,16,1000,50.84616,4.36653,exact,,0,218.12,…|1679|16,…/address/210225/1,"Rue de la Loi 16 bte 3, B-1000 Bruxelles","Wetstraat 16, 1000 Brussel",measured,false
+2,,,,,,5530,50.322619,5.006949,locality,street_missing,,1.93,,,Spontin,5530 Spontin,measured,false
+3,,,,,,,,,not_found,no_match,,,,,zzzz qqqq,,,false
+```
+
+`confidence` adds `not_found` (with `fallback_reason: no_match`) to the
+`/geocode` values. A `locality` row carries the place's centre and its
+postal code, and no street / building / address id.
+
+With `format=geojson`: one `application/geo+json` FeatureCollection,
+one Point feature per row (`geometry: null` when not found), the CSV
+columns as `properties`.
+
+An empty input gives an empty body (CSV) or an empty FeatureCollection.
+
+## `GET /metrics`
+
+Prometheus text format (`text/plain; version=0.0.4`):
+
+| Series | Labels |
+|---|---|
+| `crabfinder_http_requests_total` | `route` (template, e.g. `/building/{building_group_id}/units`), `method`, `status` |
+| `crabfinder_http_request_duration_seconds` | `route` — histogram, 1 ms … 10 s buckets |
+| `crabfinder_http_rejected_total` | `route`, `reason` (`timeout`) |
+| `crabfinder_search_total` | `tier` (`exact`, `typo`, `nearest`, `street`, `typo_street`, `or_with_number`, `or_street`, `locality`, `area`, `none`), `confidence`, `match_type` of the top result — one per `/geocode` call and per batch row |
+| `crabfinder_search_capped_total` | — searches whose over-fetch hit the 2000-row cap |
+
+```
+crabfinder_http_requests_total{route="/geocode",method="GET",status="200"} 3861
+crabfinder_search_total{tier="exact",confidence="exact",match_type="strict"} 3264
+crabfinder_search_total{tier="typo",confidence="fuzzy_street",match_type="typo"} 474
+crabfinder_http_request_duration_seconds_bucket{route="/geocode",le="0.005"} 3375
+```

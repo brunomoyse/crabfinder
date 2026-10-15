@@ -1,0 +1,68 @@
+---
+source: crates/crabfinder-eval/src/report.rs
+expression: "render_report_md(&m, \"http://127.0.0.1:8080\", 61)"
+---
+# crabfinder eval — single report
+
+- Service: `http://127.0.0.1:8080`
+- Total queries: **61**
+- Aggregated queries (excludes known_failure): 60
+- Transport/HTTP errors: 0
+
+## Overall (Tier A)
+
+| Metric | Value |
+|---|---|
+| n | 60 |
+| recall@1 | 0.900 |
+| recall@5 | 0.950 |
+| recall@10 | 1.000 |
+| building_group_recall@1 | 0.900 |
+| MRR | 0.882 |
+| strict_match_rate | 0.750 |
+
+## Latency (HTTP mode; under contention)
+
+| | n | p50 | p95 | p99 | mean | max |
+|---|---|---|---|---|---|---|
+| ms | 61 | 1.2 | 4.5 | 9.0 | 2.0 | 12.0 |
+
+_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
+
+## §3.2 contract — cross_language_recall@1
+
+- Random samples (n=12): **0.900**
+- Boosted samples (n=8): **0.900**
+
+## By region
+
+| Region | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
+|---|---|---|---|---|---|---|
+| BE-BRU | 20 | 0.900 | 0.950 | 0.900 | 0.882 | 0.750 |
+| BE-VLG | 20 | 1.000 | 1.000 | 1.000 | 0.980 | 0.750 |
+
+## By query variant
+
+| Variant | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
+|---|---|---|---|---|---|---|
+| canonical | 40 | 0.900 | 0.950 | 0.900 | 0.882 | 0.750 |
+
+## By street primary language
+
+| Language | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
+|---|---|---|---|---|---|---|
+| nl | 30 | 0.900 | 0.950 | 0.900 | 0.882 | 0.750 |
+
+## Adversarial — by category
+
+| Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
+|---|---|---|---|---|---|---|
+| hamlet (locality, street) | 5 | 0.800 | 0.850 | 0.800 | 0.784 | 0.750 |
+| notability (building) | 5 | 0.600 | 0.650 | 0.600 | 0.588 | 0.750 |
+
+## Known-failure tracking
+
+| ID | Subcategory | State | Top-1 (bgid prefix) | Top-1 match_type |
+|---|---|---|---|---|
+| `adv-known_failure-001` | sub | **still_failing** | `short|1|1` | fuzzy |
+| `adv-known_failure-002` | sub | **now_passing** | `https://databrussels.be/id/streetname|999999999999…` | fuzzy |

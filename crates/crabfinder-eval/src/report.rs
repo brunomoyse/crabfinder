@@ -419,16 +419,170 @@ fn map_diff_table(
     }
 }
 
-// Helper for handling missing buckets in diff
-impl MetricBucket {
-    // (cloned for diff fill — using Default already; nothing extra needed)
-}
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
 
-// Used in the diff aggregator
-#[allow(dead_code)]
-fn safe_get<'a>(
-    map: &'a std::collections::HashMap<String, MetricBucket>,
-    k: &str,
-) -> Option<&'a MetricBucket> {
-    map.get(k)
+    use super::*;
+    use crate::metrics::KnownFailureEntry;
+
+    fn bucket(n: usize, r1: f64, levels: &[&str]) -> MetricBucket {
+        MetricBucket {
+            n,
+            recall_at_1: r1,
+            recall_at_5: (r1 + 0.05).min(1.0),
+            recall_at_10: (r1 + 0.1).min(1.0),
+            mrr: r1 * 0.98,
+            building_group_recall_at_1: r1,
+            strict_match_rate: 0.75,
+            match_levels: levels.iter().map(|l| l.to_string()).collect(),
+        }
+    }
+
+    fn kf(id: &str, state: &str, bgid: &str) -> KnownFailureEntry {
+        KnownFailureEntry {
+            id: id.into(),
+            subcategory: "sub".into(),
+            state: state.into(),
+            current_top1_bgid: bgid.into(),
+            current_top1_match_type: "fuzzy".into(),
+        }
+    }
+
+    fn metrics(r1: f64, kfs: Vec<KnownFailureEntry>, extra_variant: bool) -> Metrics {
+        let mut by_variant = HashMap::from([("canonical".to_string(), bucket(40, r1, &[]))]);
+        if extra_variant {
+            by_variant.insert("typo".into(), bucket(10, 0.5, &[]));
+        }
+        Metrics {
+            query_count: 61,
+            aggregated_query_count: 60,
+            error_count: 0,
+            overall: bucket(60, r1, &[]),
+            latency: LatencyBucket {
+                n: 61,
+                p50_ms: 1.25,
+                p95_ms: 4.5,
+                p99_ms: 9.0,
+                mean_ms: 2.0,
+                max_ms: 12.0,
+            },
+            by_region: HashMap::from([
+                ("BE-BRU".to_string(), bucket(20, r1, &[])),
+                ("BE-VLG".to_string(), bucket(20, 1.0, &[])),
+            ]),
+            by_variant,
+            by_language: HashMap::from([("nl".to_string(), bucket(30, r1, &[]))]),
+            by_adversarial_category: HashMap::from([
+                (
+                    "hamlet".to_string(),
+                    bucket(5, 0.8, &["locality", "street"]),
+                ),
+                ("notability".to_string(), bucket(5, 0.6, &["building"])),
+            ]),
+            cross_language_recall_at_1: r1,
+            cross_language_n: 12,
+            cross_language_recall_at_1_boosted: 0.9,
+            cross_language_boosted_n: 8,
+            known_failure_tracking: kfs,
+        }
+    }
+
+    #[test]
+    fn report_markdown_snapshot() {
+        let long_bgid = format!("https://databrussels.be/id/streetname|{}|1", "9".repeat(40));
+        let m = metrics(
+            0.9,
+            vec![
+                kf("adv-known_failure-001", "still_failing", "short|1|1"),
+                kf("adv-known_failure-002", "now_passing", &long_bgid),
+            ],
+            false,
+        );
+        insta::assert_snapshot!(render_report_md(&m, "http://127.0.0.1:8080", 61));
+    }
+
+    #[test]
+    fn report_markdown_without_known_failures() {
+        let md = render_report_md(&metrics(0.9, vec![], false), "u", 60);
+        assert!(md.contains("_(no known_failure entries)_"));
+    }
+
+    fn write_report(dir: &Path, name: &str, m: Metrics) -> PathBuf {
+        let p = dir.join(name);
+        let r = Report {
+            report_version: "1".into(),
+            service_url: "u".into(),
+            metrics: m,
+            wall_clock_seconds: 1.0,
+        };
+        fs::write(&p, serde_json::to_string(&r).unwrap()).unwrap();
+        p
+    }
+
+    #[test]
+    fn diff_shows_deltas_new_buckets_and_state_changes() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = write_report(
+            tmp.path(),
+            "base.json",
+            metrics(
+                0.8,
+                vec![kf("adv-known_failure-001", "still_failing", "x")],
+                false,
+            ),
+        );
+        let cur = write_report(
+            tmp.path(),
+            "cur.json",
+            metrics(
+                0.9,
+                vec![
+                    kf("adv-known_failure-001", "now_passing", "x"),
+                    kf("adv-known_failure-009", "still_failing", "y"),
+                ],
+                true,
+            ),
+        );
+        let out = tmp.path().join("nested/diff.md");
+        write_diff(&base, &cur, &out).unwrap();
+        let d = fs::read_to_string(&out).unwrap();
+        assert!(d.contains("| recall@1 | 0.800 | 0.900 | +0.100 |"), "{d}");
+        assert!(d.contains("| typo | 0/10 |"), "{d}");
+        assert!(d.contains("**still_failing → now_passing**"), "{d}");
+        assert!(d.contains("**(new) → still_failing**"), "{d}");
+
+        write_diff(&base, &base, &out).unwrap();
+        assert!(
+            fs::read_to_string(&out)
+                .unwrap()
+                .contains("_No state changes")
+        );
+    }
+
+    #[test]
+    fn diff_rejects_unreadable_reports() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let bad = tmp.path().join("bad.json");
+        fs::write(&bad, "{}").unwrap();
+        let good = write_report(tmp.path(), "good.json", metrics(0.8, vec![], false));
+        let out = tmp.path().join("d.md");
+        let err = write_diff(&bad, &good, &out).unwrap_err();
+        assert!(format!("{err:#}").contains("loading baseline"), "{err:#}");
+        let err = write_diff(&good, &bad, &out).unwrap_err();
+        assert!(format!("{err:#}").contains("loading current"), "{err:#}");
+        assert!(write_diff(&tmp.path().join("missing.json"), &good, &out).is_err());
+    }
+
+    #[test]
+    fn detail_path_sits_next_to_the_report() {
+        assert_eq!(
+            detail_path_for(Path::new("reports/x.json")),
+            Path::new("reports/x-detail.json.gz")
+        );
+        assert_eq!(
+            detail_path_for(Path::new("r")),
+            Path::new("r-detail.json.gz")
+        );
+    }
 }

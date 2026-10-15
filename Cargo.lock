@@ -582,6 +582,7 @@ name = "crabfinder-eval"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "clap",
  "crabfinder-core",
  "crabfinder-indexer",
@@ -590,6 +591,7 @@ dependencies = [
  "crabfinder-test-support",
  "flate2",
  "futures",
+ "insta",
  "rand",
  "rand_chacha",
  "reqwest",

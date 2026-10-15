@@ -44,3 +44,5 @@ tracing-subscriber = { workspace = true }
 [dev-dependencies]
 crabfinder-test-support = { workspace = true }
 tempfile           = "3.27"
+axum               = { workspace = true }
+insta              = { workspace = true }

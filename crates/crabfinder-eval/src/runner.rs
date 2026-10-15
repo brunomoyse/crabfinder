@@ -15,7 +15,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::{info, warn};
 
-use crate::eval_set::EvalQuery;
+use crate::eval_set::{EvalQuery, MatchLevel};
 
 /// One per-query result captured by the runner. The metric layer consumes
 /// these in Step 6.
@@ -310,9 +310,15 @@ pub async fn dry_run(config: &RunnerConfig, mut queries: Vec<EvalQuery>) -> Resu
     Ok(())
 }
 
-/// Validate that every expected_* ID in the eval set still resolves in the
-/// current index. For MVP: query the service for each, check whether the
-/// expected bgid (or any of the bgid set) appears in the top-50.
+/// Validate that every expected_* ID in the eval set still exists in the
+/// live index — for post-BeSt-refresh sanity.
+///
+/// Looks each expected building up directly (`/building/{bgid}/units`)
+/// instead of searching for it, so a ranking change can't pass for a stale
+/// id. An entry is OK when one of its expected buildings exists and, for
+/// address-level entries that pin a `best_id`, one of those buildings'
+/// units carries it. Entries with nothing expected, and locality-level
+/// ones (judged by distance), are OK.
 pub async fn validate_eval_set(
     config: &RunnerConfig,
     queries: Vec<EvalQuery>,
@@ -323,29 +329,19 @@ pub async fn validate_eval_set(
         .build()
         .context("constructing reqwest client")?;
     health_check(&client, &config.service_url).await?;
+    let base = reqwest::Url::parse(&config.service_url)
+        .with_context(|| format!("parsing service url {:?}", config.service_url))?;
 
     let total = queries.len();
     info!(total, "validator: starting");
 
-    let base = config.service_url.clone();
-    let client_arc = client.clone();
     let results: Vec<(String, bool)> = stream::iter(queries)
         .map(|q| {
-            let client = client_arc.clone();
+            let client = client.clone();
             let base = base.clone();
             async move {
-                if q.expected_bgid_set.is_empty() {
-                    // Nothing to validate (e.g., known_failure entries).
-                    return (q.id, true);
-                }
-                let r = execute_one(&client, &base, 50, q.clone()).await;
-                let expected_bgids: std::collections::HashSet<&str> =
-                    q.expected_bgid_set.iter().map(String::as_str).collect();
-                let found = r
-                    .features
-                    .iter()
-                    .any(|(bgid, _, _)| expected_bgids.contains(bgid.as_str()));
-                (q.id, found)
+                let ok = expected_ids_exist(&client, &base, &q).await;
+                (q.id, ok)
             }
         })
         .buffer_unordered(config.parallel)
@@ -362,7 +358,7 @@ pub async fn validate_eval_set(
     println!("====== --validate-eval-set summary ======");
     println!("Queries validated: {total}");
     println!(
-        "Missing expected_* IDs in top-50: {} ({:.2}%)",
+        "Missing expected_* IDs: {} ({:.2}%)",
         missing.len(),
         missing_pct
     );
@@ -394,4 +390,57 @@ pub async fn validate_eval_set(
         );
     }
     Ok(())
+}
+
+/// Whether `q`'s expected building (and address, when pinned) exist.
+async fn expected_ids_exist(client: &Client, base: &reqwest::Url, q: &EvalQuery) -> bool {
+    if q.expected_bgid_set.is_empty() || q.match_level == MatchLevel::Locality {
+        return true;
+    }
+    let need_address = q.match_level == MatchLevel::Address && !q.expected_best_id_set.is_empty();
+    for bgid in &q.expected_bgid_set {
+        let units = match building_unit_ids(client, base, bgid).await {
+            Ok(u) => u,
+            Err(e) => {
+                warn!(id = %q.id, bgid, error = %e, "validator: building lookup failed");
+                continue;
+            }
+        };
+        if units.is_empty() {
+            continue;
+        }
+        if !need_address || units.iter().any(|u| q.expected_best_id_set.contains(u)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Canonical best ids of every unit of building `bgid` (empty when the
+/// building doesn't exist).
+async fn building_unit_ids(
+    client: &Client,
+    base: &reqwest::Url,
+    bgid: &str,
+) -> Result<Vec<String>> {
+    let mut url = base.clone();
+    url.path_segments_mut()
+        .map_err(|_| anyhow::anyhow!("service url {base} can't be a base"))?
+        .pop_if_empty()
+        .extend(["building", bgid, "units"]);
+    let resp = client.get(url).send().await.context("GET building units")?;
+    if !resp.status().is_success() {
+        bail!("http {}", resp.status());
+    }
+    let body: serde_json::Value = resp.json().await.context("building units JSON")?;
+    Ok(body
+        .get("features")
+        .and_then(|f| f.as_array())
+        .map(|fs| {
+            fs.iter()
+                .filter_map(|f| f.get("properties"))
+                .map(extract_best_id_canonical)
+                .collect()
+        })
+        .unwrap_or_default())
 }

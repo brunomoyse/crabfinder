@@ -6,6 +6,7 @@
 pub mod address;
 pub mod coordinates;
 pub mod error;
+pub mod house_number;
 pub mod ids;
 pub mod multilingual;
 pub mod region;

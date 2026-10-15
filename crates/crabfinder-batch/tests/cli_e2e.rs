@@ -202,8 +202,10 @@ fn box_column_and_slash_numbers_pick_the_unit() {
         assert_eq!(col(&h, r, "confidence"), "exact");
         assert_eq!(col(&h, r, "matched_house_number"), "10");
     }
-    // 10A doesn't exist → street level.
-    assert_eq!(col(&h, &rows[3], "confidence"), "median_street");
+    // 10A doesn't exist → nearest number on the street: n°10, delta 0.
+    assert_eq!(col(&h, &rows[3], "confidence"), "nearest_same_side");
+    assert_eq!(col(&h, &rows[3], "matched_house_number"), "10");
+    assert_eq!(col(&h, &rows[3], "house_number_delta"), "0");
     // The input is echoed as given.
     assert_eq!(col(&h, &rows[1], "house_number"), "10/1");
 }

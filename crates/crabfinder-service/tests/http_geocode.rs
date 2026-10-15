@@ -342,3 +342,21 @@ async fn typo_features_are_marked() {
     assert_eq!(f["fallback_reason"], "street_spelling_fuzzy");
     assert_eq!(body["match_type"], "fuzzy");
 }
+
+#[tokio::test]
+async fn nearest_number_features() {
+    let app = App::new(&fixtures::louise_street());
+    let body = app
+        .ok(&geocode_uri("Avenue Louise 44, 1050", "&limit=3"))
+        .await;
+    let fs = features(&body);
+    let hns: Vec<&str> = fs
+        .iter()
+        .map(|f| prop(f, "house_number").as_str().unwrap())
+        .collect();
+    assert_eq!(hns, ["40", "50", "32"]);
+    assert_eq!(fs[0]["confidence"], "nearest_same_side");
+    assert_eq!(fs[0]["house_number_delta"], -4);
+    assert_eq!(fs[0]["fallback_reason"], "house_number_out_of_range");
+    assert_eq!(fs[1]["house_number_delta"], 6);
+}

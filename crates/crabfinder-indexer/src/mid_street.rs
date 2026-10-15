@@ -37,6 +37,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crabfinder_core::house_number::leading_number;
 use crabfinder_core::{Address, Coordinates};
 
 /// Magic prefix for the v1 side-file. Bumping this string (`MID7` → `MID8`,
@@ -74,7 +75,7 @@ impl MidStreetBuilder {
     /// (shouldn't happen post-reprojection, but we don't trust the pipeline
     /// to that level — Lambert72 makes for poor f64 medians).
     pub fn record(&mut self, addr: &Address) {
-        let Some(num) = parse_leading_u32(&addr.house_number) else {
+        let Some(num) = leading_number(&addr.house_number) else {
             return;
         };
         let (lat, lon) = match addr.coordinates {
@@ -168,23 +169,6 @@ impl Default for MidStreetBuilder {
     }
 }
 
-/// Extract the leading run of ASCII digits and parse as u32. Returns None on
-/// empty / non-numeric / overflow.
-fn parse_leading_u32(s: &str) -> Option<u32> {
-    let mut end = 0usize;
-    for (i, c) in s.bytes().enumerate() {
-        if c.is_ascii_digit() {
-            end = i + 1;
-        } else {
-            break;
-        }
-    }
-    if end == 0 {
-        return None;
-    }
-    s[..end].parse::<u32>().ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,16 +215,6 @@ mod tests {
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
             building_group_id,
         }
-    }
-
-    #[test]
-    fn parse_leading_u32_handles_suffixes() {
-        assert_eq!(parse_leading_u32("32"), Some(32));
-        assert_eq!(parse_leading_u32("32B"), Some(32));
-        assert_eq!(parse_leading_u32("32-34"), Some(32));
-        assert_eq!(parse_leading_u32("A12"), None);
-        assert_eq!(parse_leading_u32(""), None);
-        assert_eq!(parse_leading_u32("99999"), Some(99999));
     }
 
     #[test]

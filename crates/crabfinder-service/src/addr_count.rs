@@ -32,6 +32,8 @@ use tantivy::{IndexReader, SegmentReader, TantivyDocument};
 
 use crabfinder_indexer::index::CrabSchema;
 
+use crate::mid_street::street_key_from_bgid;
+
 #[derive(Debug)]
 pub struct AddressCountIndex {
     per_segment: HashMap<SegmentId, Arc<Vec<u32>>>,
@@ -41,26 +43,6 @@ pub struct AddressCountIndex {
 }
 
 pub type SharedAddressCountIndex = Arc<AddressCountIndex>;
-
-/// Truncate a `building_group_id` to the street portion (`{ns}|{oid}`).
-/// The full form is `{ns}|{oid}|{house_number}` (see
-/// `crabfinder_core::ids::BuildingGroupId`); we drop everything from the
-/// second `|` onward so all addresses on the same street share a key.
-fn street_key_from_bgid(bgid: &str) -> &str {
-    let mut i = 0;
-    let mut pipe_count = 0;
-    for (idx, b) in bgid.bytes().enumerate() {
-        if b == b'|' {
-            pipe_count += 1;
-            if pipe_count == 2 {
-                i = idx;
-                return &bgid[..i];
-            }
-        }
-    }
-    let _ = i;
-    bgid
-}
 
 impl AddressCountIndex {
     pub fn build(reader: &IndexReader, schema: &CrabSchema) -> Result<Self> {
@@ -78,7 +60,7 @@ impl AddressCountIndex {
                     .get_first(schema.building_group_id)
                     .and_then(|v| v.as_str())
                 {
-                    let key = street_key_from_bgid(bgid);
+                    let key = street_key_from_bgid(bgid).unwrap_or(bgid);
                     *street_counts.entry(key.to_string()).or_insert(0) += 1;
                 }
                 total_docs += 1;
@@ -102,7 +84,7 @@ impl AddressCountIndex {
                     .get_first(schema.building_group_id)
                     .and_then(|v| v.as_str())
                 {
-                    let key = street_key_from_bgid(bgid);
+                    let key = street_key_from_bgid(bgid).unwrap_or(bgid);
                     if let Some(&c) = street_counts.get(key) {
                         counts[doc_id] = c;
                     }
@@ -130,20 +112,23 @@ impl AddressCountIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crabfinder_test_support::{TestIndex, fixtures};
 
     #[test]
-    fn street_key_strips_house_number() {
-        assert_eq!(
-            street_key_from_bgid("https://databrussels.be/id/streetname|2461|1"),
-            "https://databrussels.be/id/streetname|2461"
-        );
-        assert_eq!(street_key_from_bgid("ns|oid|12A"), "ns|oid");
-    }
-
-    #[test]
-    fn street_key_passthrough_when_no_second_pipe() {
-        // Defensive: malformed bgid — treat the whole thing as the street key.
-        assert_eq!(street_key_from_bgid("ns|oid"), "ns|oid");
-        assert_eq!(street_key_from_bgid("nopipe"), "nopipe");
+    fn counts_addresses_per_street() {
+        // Louise: 8 addresses; Rue Paire: 3.
+        let ti = TestIndex::build(&fixtures::louise_street());
+        let idx = AddressCountIndex::build(&ti.reader, &ti.schema).unwrap();
+        assert_eq!(idx.n_docs, 11);
+        assert_eq!(idx.n_streets, 2);
+        assert_eq!(idx.max_count, 8);
+        let searcher = ti.reader.searcher();
+        let mut all: Vec<u32> = searcher
+            .segment_readers()
+            .iter()
+            .flat_map(|seg| idx.for_segment(seg).unwrap().as_ref().clone())
+            .collect();
+        all.sort_unstable();
+        assert_eq!(all, [3, 3, 3, 8, 8, 8, 8, 8, 8, 8, 8]);
     }
 }

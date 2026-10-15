@@ -238,8 +238,20 @@ fn lex(toks: &[Tok]) -> Vec<(Lex, usize)> {
             && !is_postal(&n.text)
             && !matches!(out.last(), None | Some((Lex::Word(_), _)))
         {
-            out.push((Lex::Box(n.text.clone()), seg));
-            i += 1;
+            // `bus b 2`: BeSt has letter + number boxes (`b  2`).
+            let after = toks.get(i + 2).filter(|a| a.segment == seg);
+            if n.text.len() == 1
+                && n.text.as_bytes()[0].is_ascii_alphabetic()
+                && let Some(a) = after
+                && (1..=3).contains(&a.text.len())
+                && a.text.bytes().all(|b| b.is_ascii_digit())
+            {
+                out.push((Lex::Box(format!("{} {}", n.text, a.text)), seg));
+                i += 2;
+            } else {
+                out.push((Lex::Box(n.text.clone()), seg));
+                i += 1;
+            }
         } else if t.len() == 1
             && t.as_bytes()[0].is_ascii_alphabetic()
             && let Some((last, s)) = out.last_mut()
@@ -409,6 +421,8 @@ mod tests {
             ("Meir 12 box 0.1", "Meir", Some("12"), Some("0.1"), None),
             ("Meir 12 bt 4", "Meir", Some("12"), Some("4"), None),
             ("Meir 12 b 4", "Meir", Some("12"), Some("4"), None),
+            ("Meir 26 bus b 2, 1082", "Meir", Some("26"), Some("b 2"), Some("1082")),
+            ("Meir 26 bus B 1234", "Meir", Some("26"), Some("B"), Some("1234")),
             ("Meir 12/3", "Meir", Some("12"), Some("3"), None),
             ("Meir 12 / 3 2000", "Meir", Some("12"), Some("3"), Some("2000")),
             ("Meir 12A/B2", "Meir", Some("12A"), Some("B2"), None),

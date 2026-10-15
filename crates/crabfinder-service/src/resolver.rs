@@ -12,10 +12,15 @@
 
 use std::sync::Arc;
 
-use tantivy::{Index, IndexReader, TantivyDocument};
+use std::collections::HashMap;
+
+use tantivy::query::{BooleanQuery, Occur, TermQuery};
+use tantivy::schema::{IndexRecordOption, Value};
+use tantivy::{Index, IndexReader, TantivyDocument, Term};
 use tracing::warn;
 
-use crabfinder_core::Address;
+use crabfinder_core::house_number::leading_number;
+use crabfinder_core::{Address, MultilingualName};
 use crabfinder_indexer::index::CrabSchema;
 use crabfinder_parser::ParsedQuery;
 
@@ -101,11 +106,11 @@ pub enum Confidence {
     Exact,
     /// Street matched but house number was approximated to the nearest
     /// number on the same side of the street (parity-respecting).
-    /// _Reserved for Lot C+ — not produced in Lot A._
+    /// Produced by `Tier::Nearest` (Phase 4).
     NearestSameSide,
     /// Street matched but house number was approximated to the nearest
-    /// number on the other side of the street.
-    /// _Reserved for Lot C+ — not produced in Lot A._
+    /// number on the other side of the street, because that side has no
+    /// numbers in range. Produced by `Tier::Nearest` (Phase 4).
     NearestAnySide,
     /// Street matched but the house number was missing or not found.
     /// `resolve()` places the point at the street's median number within
@@ -260,6 +265,9 @@ pub enum Tier {
     /// Unknown street words corrected by edit distance + house-number
     /// filter (Phase 3).
     Typo,
+    /// Strict street match, requested number absent: the closest existing
+    /// number on the street, same side first (Phase 4).
+    Nearest,
     /// Strict street match, house number ignored (missing or not found).
     Street,
     /// Typo-corrected street match, house number ignored.
@@ -273,9 +281,10 @@ pub enum Tier {
 }
 
 impl Tier {
-    const ORDER: [Tier; 6] = [
+    const ORDER: [Tier; 7] = [
         Tier::Exact,
         Tier::Typo,
+        Tier::Nearest,
         Tier::Street,
         Tier::TypoStreet,
         Tier::OrWithNumber,
@@ -286,6 +295,7 @@ impl Tier {
         match self {
             Tier::Exact => "exact",
             Tier::Typo => "typo",
+            Tier::Nearest => "nearest",
             Tier::Street => "street",
             Tier::TypoStreet => "typo_street",
             Tier::OrWithNumber => "or_with_number",
@@ -296,7 +306,7 @@ impl Tier {
 
     fn match_type(self) -> MatchType {
         match self {
-            Tier::Exact | Tier::Street | Tier::None => MatchType::Strict,
+            Tier::Exact | Tier::Nearest | Tier::Street | Tier::None => MatchType::Strict,
             Tier::Typo | Tier::TypoStreet => MatchType::Typo,
             Tier::OrWithNumber | Tier::OrStreet => MatchType::Fuzzy,
         }
@@ -307,13 +317,16 @@ impl Tier {
     fn is_strict(self) -> bool {
         matches!(
             self,
-            Tier::Exact | Tier::Typo | Tier::Street | Tier::TypoStreet
+            Tier::Exact | Tier::Typo | Tier::Nearest | Tier::Street | Tier::TypoStreet
         )
     }
 
     /// Whether this tier honours the requested house number.
     fn uses_house_number(self) -> bool {
-        matches!(self, Tier::Exact | Tier::Typo | Tier::OrWithNumber)
+        matches!(
+            self,
+            Tier::Exact | Tier::Typo | Tier::Nearest | Tier::OrWithNumber
+        )
     }
 
     /// `(confidence, fallback_reason, house_number_delta)` for a hit from
@@ -336,6 +349,12 @@ impl Tier {
             Tier::TypoStreet => (
                 Confidence::FuzzyStreet,
                 missing_or(FallbackReason::StreetSpellingFuzzy),
+                None,
+            ),
+            // Refined per candidate by `label_nearest`.
+            Tier::Nearest => (
+                Confidence::NearestSameSide,
+                Some(FallbackReason::HouseNumberOutOfRange),
                 None,
             ),
             Tier::Street => (
@@ -450,15 +469,50 @@ fn search_tiers(
     let raw_limit = raw_limit(opts.limit, opts.expand);
     // Which slots the typo tiers make fuzzy; computed on first use.
     let mut unknown: Option<Vec<bool>> = None;
+    // The Nearest tier's street hits, reused by the Street tier.
+    let mut street_top: Option<Vec<(tantivy::Score, tantivy::DocAddress)>> = None;
+    let run = |q: &dyn tantivy::query::Query| {
+        if ctx.notability_enabled {
+            search_with_notability(&searcher, q, raw_limit, ctx.addr_counts.clone())
+        } else {
+            search_score_only(&searcher, q, raw_limit)
+        }
+    };
 
     for tier in Tier::ORDER.into_iter().filter(|t| t.is_strict() == strict) {
         let enabled = match tier {
-            Tier::Exact | Tier::Typo | Tier::OrWithNumber => has_hn,
+            // Nearest is not a street approximation: it stays on with
+            // mid-street off (design-batch-geocoding §236).
+            Tier::Exact | Tier::Typo | Tier::Nearest | Tier::OrWithNumber => has_hn,
             Tier::Street | Tier::TypoStreet | Tier::OrStreet => opts.mid_street_fallback,
             Tier::None => false,
         };
         if !enabled {
             continue;
+        }
+        if tier == Tier::Nearest {
+            let p = parsed(false);
+            let Some(q) = build_strict_query(field, &slots, &p, ctx.schema, &filters) else {
+                continue;
+            };
+            let top = run(q.as_ref())?;
+            let found = nearest_units(&searcher, q.as_ref(), &top, query, ctx)?;
+            street_top = Some(top);
+            if let Some(units) = found {
+                let mut set =
+                    collect_candidates(&searcher, &units, tier, has_hn, query, opts, ctx)?;
+                label_nearest(&mut set, query);
+                return Ok(Some(set));
+            }
+            continue;
+        }
+        if tier == Tier::Street
+            && let Some(top) = street_top.take()
+        {
+            if top.is_empty() {
+                continue;
+            }
+            return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx).map(Some);
         }
         let p = parsed(tier.uses_house_number());
         let q = match tier {
@@ -477,11 +531,7 @@ fn search_tiers(
             _ => build_fuzzy_query(field, &slots, &p, ctx.schema, &filters),
         };
         let Some(q) = q else { continue };
-        let top = if ctx.notability_enabled {
-            search_with_notability(&searcher, q.as_ref(), raw_limit, ctx.addr_counts.clone())?
-        } else {
-            search_score_only(&searcher, q.as_ref(), raw_limit)?
-        };
+        let top = run(q.as_ref())?;
         if top.is_empty() {
             continue;
         }
@@ -513,11 +563,15 @@ fn collect_candidates(
         ));
         docs.push(doc);
     }
-    if let Some(b) = query.box_number.as_deref() {
-        prefer_box(&mut raw_hits, b);
-    }
-    if let Some(focus) = query.focus_point {
-        apply_focus_decay(&mut raw_hits, focus, ctx.schema, &docs);
+    // Nearest hits are already in distance order; box and focus would
+    // only scramble it.
+    if tier != Tier::Nearest {
+        if let Some(b) = query.box_number.as_deref() {
+            prefer_box(&mut raw_hits, b);
+        }
+        if let Some(focus) = query.focus_point {
+            apply_focus_decay(&mut raw_hits, focus, ctx.schema, &docs);
+        }
     }
 
     let (confidence, fallback_reason, house_number_delta) = tier.labels(has_hn);
@@ -568,10 +622,152 @@ fn collect_candidates(
     })
 }
 
-/// Box numbers compare case-insensitively and ignore leading zeros
-/// (`"03"` = `"3"`).
+/// Most units the Nearest tier reads for one street (Belgian streets rarely
+/// exceed a few hundred).
+const NEAREST_MAX_UNITS: usize = 5000;
+
+/// Farthest neighbour the Nearest tier accepts: beyond it the street-level
+/// median is the better guess (PhacochR-style cut-off).
+fn nearest_limit(requested: u32) -> u32 {
+    50.max(requested / 2)
+}
+
+/// Units of the top street hit's street whose number is within
+/// `nearest_limit` of the requested one, ranked same side first, then by
+/// distance, then lower number, as `(score, doc)` pairs with a dense
+/// descending score so units of one building tie. `None` when there are
+/// no street hits, the request has no leading number, or nothing is in
+/// range.
+///
+/// "The street" is every street object in the top hit's postal code that
+/// matches `street_q` *and* carries the top hit's name: a Belgian street
+/// is often split into several objects (Avenue Louise belongs to both
+/// Brussels and Ixelles), and its two sides can sit in different ones.
+fn nearest_units(
+    searcher: &tantivy::Searcher,
+    street_q: &dyn tantivy::query::Query,
+    street_top: &[(tantivy::Score, tantivy::DocAddress)],
+    query: &AddressQuery,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<Option<Vec<(tantivy::Score, tantivy::DocAddress)>>> {
+    let Some(requested) = query.house_number.as_deref().and_then(leading_number) else {
+        return Ok(None);
+    };
+    let Some((_, top_addr)) = street_top.first() else {
+        return Ok(None);
+    };
+    let top_doc: TantivyDocument = searcher.doc(*top_addr)?;
+    let text = |doc: &TantivyDocument, f| {
+        doc.get_first(f)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    };
+    let Some(postal) = text(&top_doc, ctx.schema.postal_code) else {
+        return Ok(None);
+    };
+    let street_name = |doc: &TantivyDocument| -> Option<MultilingualName> {
+        let payload = text(doc, ctx.schema.payload)?;
+        let v: serde_json::Value = serde_json::from_str(&payload).ok()?;
+        serde_json::from_value(v.get("street_name")?.clone()).ok()
+    };
+    let Some(top_name) = street_name(&top_doc) else {
+        return Ok(None);
+    };
+    let units_q = BooleanQuery::new(vec![
+        (Occur::Must, street_q.box_clone()),
+        (
+            Occur::Must,
+            Box::new(TermQuery::new(
+                Term::from_field_text(ctx.schema.postal_code, &postal),
+                IndexRecordOption::Basic,
+            )),
+        ),
+    ]);
+    let units = search_score_only(searcher, &units_q, NEAREST_MAX_UNITS)?;
+
+    let limit = nearest_limit(requested);
+    // Street key → shares the top hit's name (decoded once per street).
+    let mut same_street: HashMap<String, bool> = HashMap::new();
+    // (other_side, |delta|, number, house_number) → rank key.
+    let mut ranked: Vec<((bool, u32, u32, String), tantivy::DocAddress)> = Vec::new();
+    for (_, addr) in units {
+        let doc: TantivyDocument = searcher.doc(addr)?;
+        let (Some(hn), Some(bgid)) = (
+            text(&doc, ctx.schema.house_number),
+            text(&doc, ctx.schema.building_group_id),
+        ) else {
+            continue;
+        };
+        let Some(n) = leading_number(&hn) else {
+            continue;
+        };
+        let dist = n.abs_diff(requested);
+        if dist > limit {
+            continue;
+        }
+        let key = street_key_from_bgid(&bgid).unwrap_or(&bgid).to_string();
+        let same = *same_street
+            .entry(key)
+            .or_insert_with(|| street_name(&doc).is_some_and(|n| same_name(&n, &top_name)));
+        if same {
+            ranked.push(((n % 2 != requested % 2, dist, n, hn.to_uppercase()), addr));
+        }
+    }
+    if ranked.is_empty() {
+        return Ok(None);
+    }
+    ranked.sort_by(|a, b| a.0.cmp(&b.0));
+    // Dense rank → descending score; equal keys (same building) tie.
+    let mut out = Vec::with_capacity(ranked.len());
+    let mut rank = 0usize;
+    for (i, (key, addr)) in ranked.iter().enumerate() {
+        if i > 0 && ranked[i - 1].0 != *key {
+            rank += 1;
+        }
+        out.push(((ranked.len() - rank) as tantivy::Score, *addr));
+    }
+    Ok(Some(out))
+}
+
+/// Two street names are the same street when any language form matches
+/// (case-insensitively).
+fn same_name(a: &MultilingualName, b: &MultilingualName) -> bool {
+    [(&a.fr, &b.fr), (&a.nl, &b.nl), (&a.de, &b.de)]
+        .into_iter()
+        .any(|(x, y)| matches!((x, y), (Some(x), Some(y)) if x.to_lowercase() == y.to_lowercase()))
+}
+
+/// Per-candidate labels for the Nearest tier: same or other side of the
+/// street, and `matched − requested`.
+fn label_nearest(set: &mut CandidateSet, query: &AddressQuery) {
+    let Some(requested) = query.house_number.as_deref().and_then(leading_number) else {
+        return;
+    };
+    for c in &mut set.candidates {
+        let Some(n) = c.hit.payload["house_number"]
+            .as_str()
+            .and_then(leading_number)
+        else {
+            continue;
+        };
+        c.confidence = if n % 2 == requested % 2 {
+            Confidence::NearestSameSide
+        } else {
+            Confidence::NearestAnySide
+        };
+        c.house_number_delta =
+            Some(i64::from(n) - i64::from(requested)).and_then(|d| i32::try_from(d).ok());
+    }
+}
+
+/// Box numbers compare case-insensitively and ignore whitespace and
+/// leading zeros (`"03"` = `"3"`, `"b  2"` = `"B2"`).
 fn normalize_box(b: &str) -> String {
-    let b = b.trim().to_lowercase();
+    let b: String = b
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase();
     let stripped = b.trim_start_matches('0');
     if stripped.is_empty() && !b.is_empty() {
         "0".into()
@@ -1162,13 +1358,13 @@ mod tests {
 
     #[test]
     fn alternatives_only_add_strict_tiers() {
-        // Primary reading: hn 11 (doesn't exist) → street-level hit.
+        // Primary reading: hn 11 (doesn't exist) → nearest number (n°5).
         let ti = TestIndex::build(&fixtures::multi_region());
         let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
         let mut q = parsed_query(&ti, "Rue du 11 Novembre Ixelles");
         assert_eq!(q.alternatives.len(), 1);
         let set = search(&q, &opts(5), &c).unwrap();
-        assert_eq!(set.tier, Tier::Street);
+        assert_eq!((set.tier, set.reading), (Tier::Nearest, 0));
         // Remove the street-level option: the alternative can't help (no
         // number) and the primary falls to the OR tier with its number.
         q.for_each_reading(|r| r.postal_code = Some("1050".into()));
@@ -1176,9 +1372,16 @@ mod tests {
             mid_street_fallback: false,
             ..opts(5)
         };
+        // Nearest is not a street approximation: it survives mid-street off.
         let set = search(&q, &off, &c).unwrap();
-        assert_eq!(set.reading, 0);
-        assert_eq!(set.tier, Tier::None);
+        assert_eq!((set.tier, set.reading), (Tier::Nearest, 0));
+        // Out of nearest range (|5 − 999| > 499) and no street tiers: the
+        // alternative has no number, so only the primary's OR tier is left.
+        let mut far = parsed_query(&ti, "Rue du 999 Novembre Ixelles");
+        far.for_each_reading(|r| r.postal_code = Some("1050".into()));
+        assert_eq!(far.alternatives.len(), 1);
+        let set = search(&far, &off, &c).unwrap();
+        assert_eq!((set.tier, set.reading), (Tier::None, 0));
     }
 
     fn boxed_building() -> TestIndex {
@@ -1256,6 +1459,7 @@ mod tests {
         assert_eq!(normalize_box(" 000 "), "0");
         assert_eq!(normalize_box("A"), "a");
         assert_eq!(normalize_box("0A"), "a");
+        assert_eq!(normalize_box("b  2"), normalize_box("B2"));
         assert_eq!(normalize_box(""), "");
     }
 
@@ -1348,5 +1552,192 @@ mod tests {
         assert!(Tier::Typo.uses_house_number());
         assert!(!Tier::TypoStreet.uses_house_number());
         assert_eq!(MatchType::Typo.as_str(), "typo");
+    }
+
+    // --- Phase 4: nearest house number -----------------------------------
+
+    fn nearest(ti: &TestIndex, q: &str) -> CandidateSet {
+        let c = ctx(ti, Arc::new(MidStreetIndex::empty()));
+        search(&parsed_query(ti, q), &opts(5), &c).unwrap()
+    }
+
+    fn summary(set: &CandidateSet) -> Vec<(String, Confidence, Option<i32>)> {
+        set.candidates
+            .iter()
+            .map(|c| (hn_of(c), c.confidence, c.house_number_delta))
+            .collect()
+    }
+
+    #[test]
+    fn nearest_prefers_the_same_side() {
+        // 44: odd 45 is one away, but even 40 (−4) is on the same side.
+        let ti = louise_index();
+        let set = nearest(&ti, "Avenue Louise 44 1050");
+        assert_eq!(set.tier, Tier::Nearest);
+        let top = &set.candidates[0];
+        assert_eq!(hn_of(top), "40");
+        assert_eq!(top.confidence, Confidence::NearestSameSide);
+        assert_eq!(top.house_number_delta, Some(-4));
+        assert_eq!(
+            top.fallback_reason,
+            Some(FallbackReason::HouseNumberOutOfRange)
+        );
+        assert_eq!(top.hit.match_type, MatchType::Strict);
+        // Same side by distance first, other side after.
+        let hns: Vec<String> = summary(&set).into_iter().map(|t| t.0).collect();
+        assert_eq!(hns, ["40", "50", "32", "20", "10"]);
+    }
+
+    #[test]
+    fn nearest_odd_and_letter_suffix() {
+        let ti = louise_index();
+        let s = nearest(&ti, "Avenue Louise 15");
+        assert_eq!(
+            summary(&s)[0],
+            ("13".into(), Confidence::NearestSameSide, Some(-2))
+        );
+        let s = nearest(&ti, "Avenue Louise 34B");
+        assert_eq!(
+            summary(&s)[0],
+            ("32".into(), Confidence::NearestSameSide, Some(-2))
+        );
+        // Same number, unknown suffix: delta 0.
+        let s = nearest(&ti, "Avenue Louise 32C");
+        assert_eq!(
+            summary(&s)[0],
+            ("32".into(), Confidence::NearestSameSide, Some(0))
+        );
+    }
+
+    #[test]
+    fn nearest_any_side_when_the_side_is_empty() {
+        // Rue Paire has 2/4/6 only; 5 → tie between 4 and 6, lower wins.
+        let ti = louise_index();
+        let s = nearest(&ti, "Rue Paire 5");
+        assert_eq!(s.tier, Tier::Nearest);
+        assert_eq!(
+            summary(&s)[0],
+            ("4".into(), Confidence::NearestAnySide, Some(-1))
+        );
+        assert_eq!(hn_of(&s.candidates[1]), "6");
+    }
+
+    #[test]
+    fn nearest_gives_up_beyond_the_limit() {
+        assert_eq!(nearest_limit(10), 50);
+        assert_eq!(nearest_limit(200), 100);
+        let ti = louise_index();
+        // 9999 − 50 > 4999 → street median instead.
+        assert_eq!(nearest(&ti, "Avenue Louise 9999").tier, Tier::Street);
+        // 110 − 50 = 60 > 55 → street median.
+        assert_eq!(nearest(&ti, "Avenue Louise 110").tier, Tier::Street);
+        // 100 − 50 = 50 ≤ 50 → nearest.
+        assert_eq!(nearest(&ti, "Avenue Louise 100").tier, Tier::Nearest);
+        // A number with no digits can't be compared.
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &query(&ti, "Avenue Louise", Some("bis"), None),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::Street);
+    }
+
+    #[test]
+    fn nearest_stays_within_the_postal_code() {
+        // Same street object in another postal code with a closer number.
+        let mut addrs = fixtures::louise_street();
+        addrs.push(
+            AddressBuilder::new("x39", fixtures::LOUISE_OID, "39")
+                .street(Some("Avenue Louise"), Some("Louizalaan"))
+                .postal("1000")
+                .build(),
+        );
+        let ti = TestIndex::build(&addrs);
+        let s = nearest(&ti, "Avenue Louise 37, 1050");
+        assert_eq!(
+            summary(&s)[0],
+            ("45".into(), Confidence::NearestSameSide, Some(8))
+        );
+        let s = nearest(&ti, "Avenue Louise 37, 1000");
+        assert_eq!(
+            summary(&s)[0],
+            ("39".into(), Confidence::NearestSameSide, Some(2))
+        );
+    }
+
+    #[test]
+    fn resolve_keeps_the_neighbours_own_coordinates() {
+        let ti = louise_index();
+        let (_tmp, ms) = sentinel_mid_street(50.5, 4.5);
+        let c = ctx(&ti, ms);
+        let r = resolve(&query(&ti, "Avenue Louise", Some("34"), Some("1050")), &c);
+        assert_eq!(r.confidence, Confidence::NearestSameSide);
+        assert_eq!(r.house_number_delta, Some(-2));
+        let hit = r.hit.unwrap();
+        assert!(
+            (hit.lat - (50.8345 + 32.0 * 0.0001)).abs() < 1e-9,
+            "n°32's own point"
+        );
+        assert_eq!(Tier::Nearest.as_str(), "nearest");
+    }
+
+    #[test]
+    fn nearest_spans_street_objects_with_the_same_name() {
+        // "Chaussée Partagée": even side in object 7001, odd side in 7002
+        // (same postal code), plus a different street that also contains
+        // both words and has n°31.
+        let mut addrs = Vec::new();
+        for (oid, street, hn) in [
+            ("e2", "7001", "2"),
+            ("e4", "7001", "4"),
+            ("o5", "7002", "5"),
+        ] {
+            addrs.push(
+                AddressBuilder::new(oid, street, hn)
+                    .street(Some("Chaussée Partagée"), None)
+                    .postal("1050")
+                    .build(),
+            );
+        }
+        addrs.push(
+            AddressBuilder::new("x", "7003", "31")
+                .street(Some("Rue Partagée de la Chaussée"), None)
+                .postal("1050")
+                .build(),
+        );
+        let ti = TestIndex::build(&addrs);
+        // 7 is odd: the odd side lives in the other street object.
+        let s = nearest(&ti, "Chaussée Partagée 7, 1050");
+        assert_eq!(s.tier, Tier::Nearest);
+        assert_eq!(
+            summary(&s)[0],
+            ("5".into(), Confidence::NearestSameSide, Some(-2))
+        );
+        // 33: n°31 is on a different street — nearest same side is n°5.
+        let s = nearest(&ti, "Chaussée Partagée 33, 1050");
+        assert!(summary(&s).iter().all(|t| t.0 != "31"), "{:?}", summary(&s));
+    }
+
+    #[test]
+    fn same_name_matches_any_language() {
+        let ml = |fr: Option<&str>, nl: Option<&str>| MultilingualName {
+            fr: fr.map(Into::into),
+            nl: nl.map(Into::into),
+            de: None,
+        };
+        assert!(same_name(
+            &ml(Some("Rue X"), None),
+            &ml(Some("rue x"), Some("X-straat"))
+        ));
+        assert!(same_name(
+            &ml(None, Some("Meir")),
+            &ml(Some("Meir"), Some("MEIR"))
+        ));
+        assert!(!same_name(
+            &ml(Some("Rue X"), None),
+            &ml(None, Some("Rue X"))
+        ));
     }
 }

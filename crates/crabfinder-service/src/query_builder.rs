@@ -305,26 +305,11 @@ pub fn build_typo_query(
     Some(Box::new(BooleanQuery::new(clauses)))
 }
 
-/// House-number filter that ignores the letter suffix's case. The v7
-/// index stores `house_number` as BeSt spells it (`32a` and `32A` both
-/// occur), so the clause ORs the distinct case forms of the query value.
+/// House-number filter that ignores the letter suffix's case: schema v8
+/// indexes `house_number` uppercased (`32a` → `32A`).
 pub(crate) fn house_number_clause(schema: &CrabSchema, hn: &str) -> Box<dyn TantivyQuery> {
-    let mut forms = vec![hn.to_string(), hn.to_uppercase(), hn.to_lowercase()];
-    forms.sort();
-    forms.dedup();
-    let mut terms: Vec<(Occur, Box<dyn TantivyQuery>)> = forms
-        .iter()
-        .map(|f| {
-            let term = Term::from_field_text(schema.house_number, f);
-            let tq: Box<dyn TantivyQuery> =
-                Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-            (Occur::Should, tq)
-        })
-        .collect();
-    if terms.len() == 1 {
-        return terms.pop().expect("one form").1;
-    }
-    Box::new(BooleanQuery::new(terms))
+    let term = Term::from_field_text(schema.house_number, &hn.to_uppercase());
+    Box::new(TermQuery::new(term, IndexRecordOption::Basic))
 }
 
 #[cfg(test)]

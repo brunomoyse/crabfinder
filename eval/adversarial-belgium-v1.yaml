@@ -4,6 +4,9 @@ version: adversarial-belgium-v1
 # - expected_building_group_id_set (list) used for notability entries:
 #   queries like 'Grand-Place' can resolve to any of ~36 distinct buildings
 #   on Brussels' Grand-Place, all equivalent from the user's perspective.
+# - match_level (v2): address (default) | building | street. Street-only
+#   queries (no house number) are scored on the street, notability entries
+#   on the building — which unit/building comes first is not theirs to pin.
 # - known_failure entries are tracked, NOT aggregated. Quarterly review
 #   enforced via acceptable_until.
 # - All best_id/bgid identifiers pinned to the live v3 index at
@@ -14,6 +17,7 @@ queries:
 # ---------- Hamlet (Wallonia parts of municipality) — 30 entries
   - id: adv-hamlet-001
     category: hamlet
+    match_level: street
     subcategory: hives-laroche
     query: "rue de la barri\u00e8re hives"
     expected_building_group_id_set:
@@ -21,6 +25,7 @@ queries:
     notes: "Route de Hives — La Roche-en-Ardenne (fuzzy)"
   - id: adv-hamlet-002
     category: hamlet
+    match_level: street
     subcategory: beausaint-laroche
     query: "beausaint la roche"
     expected_building_group_id_set:
@@ -63,6 +68,7 @@ queries:
     notes: "Vieille-Route-de-Beausaint — La Roche-en-Ardenne (strict)"
   - id: adv-hamlet-003
     category: hamlet
+    match_level: street
     subcategory: maredsous-anhee
     query: "maredsous"
     expected_building_group_id_set:
@@ -82,6 +88,7 @@ queries:
     notes: "Rue de Maredsous — Anhée (strict)"
   - id: adv-hamlet-004
     category: hamlet
+    match_level: street
     subcategory: han-sur-lesse-rochefort
     query: "han sur lesse 5580"
     expected_building_group_id_set:
@@ -103,6 +110,7 @@ queries:
     notes: "Rue de la Lesse — Rochefort (strict)"
   - id: adv-hamlet-005
     category: hamlet
+    match_level: street
     subcategory: spontin-yvoir
     query: "spontin yvoir"
     expected_building_group_id_set:
@@ -115,6 +123,7 @@ queries:
     notes: "Rue du Bailoy — Yvoir (strict)"
   - id: adv-hamlet-006
     category: hamlet
+    match_level: street
     subcategory: crupet-assesse
     query: "crupet"
     expected_building_group_id_set:
@@ -136,6 +145,7 @@ queries:
     notes: "Rue Basse — Assesse (strict)"
   - id: adv-hamlet-007
     category: hamlet
+    match_level: street
     subcategory: sosoye-anhee
     query: "sosoye"
     expected_building_group_id_set:
@@ -157,6 +167,7 @@ queries:
     notes: "Rue Par-delà-l'Eau — Anhée (strict)"
   - id: adv-hamlet-008
     category: hamlet
+    match_level: street
     subcategory: falaen-onhaye
     query: "fala\u00ebn"
     expected_building_group_id_set:
@@ -179,6 +190,7 @@ queries:
     notes: "Rue de la Gare — Onhaye (strict)"
   - id: adv-hamlet-009
     category: hamlet
+    match_level: street
     subcategory: mozet-gesves
     query: "mozet"
     expected_building_group_id_set:
@@ -192,6 +204,7 @@ queries:
     notes: "Rue de Mozet — Gesves (strict)"
   - id: adv-hamlet-010
     category: hamlet
+    match_level: street
     subcategory: soulme-doische
     query: "soulme"
     expected_building_group_id_set:
@@ -199,6 +212,7 @@ queries:
     notes: "Moulin-de-Soulme — Doische (strict)"
   - id: adv-hamlet-011
     category: hamlet
+    match_level: street
     subcategory: laforet-vresse
     query: "lafor\u00eat vresse"
     expected_building_group_id_set:
@@ -264,6 +278,7 @@ queries:
     notes: "Rue Sainte-Agathe — Vresse-sur-Semois (strict)"
   - id: adv-hamlet-012
     category: hamlet
+    match_level: street
     subcategory: chassepierre-florenville
     query: "chassepierre"
     expected_building_group_id_set:
@@ -278,6 +293,7 @@ queries:
     notes: "Rue de la Cure — Florenville (strict)"
   - id: adv-hamlet-013
     category: hamlet
+    match_level: street
     subcategory: torgny-rouvroy
     query: "torgny"
     expected_building_group_id_set:
@@ -292,6 +308,7 @@ queries:
     notes: "Rue Pêchières — Rouvroy (strict)"
   - id: adv-hamlet-014
     category: hamlet
+    match_level: street
     subcategory: mirwart-saint-hubert
     query: "mirwart"
     expected_building_group_id_set:
@@ -299,6 +316,7 @@ queries:
     notes: "Halte de Mirwart — Saint-Hubert (strict)"
   - id: adv-hamlet-015
     category: hamlet
+    match_level: street
     subcategory: weris-durbuy
     query: "w\u00e9ris"
     expected_building_group_id_set:
@@ -313,6 +331,7 @@ queries:
     notes: "Rue des Dolmens — Durbuy (strict)"
   - id: adv-hamlet-016
     category: hamlet
+    match_level: street
     subcategory: olloy-viroinval
     query: "olloy-sur-viroin"
     expected_building_group_id_set:
@@ -329,6 +348,7 @@ queries:
     notes: "Route du Viroin — Viroinval (strict)"
   - id: adv-hamlet-017
     category: hamlet
+    match_level: street
     subcategory: vierves-viroinval
     query: "vierves-sur-viroin"
     expected_building_group_id_set:
@@ -366,6 +386,7 @@ queries:
     notes: "Parc Résidentiel La Jussière — Viroinval (strict)"
   - id: adv-hamlet-018
     category: hamlet
+    match_level: street
     subcategory: treignes-viroinval
     query: "treignes"
     expected_building_group_id_set:
@@ -375,6 +396,7 @@ queries:
     notes: "Rue Malgré-Tout — Viroinval (strict)"
   - id: adv-hamlet-019
     category: hamlet
+    match_level: street
     subcategory: roly-philippeville
     query: "roly philippeville"
     expected_building_group_id_set:
@@ -393,6 +415,7 @@ queries:
     notes: "Place de Roly — Philippeville (strict)"
   - id: adv-hamlet-020
     category: hamlet
+    match_level: street
     subcategory: bellevaux-bouillon
     query: "bellevaux bouillon"
     expected_building_group_id_set:
@@ -425,6 +448,7 @@ queries:
     notes: "Route de Brienne — Bouillon (strict)"
   - id: adv-hamlet-021
     category: hamlet
+    match_level: street
     subcategory: frahan-bouillon
     query: "frahan"
     expected_building_group_id_set:
@@ -452,6 +476,7 @@ queries:
     notes: "Rue de la Passerelle — Bouillon (strict)"
   - id: adv-hamlet-022
     category: hamlet
+    match_level: street
     subcategory: wibrin-houffalize
     query: "wibrin"
     expected_building_group_id_set:
@@ -470,6 +495,7 @@ queries:
     notes: "Grande Mormont — Houffalize (strict)"
   - id: adv-hamlet-023
     category: hamlet
+    match_level: street
     subcategory: lompret-chimay
     query: "lompret"
     expected_building_group_id_set:
@@ -480,6 +506,7 @@ queries:
     notes: "Route de Lompret — Couvin (strict)"
   - id: adv-hamlet-024
     category: hamlet
+    match_level: street
     subcategory: aubechies-beloeil
     query: "aubechies"
     expected_building_group_id_set:
@@ -487,6 +514,7 @@ queries:
     notes: "Place d'Aubechies — Beloeil (strict)"
   - id: adv-hamlet-025
     category: hamlet
+    match_level: street
     subcategory: ny-hotton
     query: "ny hotton"
     expected_building_group_id_set:
@@ -519,6 +547,7 @@ queries:
     notes: "Rue de Ny — Hotton (strict)"
   - id: adv-hamlet-026
     category: hamlet
+    match_level: street
     subcategory: ave-namur
     query: "ave namur"
     expected_building_group_id_set:
@@ -539,6 +568,7 @@ queries:
     notes: "Chemin d'Ave — Wellin (fuzzy)"
   - id: adv-hamlet-027
     category: hamlet
+    match_level: street
     subcategory: celles-houyet
     query: "celles houyet"
     expected_building_group_id_set:
@@ -546,6 +576,7 @@ queries:
     notes: "Soinne — Houyet (strict)"
   - id: adv-hamlet-028
     category: hamlet
+    match_level: street
     subcategory: furfooz-dinant
     query: "furfooz"
     expected_building_group_id_set:
@@ -554,6 +585,7 @@ queries:
     notes: "Rue de Furfooz — Houyet (strict)"
   - id: adv-hamlet-029
     category: hamlet
+    match_level: street
     subcategory: limbourg-dolhain
     query: "dolhain limbourg"
     expected_building_group_id_set:
@@ -608,6 +640,7 @@ queries:
     notes: "Route de Dolhain — Baelen (fuzzy)"
   - id: adv-hamlet-030
     category: hamlet
+    match_level: street
     subcategory: xhignesse-hamoir
     query: "xhignesse"
     expected_building_group_id_set:
@@ -653,6 +686,7 @@ queries:
 # ---------- DE zone (9 German-speaking communes) — 9 entries
   - id: adv-de_zone-001
     category: de_zone
+    match_level: street
     subcategory: eupen-63023
     query: "Rathausplatz Eupen 4700"
     expected_building_group_id_set:
@@ -673,6 +707,7 @@ queries:
     notes: "Place de l'Hôtel de Ville — Eupen (strict)"
   - id: adv-de_zone-002
     category: de_zone
+    match_level: street
     subcategory: kelmis-63040
     query: "Maxstra\u00dfe Kelmis"
     expected_building_group_id_set:
@@ -706,6 +741,7 @@ queries:
     notes: "Rue Max — La Calamine (strict)"
   - id: adv-de_zone-003
     category: de_zone
+    match_level: street
     subcategory: lontzen-63048
     query: "Aachener Stra\u00dfe Lontzen"
     expected_building_group_id_set:
@@ -715,6 +751,7 @@ queries:
     notes: "Rue Marie-Thérèse — Lontzen (fuzzy)"
   - id: adv-de_zone-004
     category: de_zone
+    match_level: street
     subcategory: raeren-63061
     query: "Hauptstra\u00dfe Raeren"
     expected_building_group_id_set:
@@ -810,6 +847,7 @@ queries:
     notes: "Hauptstraße — Raeren (strict)"
   - id: adv-de_zone-005
     category: de_zone
+    match_level: street
     subcategory: amel-63001
     query: "Hauptstra\u00dfe Amel"
     expected_building_group_id_set:
@@ -836,6 +874,7 @@ queries:
     notes: "Hauptstraße — Amblève (strict)"
   - id: adv-de_zone-006
     category: de_zone
+    match_level: street
     subcategory: buellingen-63012
     query: "Bahnhofstra\u00dfe B\u00fcllingen"
     expected_building_group_id_set:
@@ -860,6 +899,7 @@ queries:
     notes: "Bahnhofstraße — Bullange (strict)"
   - id: adv-de_zone-007
     category: de_zone
+    match_level: street
     subcategory: burg-reuland-63013
     query: "Burg-Reuland 4790"
     expected_building_group_id_set:
@@ -874,6 +914,7 @@ queries:
     notes: "Peckeneck — Burg-Reuland (strict)"
   - id: adv-de_zone-008
     category: de_zone
+    match_level: street
     subcategory: buetgenbach-63087
     query: "Bahnhofstra\u00dfe B\u00fctgenbach"
     expected_building_group_id_set:
@@ -961,6 +1002,7 @@ queries:
     notes: "Bahnhofstraße — Butgenbach (strict)"
   - id: adv-de_zone-009
     category: de_zone
+    match_level: street
     subcategory: sankt-vith-63067
     query: "Hauptstra\u00dfe Sankt Vith"
     expected_building_group_id_set:
@@ -1030,6 +1072,7 @@ queries:
 # ---------- Facilités (Brussels periphery) — 6 entries
   - id: adv-facilites-001
     category: facilites
+    match_level: street
     subcategory: drogenbos-23098
     query: "Grote Baan Drogenbos"
     expected_building_group_id_set:
@@ -1098,6 +1141,7 @@ queries:
     notes: "Grote Baan — Drogenbos (strict)"
   - id: adv-facilites-002
     category: facilites
+    match_level: street
     subcategory: kraainem-23099
     query: "Wezembeeklaan Kraainem"
     expected_building_group_id_set:
@@ -1137,6 +1181,7 @@ queries:
     notes: "Wezembeeklaan — Kraainem (strict)"
   - id: adv-facilites-003
     category: facilites
+    match_level: street
     subcategory: linkebeek-23100
     query: "Hollebeekstraat Linkebeek"
     expected_building_group_id_set:
@@ -1225,6 +1270,7 @@ queries:
     notes: "Hollebeekstraat — Linkebeek (strict)"
   - id: adv-facilites-004
     category: facilites
+    match_level: street
     subcategory: sint-genesius-rode-23101
     query: "Linkebeekstraat Sint-Genesius-Rode"
     expected_building_group_id_set:
@@ -1295,6 +1341,7 @@ queries:
     notes: "Sint-Annalaan — Rhode-Saint-Genèse (fuzzy)"
   - id: adv-facilites-005
     category: facilites
+    match_level: street
     subcategory: wemmel-23102
     query: "Steenweg Wemmel"
     expected_building_group_id_set:
@@ -1328,6 +1375,7 @@ queries:
     notes: "Romeinse Steenweg — Wemmel (strict)"
   - id: adv-facilites-006
     category: facilites
+    match_level: street
     subcategory: wezembeek-oppem-23103
     query: "Astridlaan Wezembeek-Oppem"
     expected_building_group_id_set:
@@ -1525,6 +1573,7 @@ queries:
 # ---------- Notability (file 13 §4 whitelist) — 30 entries — §3.1 target metric
   - id: adv-notability-001
     category: notability
+    match_level: building
     subcategory: grand-place-bxl
     query: "Grand-Place"
     expected_best_id: "https://databrussels.be/id/address/142083/1"
@@ -1543,6 +1592,7 @@ queries:
     regression_marker: true
   - id: adv-notability-002
     category: notability
+    match_level: building
     subcategory: meir-anvers
     query: "Meir"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2406046/2023-11-01T12:15:25+01:00"
@@ -1561,6 +1611,7 @@ queries:
     regression_marker: true
   - id: adv-notability-003
     category: notability
+    match_level: building
     subcategory: grote-markt-anvers
     query: "Grote Markt"
     expected_best_id: "https://data.vlaanderen.be/id/adres/473057/2023-11-01T12:02:03+01:00"
@@ -1579,6 +1630,7 @@ queries:
     regression_marker: true
   - id: adv-notability-004
     category: notability
+    match_level: building
     subcategory: markt-bruges
     query: "Markt"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2003673/2023-11-01T11:56:11+01:00"
@@ -1597,6 +1649,7 @@ queries:
     regression_marker: true
   - id: adv-notability-005
     category: notability
+    match_level: building
     subcategory: burg-bruges
     query: "Burg"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2121236/2023-11-01T11:57:22+01:00"
@@ -1615,6 +1668,7 @@ queries:
     regression_marker: true
   - id: adv-notability-006
     category: notability
+    match_level: building
     subcategory: korenmarkt-gand
     query: "Korenmarkt"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2871450/2023-11-01T16:28:41+01:00"
@@ -1633,6 +1687,7 @@ queries:
     regression_marker: true
   - id: adv-notability-007
     category: notability
+    match_level: building
     subcategory: vrijdagmarkt-gand
     query: "Vrijdagmarkt"
     expected_best_id: "https://data.vlaanderen.be/id/adres/1336028/2023-11-01T16:59:39+01:00"
@@ -1651,6 +1706,7 @@ queries:
     regression_marker: true
   - id: adv-notability-008
     category: notability
+    match_level: building
     subcategory: place-saint-lambert-liege
     query: "Place Saint-Lambert"
     expected_best_id: "geodata.wallonie.be/id/Address/1872244/2"
@@ -1669,6 +1725,7 @@ queries:
     regression_marker: true
   - id: adv-notability-009
     category: notability
+    match_level: building
     subcategory: grand-place-mons
     query: "Grand-Place Mons"
     expected_best_id: "geodata.wallonie.be/id/Address/581272/1"
@@ -1686,6 +1743,7 @@ queries:
     notes: "Mons \u2014 anchor='Grand-Place 7000 Mons'; street match='grand-place'"
   - id: adv-notability-010
     category: notability
+    match_level: building
     subcategory: grand-place-tournai
     query: "Grand-Place Tournai"
     expected_best_id: "geodata.wallonie.be/id/Address/975045/1"
@@ -1703,6 +1761,7 @@ queries:
     notes: "Tournai \u2014 anchor=\"Grand'Place 7500 Tournai\"; street match='grand'"
   - id: adv-notability-011
     category: notability
+    match_level: building
     subcategory: sablon-bxl
     query: "Sablon"
     expected_best_id: "https://databrussels.be/id/address/209987/1"
@@ -1720,6 +1779,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Place du Grand Sablon 1000'; street match='sablon'"
   - id: adv-notability-012
     category: notability
+    match_level: building
     subcategory: place-de-brouckere-bxl
     query: "Place de Brouck\u00e8re"
     expected_best_id: "https://databrussels.be/id/address/170298/1"
@@ -1737,6 +1797,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Place de Brouck\u00e8re 1000 Bruxelles'; street match='brouck\u00e8re'"
   - id: adv-notability-013
     category: notability
+    match_level: building
     subcategory: place-st-gery-bxl
     query: "Place Saint-G\u00e9ry"
     expected_best_id: "https://databrussels.be/id/address/141027/1"
@@ -1754,6 +1815,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Place Saint-G\u00e9ry 1000'; street match='saint-g\u00e9ry'"
   - id: adv-notability-014
     category: notability
+    match_level: building
     subcategory: place-jeu-de-balle-bxl
     query: "Place du Jeu de Balle"
     expected_best_id: "https://databrussels.be/id/address/104983/1"
@@ -1771,6 +1833,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Place du Jeu de Balle 1000'; street match='jeu de balle'"
   - id: adv-notability-015
     category: notability
+    match_level: building
     subcategory: kouter-gand
     query: "Kouter"
     expected_best_id: "https://data.vlaanderen.be/id/adres/1922319/2023-11-01T16:36:54+01:00"
@@ -1788,6 +1851,7 @@ queries:
     notes: "Gand \u2014 anchor='Kouter 9000 Gent'; street match='kouter'"
   - id: adv-notability-016
     category: notability
+    match_level: building
     subcategory: groenplaats-anvers
     query: "Groenplaats"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2022733/2023-11-01T12:01:57+01:00"
@@ -1805,6 +1869,7 @@ queries:
     notes: "Anvers \u2014 anchor='Groenplaats 2000 Antwerpen'; street match='groenplaats'"
   - id: adv-notability-017
     category: notability
+    match_level: building
     subcategory: steen-anvers
     query: "Steenplein"
     expected_best_id: "https://data.vlaanderen.be/id/adres/3118193/2023-11-01T11:51:04+01:00"
@@ -1814,6 +1879,7 @@ queries:
     notes: "Anvers \u2014 anchor='Steenplein 2000 Antwerpen'; street match='steenplein'"
   - id: adv-notability-018
     category: notability
+    match_level: building
     subcategory: place-pol-mons
     query: "Place L\u00e9opold Mons"
     expected_best_id: "geodata.wallonie.be/id/Address/580336/3"
@@ -1831,6 +1897,7 @@ queries:
     notes: "Mons \u2014 anchor='Place L\u00e9opold 7000 Mons'; street match='l\u00e9opold'"
   - id: adv-notability-019
     category: notability
+    match_level: building
     subcategory: rue-de-la-loi-bxl
     query: "Rue de la Loi"
     expected_best_id: "https://databrussels.be/id/address/210226/1"
@@ -1849,6 +1916,7 @@ queries:
     regression_marker: true
   - id: adv-notability-020
     category: notability
+    match_level: building
     subcategory: avenue-louise-bxl
     query: "Avenue Louise"
     expected_best_id: "https://databrussels.be/id/address/108349/1"
@@ -1867,6 +1935,7 @@ queries:
     regression_marker: true
   - id: adv-notability-021
     category: notability
+    match_level: building
     subcategory: rue-haute-bxl
     query: "Rue Haute"
     expected_best_id: "https://databrussels.be/id/address/112848/1"
@@ -1884,6 +1953,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Rue Haute 1000 Bruxelles'; street match='rue haute'"
   - id: adv-notability-022
     category: notability
+    match_level: building
     subcategory: place-poelaert-bxl
     query: "Place Poelaert"
     expected_best_id: "https://databrussels.be/id/address/217184/1"
@@ -1895,6 +1965,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Place Poelaert 1000 Bruxelles'; street match='poelaert'"
   - id: adv-notability-023
     category: notability
+    match_level: building
     subcategory: place-flagey-ixelles
     query: "Place Flagey"
     expected_best_id: "https://databrussels.be/id/address/167297/1"
@@ -1912,6 +1983,7 @@ queries:
     notes: "Ixelles \u2014 anchor='Place Flagey 1050'; street match='flagey'"
   - id: adv-notability-024
     category: notability
+    match_level: building
     subcategory: place-jourdan-bxl
     query: "Place Jourdan"
     expected_best_id: "https://databrussels.be/id/address/613792/1"
@@ -1929,6 +2001,7 @@ queries:
     notes: "Etterbeek \u2014 anchor='Place Jourdan 1040'; street match='jourdan'"
   - id: adv-notability-025
     category: notability
+    match_level: building
     subcategory: place-luxembourg-bxl
     query: "Place du Luxembourg"
     expected_best_id: "https://databrussels.be/id/address/163554/1"
@@ -1946,6 +2019,7 @@ queries:
     notes: "Ixelles \u2014 anchor='Place du Luxembourg 1050'; street match='luxembourg'"
   - id: adv-notability-026
     category: notability
+    match_level: building
     subcategory: avenue-de-tervueren-bxl
     query: "Avenue de Tervueren"
     expected_best_id: "https://databrussels.be/id/address/181891/1"
@@ -1963,6 +2037,7 @@ queries:
     notes: "Etterbeek \u2014 anchor='Avenue de Tervueren 1040'; street match='tervueren'"
   - id: adv-notability-027
     category: notability
+    match_level: building
     subcategory: boulevard-anspach-bxl
     query: "Boulevard Anspach"
     expected_best_id: "https://databrussels.be/id/address/143812/1"
@@ -1980,6 +2055,7 @@ queries:
     notes: "Bruxelles \u2014 anchor='Boulevard Anspach 1000'; street match='anspach'"
   - id: adv-notability-028
     category: notability
+    match_level: building
     subcategory: dam-anvers
     query: "Dam Antwerpen"
     expected_best_id: "https://data.vlaanderen.be/id/adres/2013074/2023-11-01T12:32:30+01:00"
@@ -1997,6 +2073,7 @@ queries:
     notes: "Anvers \u2014 anchor='Dam 2060 Antwerpen'; street match='dam'"
   - id: adv-notability-029
     category: notability
+    match_level: building
     subcategory: place-eveche-tournai
     query: "Place de l'\u00c9v\u00each\u00e9 Tournai"
     expected_best_id: "geodata.wallonie.be/id/Address/973055/1"
@@ -2006,6 +2083,7 @@ queries:
     notes: "Tournai \u2014 anchor=\"Place de l'\u00c9v\u00each\u00e9 7500 Tournai\"; street match='\u00e9v\u00each\u00e9'"
   - id: adv-notability-030
     category: notability
+    match_level: building
     subcategory: place-grand-sablon-bxl
     query: "Grand Sablon"
     expected_best_id: "https://databrussels.be/id/address/209987/1"

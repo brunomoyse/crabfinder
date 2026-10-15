@@ -27,6 +27,10 @@ proj4rs            = "0.2.1"
 # Search
 tantivy            = { workspace = true }
 
+# OSM places (schema v8): CSV input + nearest-place R-tree
+csv                = "1.4"
+rstar              = { workspace = true }
+
 # Errors / logging
 anyhow             = { workspace = true }
 thiserror          = { workspace = true }

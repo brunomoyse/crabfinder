@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::eval_set::{AdversarialCategory, EvalQuerySource, VariantType};
+use crate::eval_set::{AdversarialCategory, EvalQuerySource, MatchLevel, VariantType};
 use crate::runner::QueryResult;
 
 /// One bucket's aggregate metrics.
@@ -24,6 +24,9 @@ pub struct MetricBucket {
     pub mrr: f64,
     pub building_group_recall_at_1: f64,
     pub strict_match_rate: f64,
+    /// Adversarial buckets: the `match_level`s scored in this bucket.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub match_levels: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -131,8 +134,17 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
         }
 
         m.aggregated_query_count += 1;
-        let rank = find_rank(&r.query.expected_bgid_set, &r.features, |t| &t.0);
-        let bid_rank = find_rank(&r.query.expected_best_id_set, &r.features, |t| &t.1);
+        let (rank, bid_rank) = match r.query.match_level {
+            MatchLevel::Address => (
+                find_rank(&r.query.expected_bgid_set, &r.features, |t| &t.0),
+                find_rank(&r.query.expected_best_id_set, &r.features, |t| &t.1),
+            ),
+            MatchLevel::Building => (
+                find_rank(&r.query.expected_bgid_set, &r.features, |t| &t.0),
+                0,
+            ),
+            MatchLevel::Street => (street_rank(&r.query.expected_bgid_set, &r.features), 0),
+        };
         let strict = r.top_match_type == "strict";
         overall_acc.add(rank, bid_rank, strict);
 
@@ -165,10 +177,9 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
                 }
             }
             EvalQuerySource::Adversarial { category, .. } => {
-                by_adv
-                    .entry(category.as_str().to_string())
-                    .or_default()
-                    .add(rank, bid_rank, strict);
+                let acc = by_adv.entry(category.as_str().to_string()).or_default();
+                acc.add(rank, bid_rank, strict);
+                acc.levels.insert(r.query.match_level.as_str());
                 if *category == AdversarialCategory::CrossLanguage {
                     cl_acc.add(rank, bid_rank, strict);
                 }
@@ -212,6 +223,22 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
 
 /// 1-indexed rank of the first feature whose extracted key is in `expected`.
 /// 0 means not found.
+/// Street part of a building group id (`{ns}|{oid}|{hn}` → `{ns}|{oid}`).
+fn street_of(bgid: &str) -> &str {
+    bgid.rsplit_once('|').map_or(bgid, |(s, _)| s)
+}
+
+/// 1-based rank of the first feature on one of the expected buildings'
+/// streets; 0 when none is.
+fn street_rank(expected_bgids: &[String], features: &[(String, String, String)]) -> usize {
+    let streets: std::collections::HashSet<&str> =
+        expected_bgids.iter().map(|b| street_of(b)).collect();
+    features
+        .iter()
+        .position(|f| !f.0.is_empty() && streets.contains(street_of(&f.0)))
+        .map_or(0, |i| i + 1)
+}
+
 fn find_rank<F>(expected: &[String], features: &[(String, String, String)], key: F) -> usize
 where
     F: Fn(&(String, String, String)) -> &String,
@@ -238,6 +265,7 @@ struct Acc {
     rr_sum: f64, // sum of 1/rank for queries that found at any rank
     bgid_recall_at_1: usize,
     strict_count: usize,
+    levels: std::collections::BTreeSet<&'static str>,
 }
 
 impl Acc {
@@ -292,6 +320,7 @@ impl Acc {
             mrr: self.rr_sum / n,
             building_group_recall_at_1: self.bgid_recall_at_1 as f64 / n,
             strict_match_rate: self.strict_count as f64 / n,
+            match_levels: self.levels.into_iter().map(String::from).collect(),
         }
     }
 }
@@ -325,7 +354,7 @@ fn compute_latency(samples: &mut [f64]) -> LatencyBucket {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eval_set::{EvalQuery, EvalQuerySource, VariantType};
+    use crate::eval_set::{EvalQuery, EvalQuerySource, MatchLevel, VariantType};
 
     fn synth_q(id: &str, expected_bgid: &str, expected_best: &str, region: &str) -> EvalQuery {
         EvalQuery {
@@ -334,6 +363,7 @@ mod tests {
             expected_bgid_set: vec![expected_bgid.into()],
             expected_best_id_set: vec![expected_best.into()],
             expected_to_fail: false,
+            match_level: MatchLevel::Address,
             source: EvalQuerySource::Synthetic {
                 variant_type: VariantType::Canonical,
                 region: region.into(),
@@ -460,5 +490,68 @@ mod tests {
         assert!((b.p50_ms - 50.0).abs() < 1e-9);
         // p95: index = ceil(0.95*10) - 1 = 9 → 100.0
         assert!((b.p95_ms - 100.0).abs() < 1e-9);
+    }
+
+    fn adv_q(id: &str, level: MatchLevel, bgid: &str, best: Option<&str>) -> EvalQuery {
+        EvalQuery {
+            id: id.into(),
+            query_string: "q".into(),
+            expected_bgid_set: vec![bgid.into()],
+            expected_best_id_set: best.into_iter().map(String::from).collect(),
+            expected_to_fail: false,
+            match_level: level,
+            source: EvalQuerySource::Adversarial {
+                category: crate::eval_set::AdversarialCategory::Facilites,
+                subcategory: "s".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn match_levels_score_address_building_and_street() {
+        let results = vec![
+            // Address: neighbouring building on the same street → miss.
+            result_with_top(
+                adv_q("a", MatchLevel::Address, "ns|1|5", Some("unit-2")),
+                "ns|1|7",
+                "unit-1",
+                "strict",
+                1.0,
+            ),
+            // Building: same situation → hit.
+            result_with_top(
+                adv_q("b", MatchLevel::Building, "ns|1|5", Some("unit-2")),
+                "ns|1|5",
+                "unit-1",
+                "strict",
+                1.0,
+            ),
+            // Street: another number on the same street → hit.
+            result_with_top(
+                adv_q("c", MatchLevel::Street, "ns|1|5", None),
+                "ns|1|99",
+                "x",
+                "strict",
+                1.0,
+            ),
+            // Street: another street → miss.
+            result_with_top(
+                adv_q("d", MatchLevel::Street, "ns|1|5", None),
+                "ns|2|5",
+                "x",
+                "strict",
+                1.0,
+            ),
+        ];
+        let m = compute(&results);
+        let b = &m.by_adversarial_category["facilites"];
+        assert_eq!(b.n, 4);
+        assert!((b.recall_at_1 - 0.5).abs() < 1e-9, "{b:?}");
+        assert_eq!(b.match_levels, ["address", "building", "street"]);
+        assert_eq!(
+            street_rank(&["ns|1|5".into()], &[("".into(), "".into(), "".into())]),
+            0
+        );
+        assert_eq!(street_of("nopipe"), "nopipe");
     }
 }

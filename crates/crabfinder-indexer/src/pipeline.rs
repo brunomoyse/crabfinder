@@ -171,6 +171,8 @@ where
                 postal_code,
                 postal_name,
                 part_of_municipality_name: pom.map(|p| p.names.clone()),
+                // Attached later by the `--places` join (cli::run).
+                place_name: None,
 
                 coordinates: {
                     let lc = LambertCoord {

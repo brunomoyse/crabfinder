@@ -40,8 +40,12 @@ log "building release binaries"
 cargo build --release -p crabfinder-indexer -p crabfinder-service -p crabfinder-eval
 log "indexing into $index_dir"
 rm -rf "$index_dir"
+places_args=()
+if [[ -f data/osm-places-be-v1.csv ]]; then
+    places_args=(--places data/osm-places-be-v1.csv)
+fi
 ./target/release/crabfinder-indexer --best-dir "$best_dir" --output "$index_dir" \
-    --notability-whitelist data/notability-whitelist-v1.yaml
+    --notability-whitelist data/notability-whitelist-v1.yaml "${places_args[@]}"
 
 # 3. Validate: every expected id in the eval sets must still resolve.
 if [[ -z "${SKIP_VALIDATE:-}" ]]; then

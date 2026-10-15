@@ -87,4 +87,10 @@ pub struct Address {
     pub coordinates: Coordinates,
 
     pub building_group_id: BuildingGroupId,
+
+    /// Nearest OpenStreetMap place (hamlet, village, …) when it adds a name
+    /// the BeSt hierarchy doesn't carry (schema v8, `--places`). Absent in
+    /// payloads written before v8.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place_name: Option<MultilingualName>,
 }

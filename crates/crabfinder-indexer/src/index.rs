@@ -225,7 +225,9 @@ impl CrabIndexWriter {
         doc.add_f64(s.lat, lat);
         doc.add_f64(s.lon, lon);
         doc.add_f64(s.notability_score, notability);
-        doc.add_text(s.house_number, &addr.house_number);
+        // Schema v8: uppercase so `32a` and `32A` are one term; the payload
+        // keeps BeSt's spelling.
+        doc.add_text(s.house_number, addr.house_number.to_uppercase());
         if let Some(b) = &addr.box_number {
             doc.add_text(s.box_number, b);
         }
@@ -265,6 +267,10 @@ fn build_searchable_tokens(addr: &Address) -> Vec<String> {
     if let Some(pom) = &addr.part_of_municipality_name {
         push_multilingual(pom, &mut out);
     }
+    // `place_name` is deliberately not searchable: hamlet words joining
+    // street words would satisfy the strict AND on the wrong street
+    // ("Rue de Gilly" near Châtelineau matching "Rue de Châtelineau").
+    // Place words are resolved through the localities side-file instead.
     out.push(addr.house_number.clone());
     if let Some(b) = &addr.box_number {
         out.push(b.clone());

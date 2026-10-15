@@ -19,6 +19,7 @@ use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
 
 use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::{AddressCountIndex, SharedAddressCountIndex};
+use crate::localities::{LocalityIndex, SharedLocalityIndex};
 use crate::mid_street::MidStreetIndex;
 use crate::resolver::ResolverContext;
 use crate::spatial::{SharedSpatialIndex, SpatialIndex};
@@ -86,6 +87,8 @@ pub struct AppState {
     /// file is absent or disabled, in which case `Confidence::MedianStreet`
     /// falls back to the top hit's own coordinates.
     pub mid_street: Arc<MidStreetIndex>,
+    /// Schema-v8 localities (`localities-v1.json`); empty when absent.
+    pub localities: SharedLocalityIndex,
 }
 
 impl AppState {
@@ -153,6 +156,9 @@ impl AppState {
             MidStreetIndex::empty()
         };
 
+        let localities = LocalityIndex::load(&index, &opts.index)?;
+        info!(entries = localities.len(), "localities loaded");
+
         if !opts.notability_enabled {
             info!("notability boost disabled: ranking falls back to pure BM25");
         }
@@ -169,6 +175,7 @@ impl AppState {
             abbrev: Arc::new(abbrev),
             addr_counts: Arc::new(addr_counts),
             mid_street: Arc::new(mid_street),
+            localities: Arc::new(localities),
         })
     }
 

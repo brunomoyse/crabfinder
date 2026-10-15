@@ -127,6 +127,33 @@ impl AdversarialCategory {
     }
 }
 
+/// What counts as a correct answer for an adversarial entry (v2 Phase 7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchLevel {
+    /// The exact address (`expected_best_id`), falling back to the
+    /// building when no address is pinned.
+    #[default]
+    Address,
+    /// Any unit of an expected building: queries that can't name a unit
+    /// (landmarks, notability).
+    Building,
+    /// Any building of an expected building's street: queries without a
+    /// house number ("Wezembeeklaan Kraainem", hamlets), where which
+    /// building comes first is not the query's to decide.
+    Street,
+}
+
+impl MatchLevel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MatchLevel::Address => "address",
+            MatchLevel::Building => "building",
+            MatchLevel::Street => "street",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdversarialQuery {
     pub id: String,
@@ -157,6 +184,8 @@ pub struct AdversarialQuery {
     pub notes: Option<String>,
     #[serde(default)]
     pub regression_marker: bool,
+    #[serde(default)]
+    pub match_level: MatchLevel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,6 +241,7 @@ pub struct EvalQuery {
     /// adversarial entries, or known_failure entries).
     pub expected_best_id_set: Vec<String>,
     pub expected_to_fail: bool,
+    pub match_level: MatchLevel,
     pub source: EvalQuerySource,
 }
 
@@ -237,6 +267,7 @@ impl EvalQuery {
             expected_bgid_set: vec![q.expected_building_group_id.clone()],
             expected_best_id_set: vec![q.expected_best_id.clone()],
             expected_to_fail: false,
+            match_level: MatchLevel::Address,
             source: EvalQuerySource::Synthetic {
                 variant_type: q.variant_type,
                 region: q.sample_region.clone(),
@@ -261,6 +292,7 @@ impl EvalQuery {
             expected_bgid_set,
             expected_best_id_set,
             expected_to_fail: q.expected_to_fail,
+            match_level: q.match_level,
             source: EvalQuerySource::Adversarial {
                 category: q.category,
                 subcategory: q.subcategory.clone(),
@@ -448,10 +480,13 @@ queries: []
                     acceptable_until: None,
                     notes: None,
                     regression_marker: false,
+                    match_level: MatchLevel::Street,
                 })
                 .collect(),
         };
         let flat = flatten(&[EvalSet::Synthetic(synth), EvalSet::Adversarial(adv)]);
         assert_eq!(flat.len(), 5);
+        assert_eq!(flat[0].match_level, MatchLevel::Address);
+        assert_eq!(flat[4].match_level, MatchLevel::Street);
     }
 }

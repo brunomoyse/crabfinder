@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | n | 3837 |
-| recall@1 | 0.835 |
-| recall@5 | 0.888 |
-| recall@10 | 0.907 |
+| recall@1 | 0.841 |
+| recall@5 | 0.891 |
+| recall@10 | 0.908 |
 | building_group_recall@1 | 0.841 |
-| MRR | 0.859 |
+| MRR | 0.863 |
 | strict_match_rate | 0.726 |
 
 ## Latency (HTTP mode; under contention)
 
 | | n | p50 | p95 | p99 | mean | max |
 |---|---|---|---|---|---|---|
-| ms | 3840 | 1.6 | 15.1 | 51.3 | 4.5 | 79.4 |
+| ms | 3840 | 1.8 | 17.0 | 51.4 | 4.7 | 86.3 |
 
 _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
 
@@ -65,12 +65,12 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 
 | Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
 |---|---|---|---|---|---|---|
-| cross_language | 10 | 0.800 | 1.000 | 0.800 | 0.900 | 1.000 |
-| de_zone | 9 | 0.778 | 0.778 | 0.778 | 0.778 | 0.889 |
-| facilites | 6 | 0.833 | 0.833 | 0.833 | 0.833 | 0.833 |
-| hamlet | 30 | 0.400 | 0.433 | 0.400 | 0.417 | 0.900 |
-| notability | 30 | 0.233 | 0.667 | 0.933 | 0.424 | 1.000 |
-| special_chars | 10 | 0.900 | 1.000 | 0.900 | 0.950 | 0.900 |
+| cross_language (address) | 10 | 0.800 | 1.000 | 0.800 | 0.900 | 1.000 |
+| de_zone (street) | 9 | 0.778 | 0.778 | 0.778 | 0.778 | 0.889 |
+| facilites (street) | 6 | 0.833 | 0.833 | 0.833 | 0.833 | 0.833 |
+| hamlet (street) | 30 | 0.467 | 0.467 | 0.467 | 0.467 | 0.900 |
+| notability (building) | 30 | 0.933 | 0.933 | 0.933 | 0.933 | 1.000 |
+| special_chars (address) | 10 | 0.900 | 1.000 | 0.900 | 0.950 | 0.900 |
 
 ## Known-failure tracking
 

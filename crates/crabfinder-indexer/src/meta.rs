@@ -34,7 +34,13 @@ use thiserror::Error;
 ///        per PhacochR §2.1). The service reads it at startup to back
 ///        `Confidence::MedianStreet`. The Tantivy schema itself is unchanged
 ///        from v6 — this bump forces a rebuild so the side file is generated.
-pub const SCHEMA_VERSION: u32 = 7;
+///   v8 — v2 Phase 5: uppercase-normalised `house_number` raw field; OSM
+///        place names (`--places`, `data/osm-places-be-v1.csv`) in the
+///        payload's `Address::place_name` (not in `searchable`: it caused
+///        false strict matches); `localities-v1.json` side-file
+///        (municipalities, parts of municipality, postal areas, OSM places
+///        with centres and postal codes).
+pub const SCHEMA_VERSION: u32 = 8;
 
 /// Filename under the index directory.
 pub const SIDECAR_FILENAME: &str = ".crab-meta.json";

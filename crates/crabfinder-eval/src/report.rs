@@ -219,6 +219,12 @@ fn region_variant_table(
     let mut entries: Vec<_> = map.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
     for (k, b) in entries {
+        // Adversarial categories show which match levels they are scored at.
+        let k = if b.match_levels.is_empty() {
+            k.clone()
+        } else {
+            format!("{k} ({})", b.match_levels.join(", "))
+        };
         s.push_str(&format!(
             "| {k} | {} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} |\n",
             b.n,

@@ -14,6 +14,7 @@ pub mod dedup;
 pub mod focus;
 pub mod http;
 pub mod hydrate;
+pub mod localities;
 pub mod mid_street;
 pub mod query_builder;
 pub mod resolver;

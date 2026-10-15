@@ -11,6 +11,8 @@
 
 use std::collections::HashMap;
 
+use crabfinder_core::house_number::leading_number;
+
 use tantivy::{TantivyDocument, schema::Value};
 
 use crabfinder_indexer::index::CrabSchema;
@@ -158,14 +160,26 @@ pub fn group_by_building(hits: &[RawHit]) -> Vec<Group> {
         });
     }
 
-    // Third pass: sort by max_score descending. Sort is stable, so ties
-    // preserve the insertion order set in pass 1.
+    // Third pass: sort by max_score descending. Equal scores (every
+    // building of a street on a street-level query) fall back to the
+    // natural order — street, then house number — so results don't depend
+    // on the index's internal doc order.
     groups.sort_by(|a, b| {
         b.max_score
             .partial_cmp(&a.max_score)
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| natural_key(&a.building_group_id).cmp(&natural_key(&b.building_group_id)))
     });
     groups
+}
+
+/// `(street key, leading house number, full id)` of a building group id
+/// (`{ns}|{oid}|{house_number}`), for deterministic tie-breaking.
+fn natural_key(bgid: &str) -> (&str, Option<u32>, &str) {
+    match bgid.rsplit_once('|') {
+        Some((street, hn)) => (street, leading_number(hn), bgid),
+        None => (bgid, None, bgid),
+    }
 }
 
 /// Pick the representative unit for a group:
@@ -478,5 +492,29 @@ mod tests {
         sort_units_stable(&mut a);
         let after_second: Vec<usize> = a.iter().map(|h| h.raw_index).collect();
         assert_eq!(after_first, after_second, "sort must be a fixed point");
+    }
+
+    #[test]
+    fn equal_scores_sort_naturally() {
+        let hits = vec![
+            hit("ns|2|10", 1.0, None, "a", MatchType::Strict, 0),
+            hit("ns|1|9", 1.0, None, "b", MatchType::Strict, 1),
+            hit("ns|1|10B", 1.0, None, "c", MatchType::Strict, 2),
+            hit("ns|1|10", 1.0, None, "d", MatchType::Strict, 3),
+            hit("ns|1|2", 1.0, None, "e", MatchType::Strict, 4),
+            hit("ns|9|1", 2.0, None, "f", MatchType::Strict, 5),
+            hit("odd", 1.0, None, "g", MatchType::Strict, 6),
+        ];
+        let order: Vec<String> = group_by_building(&hits)
+            .into_iter()
+            .map(|g| g.building_group_id)
+            .collect();
+        assert_eq!(
+            order,
+            [
+                "ns|9|1", "ns|1|2", "ns|1|9", "ns|1|10", "ns|1|10B", "ns|2|10", "odd"
+            ]
+        );
+        assert_eq!(natural_key("ns|1|x"), ("ns|1", None, "ns|1|x"));
     }
 }

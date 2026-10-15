@@ -11,10 +11,12 @@ use tracing::{info, warn};
 
 use crate::bundle::detect_regions;
 use crate::index::CrabIndexWriter;
+use crate::localities::{LOCALITIES_FILENAME, LocalitiesBuilder};
 use crate::meta::write_sidecar;
 use crate::mid_street::{MID_STREET_FILENAME, MidStreetBuilder};
 use crate::notability::NotabilityMap;
 use crate::pipeline::{IngestRegion, StreamReport, load_dictionaries, stream_resolved_addresses};
+use crate::places::PlaceIndex;
 
 /// Expected per-region status-filter rejection rate, derived from the
 /// Phase 5 Step 4 full-corpus indexing run (see `11-best-data-verified.md`
@@ -102,6 +104,12 @@ pub struct Args {
     /// (no boost) and the resulting index behaves like v3 ranking.
     #[arg(long)]
     pub notability_whitelist: Option<PathBuf>,
+
+    /// OSM places CSV (`scripts/build_osm_places.py`, schema v8). Optional
+    /// — without it no place names are attached and the localities file
+    /// only lists BeSt municipalities, parts and postal areas.
+    #[arg(long)]
+    pub places: Option<PathBuf>,
 }
 
 impl Args {
@@ -114,6 +122,7 @@ impl Args {
             output: output.into(),
             print_samples: 0,
             notability_whitelist: None,
+            places: None,
         }
     }
 }
@@ -126,6 +135,8 @@ pub struct RegionReport {
     pub pass2_ms: u128,
     pub stream: StreamReport,
     pub notability_stamped: u64,
+    /// Addresses that received an OSM place name.
+    pub places_attached: u64,
     /// `Some(actual_pct)` when the status-skip share drifted beyond
     /// `DRIFT_THRESHOLD_PCT` from the expected baseline.
     pub status_drift_pct: Option<f64>,
@@ -138,6 +149,8 @@ pub struct IndexReport {
     pub commit_ms: u128,
     pub total_ms: u128,
     pub mid_street_entries: usize,
+    pub localities_entries: usize,
+    pub places_loaded: usize,
     pub whitelist_entries: usize,
     pub whitelist_unique_bgids: usize,
     pub output: PathBuf,
@@ -163,8 +176,8 @@ impl IndexReport {
         for r in &self.regions {
             let _ = writeln!(
                 s,
-                "  {:>9?}: pass1={:>5}ms  pass2={:>7}ms  {}  notability_stamped={}",
-                r.region, r.pass1_ms, r.pass2_ms, r.stream, r.notability_stamped
+                "  {:>9?}: pass1={:>5}ms  pass2={:>7}ms  {}  notability_stamped={}  places_attached={}",
+                r.region, r.pass1_ms, r.pass2_ms, r.stream, r.notability_stamped, r.places_attached
             );
         }
         let stamped: u64 = self.regions.iter().map(|r| r.notability_stamped).sum();
@@ -177,6 +190,11 @@ impl IndexReport {
             self.whitelist_unique_bgids
         );
         let _ = writeln!(s, "  mid_street entries: {}", self.mid_street_entries);
+        let _ = writeln!(
+            s,
+            "  localities: {} (OSM places loaded: {})",
+            self.localities_entries, self.places_loaded
+        );
         let _ = writeln!(s, "  commit: {}ms", self.commit_ms);
         let _ = writeln!(
             s,
@@ -227,6 +245,15 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         }
     };
 
+    let places = match args.places.as_ref() {
+        Some(p) => PlaceIndex::load(p).with_context(|| format!("loading places {p:?}"))?,
+        None => {
+            info!("no --places supplied; no OSM place names attached");
+            PlaceIndex::empty()
+        }
+    };
+    let mut localities = LocalitiesBuilder::new();
+
     // One writer for the whole run. Tantivy commits at the end so a partial
     // failure leaves no half-built index.
     let t_overall = Instant::now();
@@ -249,8 +276,15 @@ pub fn run(args: &Args) -> Result<IndexReport> {
 
         let t_pass2 = Instant::now();
         let mut stamped: u64 = 0;
+        let mut attached: u64 = 0;
         let stream =
-            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |addr| {
+            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |mut addr| {
+                let assignment = places.assign(&addr);
+                if let Some(a) = assignment.filter(|a| a.attach) {
+                    addr.place_name = Some(places.places()[a.idx].names_for(addr.region));
+                    attached += 1;
+                }
+                localities.record(&addr, assignment.map(|a| a.idx));
                 if samples_printed < args.print_samples {
                     samples_printed += 1;
                     println!(
@@ -286,6 +320,7 @@ pub fn run(args: &Args) -> Result<IndexReport> {
             pass2_ms,
             stream,
             notability_stamped: stamped,
+            places_attached: attached,
             status_drift_pct,
         });
     }
@@ -302,12 +337,19 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         .finish(&mid_path)
         .with_context(|| format!("writing {MID_STREET_FILENAME}"))?;
     info!(path = %mid_path.display(), entries = mid_street_entries, "mid_street side-table written");
+    let places_loaded = places.len();
+    let localities_entries = localities
+        .finish(&places, &args.output)
+        .with_context(|| format!("writing {LOCALITIES_FILENAME}"))?;
+    info!(entries = localities_entries, "localities side-file written");
 
     Ok(IndexReport {
         regions: reports,
         commit_ms,
         total_ms: t_overall.elapsed().as_millis(),
         mid_street_entries,
+        localities_entries,
+        places_loaded,
         whitelist_entries: notability_map.n_entries,
         whitelist_unique_bgids: notability_map.n_unique_bgids,
         output: args.output.clone(),

@@ -312,3 +312,97 @@ fn cli_run_rejects_bad_inputs() {
     let empty = tempfile::tempdir().unwrap();
     assert!(cli::run(&Args::new(empty.path(), empty.path().join("idx"))).is_err());
 }
+
+#[test]
+fn cli_run_attaches_osm_places_and_writes_localities() {
+    use crabfinder_indexer::localities::{LOCALITIES_FILENAME, LocalityKind, read_localities};
+
+    let best = bundle_dir(&[BestBundle::wallonia_sample()]);
+    // Where the Walloon address lands after reprojection.
+    let region = detect_regions(best.path()).unwrap()[0];
+    let dicts = load_dictionaries(best.path(), region).unwrap();
+    let mut at = (0.0, 0.0);
+    stream_resolved_addresses(best.path(), region, &dicts, None, |a| {
+        if let Coordinates::Wgs84(w) = a.coordinates {
+            at = (w.lat, w.lon);
+        }
+        Ok(true)
+    })
+    .unwrap();
+
+    // A hamlet on top of it, and a village repeating the BeSt part of
+    // municipality name (indexed nowhere, but listed as a locality).
+    let csv = best.path().join("places.csv");
+    std::fs::write(
+        &csv,
+        format!(
+            "osm_id,place,name,name_fr,name_nl,name_de,lat,lon\n\
+             1,hamlet,Maupas,,,,{},{}\n\
+             2,village,Han-sur-Lesse,,,,{},{}\n",
+            at.0 + 0.0005,
+            at.1,
+            at.0 + 0.01,
+            at.1
+        ),
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let mut args = Args::new(best.path(), out.path().join("idx"));
+    args.places = Some(csv.clone());
+    let report = cli::run(&args).unwrap();
+    assert_eq!(report.places_loaded, 2);
+    assert_eq!(report.regions[0].places_attached, 1);
+    assert!(report.summary().contains("localities: "));
+
+    let idx = out.path().join("idx");
+    let (index, schema) = open(&idx);
+    // Attached to the payload, kept out of the searchable text.
+    assert_eq!(count_term(&index, schema.searchable, "maupas"), 0);
+    let searcher = index.reader().unwrap().searcher();
+    let (_, addr) = searcher
+        .search(
+            &AllQuery,
+            &tantivy::collector::TopDocs::with_limit(1).order_by_score(),
+        )
+        .unwrap()[0];
+    let doc: tantivy::TantivyDocument = searcher.doc(addr).unwrap();
+    let payload = tantivy::schema::Value::as_str(&doc.get_first(schema.payload).unwrap())
+        .unwrap()
+        .to_string();
+    let a: crabfinder_core::Address = serde_json::from_str(&payload).unwrap();
+    assert_eq!(a.place_name.unwrap().fr.as_deref(), Some("Maupas"));
+    assert!(idx.join(LOCALITIES_FILENAME).exists());
+    let ls = read_localities(&idx).unwrap();
+    assert_eq!(report.localities_entries, ls.len());
+    let kinds: Vec<LocalityKind> = ls.iter().map(|l| l.kind).collect();
+    for k in [
+        LocalityKind::Municipality,
+        LocalityKind::PartOfMunicipality,
+        LocalityKind::Hamlet,
+        LocalityKind::Village,
+    ] {
+        assert!(kinds.contains(&k), "{k:?} missing from {kinds:?}");
+    }
+    let hamlet = ls.iter().find(|l| l.kind == LocalityKind::Hamlet).unwrap();
+    assert_eq!(hamlet.postal_codes, ["5580"]);
+    assert_eq!(hamlet.name.fr.as_deref(), Some("Maupas"));
+
+    // A broken places file is reported.
+    std::fs::write(&csv, "osm_id,place,name,lat,lon\nx,y,z,1,2\n").unwrap();
+    assert!(format!("{:#}", cli::run(&args).unwrap_err()).contains("places"));
+}
+
+#[test]
+fn house_numbers_are_indexed_uppercase() {
+    use crabfinder_indexer::index::CrabIndexWriter;
+    use crabfinder_test_support::AddressBuilder;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = CrabIndexWriter::create(dir.path()).unwrap();
+    w.add_address(&AddressBuilder::new("1", "1", "12a").build())
+        .unwrap();
+    w.commit().unwrap();
+    let (index, schema) = open(dir.path());
+    assert_eq!(count_term(&index, schema.house_number, "12A"), 1);
+    assert_eq!(count_term(&index, schema.house_number, "12a"), 0);
+}

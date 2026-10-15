@@ -7,20 +7,20 @@
     "error_count": 0,
     "overall": {
       "n": 3837,
-      "recall_at_1": 0.8352879854052645,
-      "recall_at_5": 0.8884545217617931,
-      "recall_at_10": 0.90747980192859,
-      "mrr": 0.8585809225957785,
-      "building_group_recall_at_1": 0.8407610112066719,
+      "recall_at_1": 0.8412822517591869,
+      "recall_at_5": 0.8908001042481105,
+      "recall_at_10": 0.9077404222048475,
+      "mrr": 0.8629526208885087,
+      "building_group_recall_at_1": 0.8412822517591869,
       "strict_match_rate": 0.7258274693771175
     },
     "latency": {
       "n": 3840,
-      "p50_ms": 1.639,
-      "p95_ms": 15.065042,
-      "p99_ms": 51.309542,
-      "mean_ms": 4.503478565624998,
-      "max_ms": 79.37704199999999
+      "p50_ms": 1.753583,
+      "p95_ms": 16.990875,
+      "p99_ms": 51.413624999999996,
+      "mean_ms": 4.665147178385424,
+      "max_ms": 86.308958
     },
     "by_region": {
       "BE-BRU": {
@@ -52,6 +52,24 @@
       }
     },
     "by_variant": {
+      "with_postal": {
+        "n": 500,
+        "recall_at_1": 0.996,
+        "recall_at_5": 0.998,
+        "recall_at_10": 0.998,
+        "mrr": 0.997,
+        "building_group_recall_at_1": 0.996,
+        "strict_match_rate": 1.0
+      },
+      "minimal": {
+        "n": 500,
+        "recall_at_1": 0.776,
+        "recall_at_5": 0.906,
+        "recall_at_10": 0.942,
+        "mrr": 0.8320055555555554,
+        "building_group_recall_at_1": 0.776,
+        "strict_match_rate": 1.0
+      },
       "box_number": {
         "n": 59,
         "recall_at_1": 0.9830508474576272,
@@ -61,13 +79,31 @@
         "building_group_recall_at_1": 0.9830508474576272,
         "strict_match_rate": 0.0
       },
-      "minimal": {
+      "messy_punctuation": {
         "n": 500,
-        "recall_at_1": 0.776,
-        "recall_at_5": 0.906,
-        "recall_at_10": 0.942,
-        "mrr": 0.8320055555555554,
-        "building_group_recall_at_1": 0.776,
+        "recall_at_1": 0.884,
+        "recall_at_5": 0.948,
+        "recall_at_10": 0.96,
+        "mrr": 0.9149412698412699,
+        "building_group_recall_at_1": 0.884,
+        "strict_match_rate": 0.006
+      },
+      "abbreviated": {
+        "n": 289,
+        "recall_at_1": 0.9896193771626297,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.9933679354094578,
+        "building_group_recall_at_1": 0.9896193771626297,
+        "strict_match_rate": 0.9896193771626297
+      },
+      "canonical": {
+        "n": 500,
+        "recall_at_1": 0.986,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.9921666666666666,
+        "building_group_recall_at_1": 0.986,
         "strict_match_rate": 1.0
       },
       "typo": {
@@ -88,23 +124,14 @@
         "building_group_recall_at_1": 0.15841584158415842,
         "strict_match_rate": 1.0
       },
-      "canonical": {
-        "n": 500,
-        "recall_at_1": 0.986,
+      "cross_language": {
+        "n": 306,
+        "recall_at_1": 0.9967320261437909,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.9921666666666666,
-        "building_group_recall_at_1": 0.986,
+        "mrr": 0.9983660130718954,
+        "building_group_recall_at_1": 0.9967320261437909,
         "strict_match_rate": 1.0
-      },
-      "abbreviated": {
-        "n": 289,
-        "recall_at_1": 0.9896193771626297,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 0.9933679354094578,
-        "building_group_recall_at_1": 0.9896193771626297,
-        "strict_match_rate": 0.9896193771626297
       },
       "casing": {
         "n": 500,
@@ -114,45 +141,9 @@
         "mrr": 0.9921666666666666,
         "building_group_recall_at_1": 0.986,
         "strict_match_rate": 1.0
-      },
-      "with_postal": {
-        "n": 500,
-        "recall_at_1": 0.996,
-        "recall_at_5": 0.998,
-        "recall_at_10": 0.998,
-        "mrr": 0.997,
-        "building_group_recall_at_1": 0.996,
-        "strict_match_rate": 1.0
-      },
-      "messy_punctuation": {
-        "n": 500,
-        "recall_at_1": 0.884,
-        "recall_at_5": 0.948,
-        "recall_at_10": 0.96,
-        "mrr": 0.9149412698412699,
-        "building_group_recall_at_1": 0.884,
-        "strict_match_rate": 0.006
-      },
-      "cross_language": {
-        "n": 306,
-        "recall_at_1": 0.9967320261437909,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 0.9983660130718954,
-        "building_group_recall_at_1": 0.9967320261437909,
-        "strict_match_rate": 1.0
       }
     },
     "by_language": {
-      "de": {
-        "n": 21,
-        "recall_at_1": 0.9047619047619048,
-        "recall_at_5": 0.9523809523809523,
-        "recall_at_10": 0.9523809523809523,
-        "mrr": 0.9285714285714286,
-        "building_group_recall_at_1": 0.9047619047619048,
-        "strict_match_rate": 0.7619047619047619
-      },
       "fr": {
         "n": 997,
         "recall_at_1": 0.8856569709127382,
@@ -170,9 +161,42 @@
         "mrr": 0.8488478369810967,
         "building_group_recall_at_1": 0.827826725403818,
         "strict_match_rate": 0.7206314243759178
+      },
+      "de": {
+        "n": 21,
+        "recall_at_1": 0.9047619047619048,
+        "recall_at_5": 0.9523809523809523,
+        "recall_at_10": 0.9523809523809523,
+        "mrr": 0.9285714285714286,
+        "building_group_recall_at_1": 0.9047619047619048,
+        "strict_match_rate": 0.7619047619047619
       }
     },
     "by_adversarial_category": {
+      "de_zone": {
+        "n": 9,
+        "recall_at_1": 0.7777777777777778,
+        "recall_at_5": 0.7777777777777778,
+        "recall_at_10": 0.7777777777777778,
+        "mrr": 0.7777777777777778,
+        "building_group_recall_at_1": 0.7777777777777778,
+        "strict_match_rate": 0.8888888888888888,
+        "match_levels": [
+          "street"
+        ]
+      },
+      "notability": {
+        "n": 30,
+        "recall_at_1": 0.9333333333333333,
+        "recall_at_5": 0.9333333333333333,
+        "recall_at_10": 0.9333333333333333,
+        "mrr": 0.9333333333333333,
+        "building_group_recall_at_1": 0.9333333333333333,
+        "strict_match_rate": 1.0,
+        "match_levels": [
+          "building"
+        ]
+      },
       "facilites": {
         "n": 6,
         "recall_at_1": 0.8333333333333334,
@@ -180,16 +204,10 @@
         "recall_at_10": 0.8333333333333334,
         "mrr": 0.8333333333333334,
         "building_group_recall_at_1": 0.8333333333333334,
-        "strict_match_rate": 0.8333333333333334
-      },
-      "notability": {
-        "n": 30,
-        "recall_at_1": 0.23333333333333334,
-        "recall_at_5": 0.6666666666666666,
-        "recall_at_10": 0.9333333333333333,
-        "mrr": 0.4241931216931217,
-        "building_group_recall_at_1": 0.9333333333333333,
-        "strict_match_rate": 1.0
+        "strict_match_rate": 0.8333333333333334,
+        "match_levels": [
+          "street"
+        ]
       },
       "special_chars": {
         "n": 10,
@@ -198,25 +216,10 @@
         "recall_at_10": 1.0,
         "mrr": 0.95,
         "building_group_recall_at_1": 0.9,
-        "strict_match_rate": 0.9
-      },
-      "de_zone": {
-        "n": 9,
-        "recall_at_1": 0.7777777777777778,
-        "recall_at_5": 0.7777777777777778,
-        "recall_at_10": 0.7777777777777778,
-        "mrr": 0.7777777777777778,
-        "building_group_recall_at_1": 0.7777777777777778,
-        "strict_match_rate": 0.8888888888888888
-      },
-      "hamlet": {
-        "n": 30,
-        "recall_at_1": 0.4,
-        "recall_at_5": 0.43333333333333335,
-        "recall_at_10": 0.43333333333333335,
-        "mrr": 0.4166666666666667,
-        "building_group_recall_at_1": 0.4,
-        "strict_match_rate": 0.9
+        "strict_match_rate": 0.9,
+        "match_levels": [
+          "address"
+        ]
       },
       "cross_language": {
         "n": 10,
@@ -225,7 +228,22 @@
         "recall_at_10": 1.0,
         "mrr": 0.9,
         "building_group_recall_at_1": 0.8,
-        "strict_match_rate": 1.0
+        "strict_match_rate": 1.0,
+        "match_levels": [
+          "address"
+        ]
+      },
+      "hamlet": {
+        "n": 30,
+        "recall_at_1": 0.4666666666666667,
+        "recall_at_5": 0.4666666666666667,
+        "recall_at_10": 0.4666666666666667,
+        "mrr": 0.4666666666666667,
+        "building_group_recall_at_1": 0.4666666666666667,
+        "strict_match_rate": 0.9,
+        "match_levels": [
+          "street"
+        ]
       }
     },
     "cross_language_recall_at_1": 0.9827586206896551,
@@ -256,5 +274,5 @@
       }
     ]
   },
-  "wall_clock_seconds": 2.1616697115000014
+  "wall_clock_seconds": 2.2392706456250053
 }

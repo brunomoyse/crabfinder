@@ -76,6 +76,7 @@ pub struct AddressBuilder {
     status: Status,
     lat: f64,
     lon: f64,
+    place: Option<MultilingualName>,
 }
 
 impl AddressBuilder {
@@ -95,6 +96,7 @@ impl AddressBuilder {
             status: Status::Current,
             lat: 50.8466,
             lon: 4.3525,
+            place: None,
         }
     }
 
@@ -150,6 +152,12 @@ impl AddressBuilder {
         self
     }
 
+    /// OSM place name (schema v8), as the `--places` join would attach it.
+    pub fn place(mut self, fr: Option<&str>, nl: Option<&str>) -> Self {
+        self.place = Some(name(fr, nl, None));
+        self
+    }
+
     pub fn at(mut self, lat: f64, lon: f64) -> Self {
         self.lat = lat;
         self.lon = lon;
@@ -189,6 +197,7 @@ impl AddressBuilder {
                 lon: self.lon,
             }),
             building_group_id,
+            place_name: self.place,
         }
     }
 }

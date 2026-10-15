@@ -111,6 +111,11 @@ pub struct Args {
     /// only lists BeSt municipalities, parts and postal areas.
     #[arg(long)]
     pub places: Option<PathBuf>,
+
+    /// Replace an index already in `--output`. Without it the indexer
+    /// refuses: Tantivy would append, doubling every address.
+    #[arg(long)]
+    pub overwrite: bool,
 }
 
 impl Args {
@@ -124,6 +129,7 @@ impl Args {
             print_samples: 0,
             notability_whitelist: None,
             places: None,
+            overwrite: false,
         }
     }
 }
@@ -230,6 +236,21 @@ fn status_drift(region: IngestRegion, report: &StreamReport) -> Option<f64> {
     ((actual - expected).abs() > DRIFT_THRESHOLD_PCT).then_some(actual)
 }
 
+/// Refuse (or, with `overwrite`, delete) an index already in `dir`.
+fn clear_existing_index(dir: &Path, overwrite: bool) -> Result<()> {
+    if !dir.join("meta.json").exists() {
+        return Ok(());
+    }
+    if !overwrite {
+        return Err(anyhow!(
+            "{dir:?} already holds an index; pass --overwrite to replace it \
+             (indexing into it would append a second copy of every address)"
+        ));
+    }
+    warn!(?dir, "--overwrite: deleting the existing index");
+    std::fs::remove_dir_all(dir).with_context(|| format!("deleting {dir:?}"))
+}
+
 /// Index every selected region of `args.best_dir` into `args.output`.
 pub fn run(args: &Args) -> Result<IndexReport> {
     info!("crabfinder-indexer starting; output={:?}", args.output);
@@ -262,6 +283,9 @@ pub fn run(args: &Args) -> Result<IndexReport> {
     // One writer for the whole run. Tantivy commits at the end so a partial
     // failure leaves no half-built index.
     let t_overall = Instant::now();
+    // Only once every input has loaded, so a bad flag never costs the old
+    // index.
+    clear_existing_index(&args.output, args.overwrite)?;
     let mut writer =
         CrabIndexWriter::create(&args.output).context("opening Tantivy index for write")?;
     // Schema v7: (street_id, postal_code) → median-number coords, shared

@@ -44,7 +44,11 @@ use thiserror::Error;
 ///        imputed instead of reprojected into France (`impute.rs`); payload
 ///        `Address::position_source` + FAST u64 `position_source` field so
 ///        `/reverse` skips street- and locality-level guesses.
-pub const SCHEMA_VERSION: u32 = 9;
+///   v10 — v2 Phase 10: raw `street_exact` field (each street name form,
+///        analyzed and space-joined) so a query naming a street exactly
+///        ("Markt") outranks streets that merely contain its words
+///        ("Grote Markt").
+pub const SCHEMA_VERSION: u32 = 10;
 
 /// Filename under the index directory.
 pub const SIDECAR_FILENAME: &str = ".crab-meta.json";

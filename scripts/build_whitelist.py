@@ -36,10 +36,13 @@ BASE = "http://127.0.0.1:8080"
 # subcategory values.
 RATIONALE: dict[str, tuple[str, str, float]] = {
     # 30 first-tier (existing adversarial)
-    "grand-place-bxl": ("Grand-Place / Grote Markt — Bruxelles", "UNESCO World Heritage; central square of Brussels.", 3.0),
+    # 3.5, one notch above the other 3.0 squares, for the three squares
+    # whose bare name means them: "Grand-Place" is Brussels (not Mons or
+    # Tournai), "Grote Markt" Antwerp, "Markt" Bruges (v2 Phase 10).
+    "grand-place-bxl": ("Grand-Place / Grote Markt — Bruxelles", "UNESCO World Heritage; central square of Brussels; the national landmark among the Grand-Places.", 3.5),
     "meir-anvers":     ("Meir — Anvers", "Iconic 1.6 km shopping axis through Antwerp city centre.", 3.0),
-    "grote-markt-anvers": ("Grote Markt — Anvers", "Antwerp's central square; cathedral + city hall.", 3.0),
-    "markt-bruges":    ("Markt — Brugge", "UNESCO old town main square (Belfort, Provinciaal Hof).", 3.0),
+    "grote-markt-anvers": ("Grote Markt — Anvers", "Antwerp's central square; cathedral + city hall.", 3.5),
+    "markt-bruges":    ("Markt — Brugge", "UNESCO old town main square (Belfort, Provinciaal Hof).", 3.5),
     "burg-bruges":     ("Burg — Brugge", "UNESCO old town civic square (Stadhuis, Heilig Bloed).", 3.0),
     "korenmarkt-gand": ("Korenmarkt — Gent", "Central market square; Sint-Niklaaskerk, Belfort access.", 3.0),
     "vrijdagmarkt-gand": ("Vrijdagmarkt — Gent", "Historic civic square; weekly market for centuries.", 3.0),

@@ -59,6 +59,11 @@ pub fn register_tokenizers(index: &Index) {
 
 pub const FIELD_BEST_ID: &str = "best_id";
 pub const FIELD_SEARCHABLE: &str = "searchable";
+/// Raw (not stored): each language form of the street name, analyzed with
+/// the `crab` chain and joined by single spaces (`"Grand-Place"` →
+/// `"grand place"`). Lets the query reward a street *named* exactly what
+/// the user typed over streets that only contain the words (schema v10).
+pub const FIELD_STREET_EXACT: &str = "street_exact";
 /// FAST f64, default 1.0. Boost multiplier applied to BM25 at query time
 /// via `TopDocs::tweak_score`. File 13 §6 (Option A); schema v4. Tantivy
 /// 0.26 has no f32 numeric field; we use f64 (8 bytes × 6.84M ≈ 55 MB,
@@ -86,6 +91,7 @@ pub struct CrabSchema {
     pub schema: Schema,
     pub best_id: Field,
     pub searchable: Field,
+    pub street_exact: Field,
     pub notability_score: Field,
     pub lat: Field,
     pub lon: Field,
@@ -135,6 +141,7 @@ impl CrabSchema {
 
         let best_id = sb.add_text_field(FIELD_BEST_ID, raw_stored.clone());
         let searchable = sb.add_text_field(FIELD_SEARCHABLE, text_opts);
+        let street_exact = sb.add_text_field(FIELD_STREET_EXACT, raw_opts.clone());
         let lat = sb.add_f64_field(FIELD_LAT, f64_stored_fast.clone());
         let lon = sb.add_f64_field(FIELD_LON, f64_stored_fast);
         // FAST-only (not stored) — read at query time via tweak_score.
@@ -158,6 +165,7 @@ impl CrabSchema {
             schema,
             best_id,
             searchable,
+            street_exact,
             notability_score,
             lat,
             lon,
@@ -179,6 +187,7 @@ impl CrabSchema {
 pub struct CrabIndexWriter {
     pub schema: CrabSchema,
     writer: IndexWriter,
+    analyzer: TextAnalyzer,
 }
 
 impl CrabIndexWriter {
@@ -195,7 +204,11 @@ impl CrabIndexWriter {
         let writer = index
             .writer::<TantivyDocument>(1_000_000_000) // 1 GB arena (file 07 §5)
             .context("constructing IndexWriter")?;
-        Ok(Self { schema, writer })
+        Ok(Self {
+            schema,
+            writer,
+            analyzer: build_text_analyzer(),
+        })
     }
 
     pub fn add_address(&mut self, addr: &Address) -> Result<()> {
@@ -228,6 +241,18 @@ impl CrabIndexWriter {
         for value in &tokens {
             doc.add_text(s.searchable, value);
         }
+        let n = &addr.street_name;
+        let mut exact: Vec<String> = [&n.fr, &n.nl, &n.de]
+            .into_iter()
+            .flatten()
+            .map(|name| analyzed_name(&mut self.analyzer, name))
+            .filter(|k| !k.is_empty())
+            .collect();
+        exact.sort();
+        exact.dedup();
+        for k in &exact {
+            doc.add_text(s.street_exact, k);
+        }
 
         doc.add_f64(s.lat, lat);
         doc.add_f64(s.lon, lon);
@@ -259,6 +284,20 @@ impl CrabIndexWriter {
         self.writer.commit().context("Tantivy commit")?;
         Ok(())
     }
+}
+
+/// `name`'s tokens under `analyzer`, joined by single spaces — the
+/// `street_exact` key.
+pub fn analyzed_name(analyzer: &mut TextAnalyzer, name: &str) -> String {
+    let mut stream = analyzer.token_stream(name);
+    let mut out = String::new();
+    while stream.advance() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&stream.token().text);
+    }
+    out
 }
 
 /// Build the multi-valued searchable token vector from an `Address`. Every

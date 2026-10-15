@@ -28,8 +28,8 @@ entries:
   - https://databrussels.be/id/streetname|3281|4
   - https://databrussels.be/id/streetname|3281|34
   - https://databrussels.be/id/streetname|3281|12
-  boost_multiplier: 3.0
-  rationale: UNESCO World Heritage; central square of Brussels.
+  boost_multiplier: 3.5
+  rationale: UNESCO World Heritage; central square of Brussels; the national landmark among the Grand-Places.
 - notability_id: nota-meir-anvers
   canonical_name: Meir — Anvers
   target_building_group_ids:
@@ -58,7 +58,7 @@ entries:
   - https://data.vlaanderen.be/id/straatnaam/|1064|54
   - https://data.vlaanderen.be/id/straatnaam/|1064|50
   - https://data.vlaanderen.be/id/straatnaam/|1064|58
-  boost_multiplier: 3.0
+  boost_multiplier: 3.5
   rationale: Antwerp's central square; cathedral + city hall.
 - notability_id: nota-markt-bruges
   canonical_name: Markt — Brugge
@@ -73,7 +73,7 @@ entries:
   - https://data.vlaanderen.be/id/straatnaam/|45658|31
   - https://data.vlaanderen.be/id/straatnaam/|45658|11
   - https://data.vlaanderen.be/id/straatnaam/|45658|19
-  boost_multiplier: 3.0
+  boost_multiplier: 3.5
   rationale: UNESCO old town main square (Belfort, Provinciaal Hof).
 - notability_id: nota-burg-bruges
   canonical_name: Burg — Brugge

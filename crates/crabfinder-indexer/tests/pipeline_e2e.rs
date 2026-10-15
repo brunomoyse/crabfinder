@@ -275,6 +275,31 @@ fn cli_run_builds_a_complete_index() {
     assert_eq!(searcher.search(&AllQuery, &Count).unwrap(), 5);
     assert_eq!(count_term(&index, schema.region, "BE-WAL"), 1);
     assert_eq!(count_term(&index, schema.box_number, "2"), 1);
+    // Schema v10: each street name form, analyzed and space-joined.
+    assert!(count_term(&index, schema.street_exact, "avenue louise") > 0);
+    assert!(count_term(&index, schema.street_exact, "louizalaan") > 0);
+    assert_eq!(count_term(&index, schema.street_exact, "louise"), 0);
+}
+
+#[test]
+fn cli_run_refuses_to_append_to_an_existing_index() {
+    let best = bundle_dir(&[BestBundle::brussels_sample()]);
+    let out = tempfile::tempdir().unwrap();
+    let mut args = Args::new(best.path(), out.path().join("idx"));
+    let first = cli::run(&args).unwrap().total().emitted;
+
+    let err = cli::run(&args).unwrap_err();
+    assert!(format!("{err:#}").contains("pass --overwrite"), "{err:#}");
+
+    // --overwrite replaces it: the same document count, not twice as many.
+    args.overwrite = true;
+    cli::run(&args).unwrap();
+    let (index, _) = open(&out.path().join("idx"));
+    let searcher = index.reader().unwrap().searcher();
+    assert_eq!(
+        searcher.search(&AllQuery, &Count).unwrap() as u64,
+        first as u64
+    );
 }
 
 #[test]
@@ -387,9 +412,12 @@ fn cli_run_attaches_osm_places_and_writes_localities() {
     assert_eq!(hamlet.postal_codes, ["5580"]);
     assert_eq!(hamlet.name.fr.as_deref(), Some("Maupas"));
 
-    // A broken places file is reported.
+    // A broken places file is reported, before the existing index is
+    // touched even with --overwrite.
     std::fs::write(&csv, "osm_id,place,name,lat,lon\nx,y,z,1,2\n").unwrap();
+    args.overwrite = true;
     assert!(format!("{:#}", cli::run(&args).unwrap_err()).contains("places"));
+    assert!(idx.join("meta.json").exists());
 }
 
 #[test]

@@ -11,8 +11,8 @@ use std::ops::Bound;
 use tantivy::collector::TopDocs;
 
 use tantivy::query::{
-    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query as TantivyQuery,
-    RangeQuery, TermQuery,
+    BooleanQuery, BoostQuery, ConstScoreQuery, FuzzyTermQuery, Occur, PhraseQuery,
+    Query as TantivyQuery, RangeQuery, TermQuery,
 };
 use tantivy::schema::IndexRecordOption;
 use tantivy::{DocId, Index, Score, SegmentReader, Term};
@@ -300,6 +300,11 @@ pub fn build_strict_query(
         // AND branch is the Must; phrases only add score on top of it (a
         // lone matching pair must never satisfy the query).
         text_branches.push((Occur::Must, and_q));
+        text_branches.extend(
+            exact_name_clauses(schema, slots)
+                .into_iter()
+                .map(|q| (Occur::Should, q)),
+        );
 
         let textual: Box<dyn TantivyQuery> = Box::new(BooleanQuery::new(text_branches));
         clauses.push((Occur::Must, textual));
@@ -311,6 +316,56 @@ pub fn build_strict_query(
         return None;
     }
     Some(Box::new(BooleanQuery::new(clauses)))
+}
+
+/// Score added when the street is named exactly a leading run of the query
+/// words (schema v10). Constant, so rare and common names gain alike; the
+/// size of one more matching word of `searchable`.
+pub const EXACT_NAME_BONUS: Score = 10.0;
+
+/// Leading runs of slots tried as whole street names, longest first, and
+/// the cap on the form combinations they expand to.
+const MAX_EXACT_KEYS: usize = 16;
+
+/// Should clauses rewarding a street named exactly `slots[..k]` for some
+/// `k` (any abbreviation form per slot): "Markt" → *Markt* over *Grote
+/// Markt*, "Kerkstraat Gent" → *Kerkstraat* over *Oude Kerkstraat*.
+fn exact_name_clauses(schema: &CrabSchema, slots: &[Vec<String>]) -> Vec<Box<dyn TantivyQuery>> {
+    let mut keys: Vec<String> = Vec::new();
+    for k in (1..=slots.len()).rev() {
+        let mut combos = vec![String::new()];
+        for forms in &slots[..k] {
+            combos = combos
+                .iter()
+                .flat_map(|c| {
+                    forms.iter().map(move |f| {
+                        if c.is_empty() {
+                            f.clone()
+                        } else {
+                            format!("{c} {f}")
+                        }
+                    })
+                })
+                .take(MAX_EXACT_KEYS)
+                .collect();
+        }
+        keys.extend(combos);
+        if keys.len() >= MAX_EXACT_KEYS {
+            break;
+        }
+    }
+    keys.truncate(MAX_EXACT_KEYS);
+    keys.sort();
+    keys.dedup();
+    keys.into_iter()
+        .map(|k| {
+            let tq = TermQuery::new(
+                Term::from_field_text(schema.street_exact, &k),
+                IndexRecordOption::Basic,
+            );
+            Box::new(ConstScoreQuery::new(Box::new(tq), EXACT_NAME_BONUS)) as Box<dyn TantivyQuery>
+        })
+        .collect()
 }
 
 /// Must clauses shared by every tier: house number (when the reading
@@ -609,6 +664,43 @@ pub fn build_fuzzy_query(
         return None;
     }
     Some(Box::new(BooleanQuery::new(clauses)))
+}
+
+#[cfg(test)]
+mod exact_name_tests {
+    use super::*;
+
+    fn slots(words: &[&[&str]]) -> Vec<Vec<String>> {
+        words
+            .iter()
+            .map(|forms| forms.iter().map(|f| f.to_string()).collect())
+            .collect()
+    }
+
+    fn keys(slots: &[Vec<String>]) -> Vec<String> {
+        let schema = CrabSchema::build();
+        exact_name_clauses(&schema, slots)
+            .iter()
+            .map(|q| {
+                let mut terms = Vec::new();
+                q.query_terms(&mut |t, _| terms.push(t.value().as_str().unwrap().to_string()));
+                terms.join("|")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_leading_run_and_abbreviation_form_is_a_key() {
+        let k = keys(&slots(&[&["av", "avenue"], &["louise"]]));
+        assert_eq!(k, ["av", "av louise", "avenue", "avenue louise"]);
+        assert!(keys(&[]).is_empty());
+    }
+
+    #[test]
+    fn keys_are_capped() {
+        let many: Vec<&[&str]> = vec![&["a", "b", "c"]; 6];
+        assert_eq!(keys(&slots(&many)).len(), MAX_EXACT_KEYS);
+    }
 }
 
 #[cfg(test)]

@@ -34,6 +34,9 @@ pub enum VariantType {
     HighHouseNumber,
     /// Commas between every part and a `B-` postal prefix.
     MessyPunctuation,
+    /// Street + number + the postal code of the nearest *other* postal
+    /// area: the neighbouring-commune mistake (v2 Phase 10).
+    WrongPostal,
 }
 
 impl VariantType {
@@ -49,6 +52,7 @@ impl VariantType {
             VariantType::BoxNumber => "box_number",
             VariantType::HighHouseNumber => "high_house_number",
             VariantType::MessyPunctuation => "messy_punctuation",
+            VariantType::WrongPostal => "wrong_postal",
         }
     }
 }

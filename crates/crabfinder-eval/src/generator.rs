@@ -27,7 +27,8 @@ use tantivy::schema::{Field, Value};
 use tantivy::{DocAddress, Index, TantivyDocument};
 use tracing::{info, warn};
 
-use crabfinder_core::{Address, MultilingualName, Region};
+use crabfinder_core::{Address, Coordinates, MultilingualName, Region};
+use crabfinder_indexer::localities::{postal_centres, read_localities};
 
 use crate::eval_set::{SyntheticCorpus, SyntheticEvalSet, SyntheticQuery, VariantType};
 
@@ -248,6 +249,34 @@ pub fn generate_mvp(
         next_id += 1;
     }
 
+    // 6c. Wrong postal code: every random sample again, with the code of
+    //     the nearest other postal area. Appended last so the ids above
+    //     match sets generated before this variant existed.
+    let postal_areas = postal_area_centres(index_path);
+    if postal_areas.is_empty() {
+        warn!("generator: no localities file; skipping wrong_postal");
+    }
+    for (_addr, address) in &random_addresses {
+        let Some(query_string) = build_wrong_postal(address, &postal_areas) else {
+            continue;
+        };
+        queries.push(SyntheticQuery {
+            id: format!("mvp-v1-{:06}", next_id),
+            sample_best_id: address.id.to_string(),
+            sample_building_group_id: address.building_group_id.0.clone(),
+            sample_region: region_iso(address.region).to_string(),
+            sample_street_primary_lang: street_primary_lang(&address.street_name)
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "?".to_string()),
+            variant_type: VariantType::WrongPostal,
+            boosted: false,
+            query_string,
+            expected_best_id: address.id.to_string(),
+            expected_building_group_id: address.building_group_id.0.clone(),
+        });
+        next_id += 1;
+    }
+
     // 7. Write JSON
     let set = SyntheticEvalSet {
         version: "v2".to_string(),
@@ -302,6 +331,7 @@ pub fn generate_mvp(
         "box_number",
         "high_house_number",
         "messy_punctuation",
+        "wrong_postal",
     ] {
         println!("  {v:<16}: {}", by_variant.get(v).copied().unwrap_or(0));
     }
@@ -569,6 +599,41 @@ pub(crate) fn build_high_house_number(addr: &Address) -> Option<String> {
         "{street} {} {} {muni}",
         addr.house_number, addr.postal_code
     ))
+}
+
+/// `(postal code, centre)` of every postal code in the index's localities
+/// side-file (`postal_centres`), sorted by code; empty without one.
+fn postal_area_centres(index_path: &Path) -> Vec<(String, (f64, f64))> {
+    let Ok(localities) = read_localities(index_path) else {
+        return Vec::new();
+    };
+    let mut out: Vec<_> = postal_centres(&localities).into_iter().collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// `{street} {hn} {postal}` with the postal code whose centre is nearest
+/// to `addr` among the other codes.
+pub(crate) fn build_wrong_postal(
+    addr: &Address,
+    postal_areas: &[(String, (f64, f64))],
+) -> Option<String> {
+    let Coordinates::Wgs84(p) = &addr.coordinates else {
+        return None;
+    };
+    let lang = street_primary_lang(&addr.street_name)?;
+    let street = pick_in_lang(&addr.street_name, lang)?;
+    // Equirectangular distance is plenty to rank neighbours.
+    let d2 = |(lat, lon): (f64, f64)| {
+        let dx = (lon - p.lon) * p.lat.to_radians().cos();
+        let dy = lat - p.lat;
+        dx * dx + dy * dy
+    };
+    let (code, _) = postal_areas
+        .iter()
+        .filter(|(code, _)| *code != addr.postal_code)
+        .min_by(|a, b| d2(a.1).total_cmp(&d2(b.1)).then_with(|| a.0.cmp(&b.0)))?;
+    Some(format!("{street} {} {code}", addr.house_number))
 }
 
 /// FNV-1a over `(seed, id)` — a stable per-address seed for the typo edit.
@@ -965,6 +1030,33 @@ mod tests {
         );
         addr.house_number = "A1".into();
         assert!(build_high_house_number(&addr).is_none());
+    }
+
+    #[test]
+    fn wrong_postal_takes_the_nearest_other_postal_area() {
+        let mut addr = make_addr(
+            Region::Flanders,
+            ml(None, Some("Meir"), None),
+            ml(None, Some("Antwerpen"), None),
+        );
+        addr.house_number = "12".into();
+        let areas = vec![
+            ("2000".to_string(), (51.0, 4.0)),   // its own: skipped
+            ("2018".to_string(), (51.02, 4.0)),  // 2.2 km
+            ("2600".to_string(), (51.01, 4.0)),  // 1.1 km: nearest
+            ("9000".to_string(), (51.05, 3.72)), // far
+        ];
+        assert_eq!(
+            build_wrong_postal(&addr, &areas).as_deref(),
+            Some("Meir 12 2600")
+        );
+        assert!(build_wrong_postal(&addr, &areas[..1]).is_none());
+        assert!(build_wrong_postal(&addr, &[]).is_none());
+        addr.coordinates = Coordinates::Lambert72(crabfinder_core::LambertCoord {
+            easting: 0.0,
+            northing: 0.0,
+        });
+        assert!(build_wrong_postal(&addr, &areas).is_none());
     }
 
     /// Optimal-string-alignment distance (Damerau with adjacent swaps).

@@ -89,6 +89,8 @@ pub enum MatchType {
     /// Carried so clients can rely on `match_type` always being present
     /// regardless of which endpoint produced the feature.
     Spatial,
+    /// Looked up by BeSt id (`/lookup`, v2 Phase 10).
+    Id,
 }
 
 impl MatchType {
@@ -98,6 +100,7 @@ impl MatchType {
             MatchType::Fuzzy => "fuzzy",
             MatchType::Typo => "typo",
             MatchType::Spatial => "spatial",
+            MatchType::Id => "id",
         }
     }
 }

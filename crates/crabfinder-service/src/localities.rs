@@ -9,13 +9,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use tantivy::Index;
 
-use crabfinder_indexer::localities::{Locality, LocalityKind, read_localities};
+use crabfinder_indexer::localities::{Locality, LocalityKind, postal_centres, read_localities};
 
 use crate::query_builder::analyze;
 
 #[derive(Debug, Default)]
 pub struct LocalityIndex {
     by_name: HashMap<String, Vec<Locality>>,
+    /// Postal code → centre (`postal_centres`), for the postal-code
+    /// relaxation (v2 Phase 10).
+    postal: HashMap<String, (f64, f64)>,
     len: usize,
 }
 
@@ -30,6 +33,7 @@ impl LocalityIndex {
     /// joined with a space (`"Han-sur-Lesse"` → `"han sur lesse"`).
     pub fn from_localities(index: &Index, localities: Vec<Locality>) -> Self {
         let len = localities.len();
+        let postal = postal_centres(&localities);
         let mut by_name: HashMap<String, Vec<Locality>> = HashMap::new();
         for l in localities {
             let mut keys: Vec<String> = [&l.name.fr, &l.name.nl, &l.name.de]
@@ -51,7 +55,11 @@ impl LocalityIndex {
                     .then(b.address_count.cmp(&a.address_count))
             });
         }
-        Self { by_name, len }
+        Self {
+            by_name,
+            postal,
+            len,
+        }
     }
 
     /// Load `localities-v1.json` from `index_dir`; empty when absent.
@@ -84,6 +92,11 @@ impl LocalityIndex {
                 .then(b.address_count.cmp(&a.address_count))
         });
         out
+    }
+
+    /// Centre of postal code `pc`, when the index knows it.
+    pub fn postal_centre(&self, pc: &str) -> Option<(f64, f64)> {
+        self.postal.get(pc).copied()
     }
 
     pub fn len(&self) -> usize {

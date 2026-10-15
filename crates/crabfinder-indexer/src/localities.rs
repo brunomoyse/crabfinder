@@ -260,6 +260,41 @@ pub fn read_localities(index_dir: &Path) -> Result<Vec<Locality>> {
     Ok(file.localities)
 }
 
+/// Centre of every postal code, address-weighted: the mean of its postal
+/// areas; else of the municipalities and parts of municipality it is the
+/// only code of; else of every municipality listing it. (A postal area is
+/// only recorded when its name differs from its municipality's, so most
+/// single-code municipalities have none.)
+pub fn postal_centres(localities: &[Locality]) -> HashMap<String, (f64, f64)> {
+    let tiers: [&dyn Fn(&Locality) -> bool; 3] = [
+        &|l| l.kind == LocalityKind::PostalArea,
+        &|l| {
+            matches!(
+                l.kind,
+                LocalityKind::Municipality | LocalityKind::PartOfMunicipality
+            ) && l.postal_codes.len() == 1
+        },
+        &|l| l.kind == LocalityKind::Municipality,
+    ];
+    let mut out: HashMap<String, (f64, f64)> = HashMap::new();
+    for in_tier in tiers {
+        let mut acc: HashMap<&str, (f64, f64, f64)> = HashMap::new();
+        for l in localities.iter().filter(|l| in_tier(l)) {
+            let w = f64::from(l.address_count.max(1));
+            for pc in l.postal_codes.iter().filter(|pc| !out.contains_key(*pc)) {
+                let e = acc.entry(pc).or_default();
+                e.0 += l.lat * w;
+                e.1 += l.lon * w;
+                e.2 += w;
+            }
+        }
+        for (pc, (lat, lon, w)) in acc {
+            out.insert(pc.to_string(), (lat / w, lon / w));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,5 +454,48 @@ mod tests {
         ] {
             assert!(!k.as_str().is_empty());
         }
+    }
+
+    fn loc(kind: LocalityKind, codes: &[&str], lat: f64, lon: f64, n: u32) -> Locality {
+        Locality {
+            kind,
+            name: ml("x"),
+            lat,
+            lon,
+            postal_codes: codes.iter().map(|c| c.to_string()).collect(),
+            address_count: n,
+            region: None,
+        }
+    }
+
+    #[test]
+    fn postal_centres_prefer_postal_areas_then_single_code_localities() {
+        use LocalityKind::*;
+        let ls = vec![
+            // 2000: a postal area wins over the multi-code municipality.
+            loc(PostalArea, &["2000"], 51.22, 4.40, 10),
+            loc(Municipality, &["2000", "2018", "2600"], 51.20, 4.42, 100),
+            // 2018: two single-code parts, address-weighted.
+            loc(PartOfMunicipality, &["2018"], 51.0, 4.0, 1),
+            loc(PartOfMunicipality, &["2018"], 51.3, 4.3, 2),
+            // 1160: its municipality's only code.
+            loc(Municipality, &["1160"], 50.82, 4.42, 22_000),
+            // OSM places never count.
+            loc(Village, &["1160"], 49.0, 3.0, 5),
+        ];
+        let c = postal_centres(&ls);
+        let near = |pc: &str, (lat, lon): (f64, f64)| {
+            let (a, b) = c[pc];
+            assert!(
+                (a - lat).abs() < 1e-9 && (b - lon).abs() < 1e-9,
+                "{pc}: {a},{b}"
+            );
+        };
+        near("2000", (51.22, 4.40));
+        near("2018", (51.2, 4.2));
+        near("1160", (50.82, 4.42));
+        // 2600: only the multi-code municipality lists it.
+        near("2600", (51.20, 4.42));
+        assert_eq!(c.len(), 4);
     }
 }

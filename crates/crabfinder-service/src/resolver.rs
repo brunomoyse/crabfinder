@@ -33,7 +33,7 @@ use crate::hydrate::{HydratedHit, hydrate};
 use crate::localities::{Province, SharedLocalityIndex};
 use crate::mid_street::{MidStreetIndex, street_key_from_bgid};
 use crate::query_builder::{
-    Area, FilterParams, analyze, build_area_query, build_fuzzy_query, build_strict_query,
+    Area, BBox, FilterParams, analyze, build_area_query, build_fuzzy_query, build_strict_query,
     build_typo_query, search_score_only, search_with_notability, searchable_field, slot_is_unknown,
 };
 use crate::spatial::haversine_m;
@@ -53,8 +53,13 @@ pub struct AddressQuery {
     /// Box / unit hint (`bte 3`). Not a filter: a unit whose box matches
     /// becomes its building's representative (`prefer_box`).
     pub box_number: Option<String>,
-    /// 4-digit Belgian postal code as a string.
+    /// 4-digit Belgian postal code as a string. Part of the address: when
+    /// nothing matches strictly inside it, the resolver retries around it
+    /// (`Confidence::AdjacentCommune`, v2 Phase 10) unless
+    /// `postal_code_strict`.
     pub postal_code: Option<String>,
+    /// Treat `postal_code` as a hard filter (`/geocode?postal_code=`).
+    pub postal_code_strict: bool,
     /// Indexed ISO region form (`BE-BRU` / `BE-VLG` / `BE-WAL`). Optional
     /// hard filter — passed straight through to the Tantivy MUST clause.
     pub region_filter: Option<String>,
@@ -62,6 +67,8 @@ pub struct AddressQuery {
     /// re-scored after retrieval by exponential distance decay
     /// (`focus::apply_focus_decay`).
     pub focus_point: Option<(f64, f64)>,
+    /// Decay length of `focus_point`, metres; `None` = `FOCUS_HALF_LIFE_M`.
+    pub focus_decay_m: Option<f64>,
     /// Other readings of the same free text (parser alternatives, Phase 2),
     /// tried in order when this one has no strict-tier hit. Alternatives
     /// never carry alternatives of their own.
@@ -69,6 +76,8 @@ pub struct AddressQuery {
     /// Hard geographic restriction. Set by the resolver itself on the
     /// locality-suffix reading (`locality_suffix_reading`, Phase 6).
     pub area: Option<Area>,
+    /// Caller's hard rectangle (`/geocode?bbox=`, v2 Phase 10).
+    pub bbox: Option<BBox>,
 }
 
 impl AddressQuery {
@@ -126,8 +135,10 @@ pub enum Confidence {
     /// house number was used (`house_number_delta == Some(0)`) it matched
     /// exactly; otherwise the result is street-level.
     FuzzyStreet,
-    /// Street found only by widening to a neighbouring commune.
-    /// _Reserved for post-v1._
+    /// Nothing matched inside the given postal code: found around it
+    /// instead, nearest first (v2 Phase 10). `house_number_delta` tells
+    /// whether the number matched (`0`), was approximated, or was ignored
+    /// (absent).
     AdjacentCommune,
     /// The query only names a locality (village, hamlet, municipality…):
     /// candidates are the buildings around its centre, and `resolve()`
@@ -162,7 +173,7 @@ pub enum FallbackReason {
     HouseNumberOutOfRange,
     /// Strict query returned zero hits; fuzzy fallback succeeded.
     StreetSpellingFuzzy,
-    /// Street matched only in an adjacent commune (post-v1).
+    /// Found outside the given postal code (`Confidence::AdjacentCommune`).
     PostalCodeMismatch,
     /// No match at all.
     NoMatch,
@@ -536,24 +547,119 @@ fn search_readings(
     }
     let readings = std::iter::once(query).chain(query.alternatives.iter());
     for (reading, q) in readings.enumerate() {
-        if let Some(set) = search_tiers(q, opts, ctx, true)? {
+        if let Some(set) = search_tiers(q, opts, ctx, Tier::is_strict)? {
+            // The street exists in the postal code but not the number: the
+            // exact number just across the postal boundary may be the
+            // likelier address (`prefer_exact_nearby`).
+            if matches!(set.tier, Tier::Street | Tier::Nearest)
+                && q.house_number.is_some()
+                && let Some(near) =
+                    search_postal_relaxed(q, opts, ctx, |t| matches!(t, Tier::Exact | Tier::Typo))?
+                && prefer_exact_nearby(&set, &near)
+            {
+                return Ok(CandidateSet { reading, ..near });
+            }
+            // Another reading (the postal code read as a house number)
+            // that doesn't match that number exactly is weaker evidence
+            // than the street near the postal code.
+            if reading > 0
+                && !matches!(set.tier, Tier::Exact | Tier::Typo)
+                && let Some(near) = search_postal_relaxed(query, opts, ctx, Tier::is_strict)?
+            {
+                return Ok(near);
+            }
             return Ok(CandidateSet { reading, ..set });
         }
     }
     for r in locality_suffix_readings(query, ctx) {
-        if let Some(set) = search_tiers(&r, opts, ctx, true)? {
+        if let Some(set) = search_tiers(&r, opts, ctx, Tier::is_strict)? {
             return Ok(set);
         }
     }
-    Ok(search_tiers(query, opts, ctx, false)?.unwrap_or_else(CandidateSet::empty))
+    if let Some(set) = search_postal_relaxed(query, opts, ctx, Tier::is_strict)? {
+        return Ok(set);
+    }
+    Ok(search_tiers(query, opts, ctx, |t| !t.is_strict())?.unwrap_or_else(CandidateSet::empty))
 }
 
-/// Run the strict (`strict == true`) or OR tiers of one reading.
+/// A nearest-number answer this far from the requested number loses to
+/// the exact number on a namesake street across the postal boundary.
+const NEAREST_TRUST_DELTA: i32 = 20;
+
+/// Whether `exact` (the exact number found around the postal code) beats
+/// `inside` (the street-level or nearest-number match inside it): always
+/// for a street-level match; for a nearest number when the exact one is
+/// on the same street object (a street crossing the boundary) or the
+/// approximation is off by `NEAREST_TRUST_DELTA` or more.
+fn prefer_exact_nearby(inside: &CandidateSet, exact: &CandidateSet) -> bool {
+    let (Some(i), Some(e)) = (inside.candidates.first(), exact.candidates.first()) else {
+        return false;
+    };
+    if inside.tier == Tier::Street {
+        return true;
+    }
+    street_key_from_bgid(&i.hit.building_group_id) == street_key_from_bgid(&e.hit.building_group_id)
+        || i.house_number_delta
+            .is_none_or(|d| d.abs() >= NEAREST_TRUST_DELTA)
+}
+
+/// Radius around the postal code's centre searched when nothing matches
+/// inside it, and the distance decay ranking those hits.
+const POSTAL_RELAX_RADIUS_M: f64 = 20_000.0;
+const POSTAL_RELAX_DECAY_M: f64 = 5_000.0;
+
+/// The `tiers` of `query` without its postal code, inside
+/// `POSTAL_RELAX_RADIUS_M` of the code's centre and nearest first,
+/// labelled `AdjacentCommune` / `PostalCodeMismatch`. `None` when the query
+/// has no (relaxable, known) postal code or nothing matches.
+fn search_postal_relaxed(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    tiers: impl Fn(Tier) -> bool,
+) -> tantivy::Result<Option<CandidateSet>> {
+    if query.postal_code_strict || query.area.is_some() {
+        return Ok(None);
+    }
+    let Some((lat, lon)) = query
+        .postal_code
+        .as_deref()
+        .and_then(|pc| ctx.localities.postal_centre(pc))
+    else {
+        return Ok(None);
+    };
+    let relaxed = AddressQuery {
+        postal_code: None,
+        area: Some(Area {
+            lat,
+            lon,
+            radius_m: POSTAL_RELAX_RADIUS_M,
+        }),
+        focus_point: query.focus_point.or(Some((lat, lon))),
+        focus_decay_m: if query.focus_point.is_some() {
+            query.focus_decay_m
+        } else {
+            Some(POSTAL_RELAX_DECAY_M)
+        },
+        alternatives: Vec::new(),
+        ..query.clone()
+    };
+    let Some(mut set) = search_tiers(&relaxed, opts, ctx, tiers)? else {
+        return Ok(None);
+    };
+    for c in &mut set.candidates {
+        c.confidence = Confidence::AdjacentCommune;
+        c.fallback_reason = Some(FallbackReason::PostalCodeMismatch);
+    }
+    Ok(Some(set))
+}
+
+/// Run the `tiers` (of `Tier::ORDER`) of one reading, in order.
 fn search_tiers(
     query: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
-    strict: bool,
+    tiers: impl Fn(Tier) -> bool,
 ) -> tantivy::Result<Option<CandidateSet>> {
     let slots: Vec<Vec<String>> = query
         .street_tokens
@@ -565,6 +671,7 @@ fn search_tiers(
         region: query.region_filter.clone(),
         postal_code: query.postal_code.clone(),
         area: query.area,
+        bbox: query.bbox,
     };
     let parsed = |with_hn: bool| ParsedQuery {
         raw_query: String::new(),
@@ -598,7 +705,7 @@ fn search_tiers(
         }
     };
 
-    for tier in Tier::ORDER.into_iter().filter(|t| t.is_strict() == strict) {
+    for tier in Tier::ORDER.into_iter().filter(|t| tiers(*t)) {
         let enabled = match tier {
             // Nearest is not a street approximation: it stays on with
             // mid-street off (design-batch-geocoding §236).
@@ -680,9 +787,11 @@ fn search_tiers(
     Ok(None)
 }
 
-/// The caller's `focus_point` with the standard decay length.
+/// The query's `focus_point` with its decay length.
 fn user_focus(query: &AddressQuery) -> Option<((f64, f64), f64)> {
-    query.focus_point.map(|p| (p, FOCUS_HALF_LIFE_M))
+    query
+        .focus_point
+        .map(|p| (p, query.focus_decay_m.unwrap_or(FOCUS_HALF_LIFE_M)))
 }
 
 /// Materialise a tier's raw hits into ranked, labelled candidates.
@@ -960,6 +1069,7 @@ fn search_locality(
             lon: loc.lon,
             radius_m,
         }),
+        bbox: query.bbox,
     };
     let searcher = ctx.reader.searcher();
     // Area-bounded and re-ranked by distance: see `search_tiers`.

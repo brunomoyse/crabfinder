@@ -11,6 +11,7 @@ use crabfinder_parser::ParsedQuery;
 use crate::AppState;
 use crate::dedup::{MatchType, RAW_HIT_CAP};
 use crate::focus::parse_focus_point;
+use crate::query_builder::BBox;
 use crate::resolver::{AddressQuery, SearchOptions, Tier, search};
 
 use super::blocking;
@@ -58,6 +59,9 @@ pub struct GeocodeParams {
     /// Optional `"lat,lng"` hint; scores decay exponentially with distance.
     #[serde(default)]
     pub focus_point: Option<String>,
+    /// Hard rectangle `min_lon,min_lat,max_lon,max_lat` (v2 Phase 10).
+    #[serde(default)]
+    pub bbox: Option<String>,
 }
 
 fn default_limit() -> usize {
@@ -252,6 +256,14 @@ pub async fn geocode(
         ),
         None => None,
     };
+    let bbox = match params.bbox.as_deref() {
+        Some(raw) => Some(BBox::parse(raw).ok_or_else(|| {
+            ServiceError::BadQuery(format!(
+                "invalid bbox '{raw}' (expected min_lon,min_lat,max_lon,max_lat)"
+            ))
+        })?),
+        None => None,
+    };
     let focus_point = match params.focus_point.as_deref() {
         Some(raw) => Some(parse_focus_point(raw).ok_or_else(|| {
             ServiceError::BadQuery(format!(
@@ -278,8 +290,10 @@ pub async fn geocode(
     query.for_each_reading(|r| {
         if postal_override.is_some() {
             r.postal_code.clone_from(&postal_override);
+            r.postal_code_strict = true;
         }
         r.region_filter.clone_from(&region_filter);
+        r.bbox = bbox;
         r.focus_point = focus_point;
     });
     // At least two candidates, so the ambiguity check has a runner-up.

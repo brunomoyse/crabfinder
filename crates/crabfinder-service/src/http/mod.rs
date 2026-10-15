@@ -9,6 +9,7 @@ pub mod error;
 pub mod feature;
 pub mod geocode;
 pub mod health;
+pub mod lookup;
 pub mod reverse;
 
 use std::sync::Arc;
@@ -86,6 +87,7 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
             get(building::building_units),
         )
         .route("/reverse", get(reverse::reverse))
+        .route("/lookup", get(lookup::lookup))
         .route_layer(middleware::from_fn_with_state(
             guard_for(opts.request_timeout),
             guard,

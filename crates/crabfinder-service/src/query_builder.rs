@@ -115,6 +115,50 @@ pub struct FilterParams {
     pub postal_code: Option<String>,
     /// Bounding box around a named locality (v2 Phase 6).
     pub area: Option<Area>,
+    /// Caller's rectangle (`/geocode?bbox=`, v2 Phase 10).
+    pub bbox: Option<BBox>,
+}
+
+/// A lat/lon rectangle, filtered on the FAST `lat` / `lon` fields.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BBox {
+    pub min_lat: f64,
+    pub max_lat: f64,
+    pub min_lon: f64,
+    pub max_lon: f64,
+}
+
+impl BBox {
+    /// Parse `min_lon,min_lat,max_lon,max_lat` (the GeoJSON / OSM order).
+    /// `None` unless all four are finite, in range and min < max.
+    pub fn parse(raw: &str) -> Option<Self> {
+        let v: Vec<f64> = raw
+            .split(',')
+            .map(|p| p.trim().parse::<f64>())
+            .collect::<Result<_, _>>()
+            .ok()?;
+        let [min_lon, min_lat, max_lon, max_lat] = v[..] else {
+            return None;
+        };
+        let lat_ok = |x: f64| (-90.0..=90.0).contains(&x);
+        let lon_ok = |x: f64| (-180.0..=180.0).contains(&x);
+        (lat_ok(min_lat)
+            && lat_ok(max_lat)
+            && lon_ok(min_lon)
+            && lon_ok(max_lon)
+            && min_lat < max_lat
+            && min_lon < max_lon)
+            .then_some(Self {
+                min_lat,
+                max_lat,
+                min_lon,
+                max_lon,
+            })
+    }
+
+    pub fn contains(&self, lat: f64, lon: f64) -> bool {
+        (self.min_lat..=self.max_lat).contains(&lat) && (self.min_lon..=self.max_lon).contains(&lon)
+    }
 }
 
 /// A circle around a point, filtered as its bounding box on the FAST
@@ -141,9 +185,12 @@ impl Area {
     }
 }
 
-/// Must clauses keeping `lat` / `lon` inside `area`'s bounding box.
-fn area_clauses(schema: &CrabSchema, area: &Area) -> [Box<dyn TantivyQuery>; 2] {
-    let (lat0, lat1, lon0, lon1) = area.bounds();
+/// Must clauses keeping `lat` / `lon` inside `(min_lat, max_lat, min_lon,
+/// max_lon)`.
+fn bounds_clauses(
+    schema: &CrabSchema,
+    (lat0, lat1, lon0, lon1): (f64, f64, f64, f64),
+) -> [Box<dyn TantivyQuery>; 2] {
     let range = |field, lo, hi| -> Box<dyn TantivyQuery> {
         Box::new(RangeQuery::new(
             Bound::Included(Term::from_field_f64(field, lo)),
@@ -292,7 +339,12 @@ fn push_filters(
         clauses.push((Occur::Must, tq));
     }
     if let Some(area) = &filters.area {
-        for q in area_clauses(schema, area) {
+        for q in bounds_clauses(schema, area.bounds()) {
+            clauses.push((Occur::Must, q));
+        }
+    }
+    if let Some(b) = &filters.bbox {
+        for q in bounds_clauses(schema, (b.min_lat, b.max_lat, b.min_lon, b.max_lon)) {
             clauses.push((Occur::Must, q));
         }
     }

@@ -319,9 +319,9 @@ mod tests {
 
     #[test]
     fn quantile_single_value_is_that_value() {
-        let v = vec![3.14_f32];
-        assert!((pick_quantile(&v, 0.25) - 3.14).abs() < 1e-6);
-        assert!((pick_quantile(&v, 0.95) - 3.14).abs() < 1e-6);
+        let v = vec![2.75_f32];
+        assert!((pick_quantile(&v, 0.25) - 2.75).abs() < 1e-6);
+        assert!((pick_quantile(&v, 0.95) - 2.75).abs() < 1e-6);
     }
 
     #[test]

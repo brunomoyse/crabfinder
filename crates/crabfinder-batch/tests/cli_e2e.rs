@@ -58,17 +58,32 @@ fn default_path_does_median_fallback() {
 }
 
 #[test]
-fn no_mid_street_changes_coords_but_not_confidence_today() {
-    // Pins the pre-v2 behaviour; Phase 1 makes the flag skip the tier.
+fn no_mid_street_skips_street_level_fallbacks() {
     let ti = index();
     let mut args = Args::for_index(ti.path());
     args.no_mid_street = true;
-    let (_, body) = run_csv(&args, &format!("{HEADER}1,Avenue Louise,999,1050\n"));
+    let (_, body) = run_csv(
+        &args,
+        &format!(
+            "{HEADER}1,Avenue Louise,999,1050
+2,Avenue Louise,10,1050
+3,Avenue Louise,,1050
+"
+        ),
+    );
     let (h, rows) = parse_csv(&body);
-    assert_eq!(col(&h, &rows[0], "confidence"), "median_street");
-    let lat: f64 = col(&h, &rows[0], "lat").parse().unwrap();
-    // Some Louise building's own coordinates (10/20/30 span 50.830–50.832).
-    assert!((50.8299..=50.8321).contains(&lat), "{lat}");
+    assert_eq!(col(&h, &rows[0], "confidence"), "not_found");
+    assert_eq!(col(&h, &rows[0], "lat"), "");
+    assert_eq!(
+        col(&h, &rows[1], "confidence"),
+        "exact",
+        "exact matches are unaffected"
+    );
+    assert_eq!(
+        col(&h, &rows[2], "confidence"),
+        "not_found",
+        "no number → street-level only"
+    );
 }
 
 #[test]

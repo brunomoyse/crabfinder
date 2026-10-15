@@ -973,8 +973,8 @@ mod tests {
         for (i, row) in d.iter_mut().enumerate() {
             row[0] = i;
         }
-        for j in 0..=b.len() {
-            d[0][j] = j;
+        for (j, cell) in d[0].iter_mut().enumerate() {
+            *cell = j;
         }
         for i in 1..=a.len() {
             for j in 1..=b.len() {

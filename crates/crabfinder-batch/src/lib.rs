@@ -25,7 +25,7 @@ use tracing::{info, warn};
 use crabfinder_service::batch::dedup::{ClosureResolver, dedup_then_resolve};
 use crabfinder_service::batch::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
 use crabfinder_service::query_builder::analyze;
-use crabfinder_service::resolver::{AddressQuery, resolve};
+use crabfinder_service::resolver::{AddressQuery, SearchOptions, resolve_with};
 use crabfinder_service::{AppState, LoadOptions};
 
 #[derive(Debug, Clone, Parser)]
@@ -56,8 +56,9 @@ pub struct Args {
     #[arg(long)]
     pub delimiter: Option<char>,
 
-    /// Disable the `Confidence::MedianStreet` fallback. Same toggle as the
-    /// HTTP endpoint's `mid_street_fallback=false` option.
+    /// Disable the street-level fallbacks: rows whose house number can't
+    /// be matched come back `not_found`. Same toggle as the HTTP
+    /// endpoint's `mid_street_fallback=false` option.
     #[arg(long, default_value_t = false)]
     pub no_mid_street: bool,
 
@@ -113,7 +114,6 @@ fn non_dash(p: Option<&Path>) -> Option<&Path> {
 pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Result<Summary> {
     let mut opts = LoadOptions::new(&args.index);
     opts.abbreviation_dict = args.abbreviation_dict.clone();
-    opts.mid_street = !args.no_mid_street;
     opts.spatial = false;
     let state = AppState::load(&opts)?;
 
@@ -131,7 +131,11 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
         .build()
         .context("configuring rayon thread pool")?;
     let ctx = state.resolver_context();
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve(q, &ctx));
+    let search_opts = SearchOptions {
+        mid_street_fallback: !args.no_mid_street,
+        ..SearchOptions::default()
+    };
+    let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &search_opts, &ctx));
     let make_query = |row: &InputRow| AddressQuery {
         street_tokens: analyze(&state.index, &row.street),
         house_number: row.house_number.clone(),

@@ -83,12 +83,13 @@ async fn json_payload_over_10000_is_413() {
 }
 
 #[tokio::test]
-async fn mid_street_fallback_disabled_changes_coords_not_confidence() {
-    // Pins the pre-v2 behaviour: an empty mid-street table only changes
-    // the coordinates. Phase 1 makes the option skip the tier instead.
+async fn mid_street_fallback_disabled_yields_not_found() {
     let app = app();
     let body = serde_json::json!({
-        "addresses": [{"id": "b", "street": "Avenue Louise", "house_number": "999", "postal_code": "1050"}],
+        "addresses": [
+            {"id": "b", "street": "Avenue Louise", "house_number": "999", "postal_code": "1050"},
+            {"id": "a", "street": "Avenue Louise", "house_number": "10", "postal_code": "1050"},
+        ],
         "options": {"mid_street_fallback": false}
     });
     let (status, _, body) = app
@@ -96,10 +97,9 @@ async fn mid_street_fallback_disabled_changes_coords_not_confidence() {
         .await;
     assert_eq!(status, StatusCode::OK);
     let (h, rows) = parse_csv(&body);
-    assert_eq!(col(&h, &rows[0], "confidence"), "median_street");
-    let lat: f64 = col(&h, &rows[0], "lat").parse().unwrap();
-    // Some Louise building's own coordinates (10/20/30 span 50.830–50.832).
-    assert!((50.8299..=50.8321).contains(&lat), "{lat}");
+    assert_eq!(col(&h, &rows[0], "confidence"), "not_found");
+    assert_eq!(col(&h, &rows[0], "fallback_reason"), "no_match");
+    assert_eq!(col(&h, &rows[1], "confidence"), "exact");
 }
 
 #[tokio::test]

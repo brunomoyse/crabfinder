@@ -2,21 +2,18 @@
 
 use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
-use tantivy::TantivyDocument;
 use tracing::warn;
 
 use crabfinder_parser::ParsedQuery;
 
 use crate::AppState;
-use crate::dedup::{MatchType, RAW_HIT_CAP, RawHit, group_by_building, raw_limit};
-use crate::focus::{apply_focus_decay, parse_focus_point};
-use crate::query_builder::{
-    FilterParams, analyze, build_fuzzy_query, build_strict_query, search_score_only,
-    search_with_notability, searchable_field,
-};
+use crate::dedup::{MatchType, RAW_HIT_CAP};
+use crate::focus::parse_focus_point;
+use crate::query_builder::analyze;
+use crate::resolver::{AddressQuery, SearchOptions, Tier, search};
 
 use super::error::{ApiQuery, ServiceError};
-use super::feature::{Feature, hydrate_feature};
+use super::feature::Feature;
 
 #[derive(Debug, Deserialize)]
 pub struct GeocodeParams {
@@ -110,7 +107,6 @@ pub async fn geocode(
     }
     let limit = params.limit.clamp(1, 100);
     let expand = params.expand;
-    let raw_limit = raw_limit(limit, expand);
 
     let region_filter = match params.region.as_deref() {
         Some(raw) => Some(
@@ -124,10 +120,6 @@ pub async fn geocode(
         ),
         None => None,
     };
-    let filters = FilterParams {
-        region: region_filter,
-        postal_code: params.postal_code.as_deref().map(|s| s.trim().to_string()),
-    };
     let focus_point = match params.focus_point.as_deref() {
         Some(raw) => Some(parse_focus_point(raw).ok_or_else(|| {
             ServiceError::BadQuery(format!(
@@ -138,106 +130,50 @@ pub async fn geocode(
     };
 
     let parsed = crabfinder_parser::parse(q);
-    let slots: Vec<Vec<String>> = parsed
-        .street_tokens
-        .iter()
-        .flat_map(|t| analyze(&s.index, t))
-        .map(|t| s.abbrev.expand(&t))
-        .collect();
-
-    let field = searchable_field(&s.schema);
-    let searcher = s.reader.searcher();
-    let run = |q: &dyn tantivy::query::Query| {
-        if s.notability_enabled {
-            search_with_notability(&searcher, q, raw_limit, s.addr_counts.clone())
-        } else {
-            search_score_only(&searcher, q, raw_limit)
-        }
+    let query = AddressQuery {
+        street_tokens: parsed
+            .street_tokens
+            .iter()
+            .flat_map(|t| analyze(&s.index, t))
+            .collect(),
+        house_number: parsed.house_number.clone(),
+        // An explicit `postal_code` param overrides the one parsed from q.
+        postal_code: params
+            .postal_code
+            .as_deref()
+            .map(|p| p.trim().to_string())
+            .or_else(|| parsed.postal_code.clone()),
+        region_filter,
+        focus_point,
     };
-
-    // Strict pass, then the OR fallback only when strict returned nothing.
-    let mut top_level_mt = MatchType::Strict;
-    let mut top_docs = match build_strict_query(field, &slots, &parsed, &s.schema, &filters) {
-        Some(q) => {
-            run(q.as_ref()).map_err(|e| ServiceError::internal("Tantivy search (strict)", e))?
-        }
-        None => Vec::new(),
+    let opts = SearchOptions {
+        limit,
+        expand,
+        mid_street_fallback: true,
     };
-    if top_docs.is_empty()
-        && let Some(q) = build_fuzzy_query(field, &slots, &parsed, &s.schema, &filters)
-    {
-        top_docs =
-            run(q.as_ref()).map_err(|e| ServiceError::internal("Tantivy search (fuzzy)", e))?;
-        if !top_docs.is_empty() {
-            top_level_mt = MatchType::Fuzzy;
-            warn!(q = %q_to_debug(&parsed), "strict pass empty; fell back to fuzzy");
-        }
-    }
-
-    let mut docs: Vec<TantivyDocument> = Vec::with_capacity(top_docs.len());
-    let mut raw_hits: Vec<RawHit> = Vec::with_capacity(top_docs.len());
-    for (i, (score, doc_addr)) in top_docs.iter().enumerate() {
-        let doc = searcher
-            .doc::<TantivyDocument>(*doc_addr)
-            .map_err(|e| ServiceError::internal("Tantivy doc", e))?;
-        raw_hits.push(RawHit::from_doc(&doc, &s.schema, *score, top_level_mt, i));
-        docs.push(doc);
-    }
-
-    if let Some(focus) = focus_point {
-        apply_focus_decay(&mut raw_hits, focus, &s.schema, &docs);
-    }
-
-    let raw_hit_count = raw_hits.len();
-    if !expand && raw_hit_count >= RAW_HIT_CAP {
+    let set = search(&query, &opts, &s.resolver_context())
+        .map_err(|e| ServiceError::internal("Tantivy search", e))?;
+    if set.capped {
         warn!(
-            raw_hits = raw_hit_count,
+            raw_hits = set.raw_hits,
             cap = RAW_HIT_CAP,
             q = %q_to_debug(&parsed),
             "oversearch cap reached; some buildings may be missing from the tail"
         );
     }
-    let features: Vec<Feature> = if expand {
-        raw_hits
-            .iter()
-            .take(limit)
-            .map(|h| {
-                hydrate_feature(
-                    &docs[h.raw_index],
-                    &s.schema,
-                    h.score,
-                    h.match_type,
-                    1,
-                    h.building_group_id.clone(),
-                    None,
-                )
-            })
-            .collect::<Result<_, _>>()?
-    } else {
-        group_by_building(&raw_hits)
-            .into_iter()
-            .take(limit)
-            .map(|g| {
-                hydrate_feature(
-                    &docs[g.representative_index],
-                    &s.schema,
-                    g.max_score,
-                    g.match_type,
-                    g.unit_count,
-                    g.building_group_id,
-                    None,
-                )
-            })
-            .collect::<Result<_, _>>()?
-    };
+    if set.tier == Tier::OrStreet || set.tier == Tier::OrWithNumber {
+        warn!(q = %q_to_debug(&parsed), "strict tiers empty; fell back to fuzzy");
+    }
+    let raw_hit_count = set.raw_hits;
+    let features: Vec<Feature> = set.candidates.into_iter().map(Feature::from).collect();
 
-    let match_type = if features
-        .iter()
-        .any(|f| f.match_type == MatchType::Strict.as_str())
+    // An empty result reports "strict": nothing fell back to fuzzy.
+    let match_type = if features.is_empty()
+        || features
+            .iter()
+            .any(|f| f.match_type == MatchType::Strict.as_str())
     {
         "strict"
-    } else if features.is_empty() {
-        top_level_mt.as_str()
     } else {
         "fuzzy"
     };

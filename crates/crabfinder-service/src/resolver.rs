@@ -1,24 +1,18 @@
 //! Address-resolution core.
 //!
-//! Pure logic that takes a structured `AddressQuery` and returns a single
-//! `ResolvedAddress` decision. No HTTP, no CSV, no CLI plumbing — those
-//! belong to the façades (the HTTP /geocode handler and the future batch
-//! HTTP/CLI endpoints).
+//! `search()` is the one ranked-retrieval pipeline behind `/geocode`,
+//! `POST /batch/geocode`, the `crabfinder-batch` CLI and eval batch mode.
+//! It walks a fixed list of tiers (see `Tier`) and returns the candidates
+//! of the first tier that matches, each labelled with a `Confidence`.
+//! `resolve()` reduces that to the single decision the batch contract
+//! needs (`design-batch-geocoding` §3.1), swapping in the street's median
+//! coordinates for street-level outcomes.
 //!
-//! See `docs/design-batch-geocoding.md` §1 for the architectural rationale.
-//!
-//! Lot A scope: only `Confidence::Exact`, `Confidence::FuzzyStreet`, and
-//! `Confidence::NotFound` are produced. `MedianStreet`, `NearestSameSide`,
-//! `NearestAnySide`, and `AdjacentCommune` are introduced by later lots —
-//! the enum variants exist now so the output schema is stable across lots.
-//!
-//! `dead_code` is silenced module-wide: the surface lands now but isn't
-//! consumed until Lot D (CSV batch path) wires the resolver into a façade.
-#![allow(dead_code)]
+//! No HTTP, no CSV, no CLI plumbing — those belong to the façades.
 
 use std::sync::Arc;
 
-use tantivy::{Index, IndexReader, TantivyDocument, schema::Value};
+use tantivy::{Index, IndexReader, TantivyDocument};
 use tracing::warn;
 
 use crabfinder_core::Address;
@@ -27,7 +21,8 @@ use crabfinder_parser::ParsedQuery;
 
 use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::SharedAddressCountIndex;
-use crate::dedup::{MatchType, RawHit, group_by_building};
+use crate::dedup::{MatchType, RAW_HIT_CAP, RawHit, group_by_building, raw_limit};
+use crate::focus::apply_focus_decay;
 use crate::hydrate::{HydratedHit, hydrate};
 use crate::mid_street::{MidStreetIndex, street_key_from_bgid};
 use crate::query_builder::{
@@ -53,9 +48,8 @@ pub struct AddressQuery {
     /// hard filter — passed straight through to the Tantivy MUST clause.
     pub region_filter: Option<String>,
     /// Optional geographic hint as `(lat, lng)`. When set, results are
-    /// re-scored after retrieval by exponential distance decay. The batch
-    /// case typically leaves this `None` (no per-row hint), but the field
-    /// is here so the same `resolve()` serves recherche later.
+    /// re-scored after retrieval by exponential distance decay
+    /// (`focus::apply_focus_decay`).
     pub focus_point: Option<(f64, f64)>,
 }
 
@@ -75,12 +69,13 @@ pub enum Confidence {
     /// number on the other side of the street.
     /// _Reserved for Lot C+ — not produced in Lot A._
     NearestAnySide,
-    /// Street matched but house number was unknown or out of range; result
-    /// is the centroid of the street within the requested postal code.
-    /// _Reserved for Lot C — not produced in Lot A._
+    /// Street matched but the house number was missing or not found.
+    /// `resolve()` places the point at the street's median number within
+    /// the postal code; `/geocode` returns buildings on the street.
     MedianStreet,
-    /// Strict query failed; result came from the OR-of-tokens fuzzy fallback.
-    /// House number, if provided, did match — only the street name was fuzzy.
+    /// Only the OR-of-tokens fallback matched the street name. When the
+    /// house number was used (`house_number_delta == Some(0)`) it matched
+    /// exactly; otherwise the result is street-level.
     FuzzyStreet,
     /// Street found only by widening to a neighbouring commune.
     /// _Reserved for post-v1._
@@ -195,263 +190,335 @@ pub struct ResolverContext<'a> {
     pub mid_street: Arc<MidStreetIndex>,
 }
 
-/// Resolve a single address. Always returns a `ResolvedAddress` — never
-/// errors out (Tantivy IO failures are reported as `NotFound` with a log
-/// line; the alternative is to bubble errors per-row and have the batch
-/// caller decide whether to abort or skip, which doubles the API surface
-/// for marginal benefit on a well-built index).
-///
-/// Resolution order (Lot C scope):
-/// 1. **Strict with house_number** (when provided) → `Confidence::Exact`.
-/// 2. **Strict without house_number** → `Confidence::MedianStreet` using
-///    the mid_street side-table for coordinates. `fallback_reason` is
-///    `HouseNumberOutOfRange` if a number was supplied, `HouseNumberMissing`
-///    if not.
-/// 3. **Fuzzy without house_number** → `Confidence::FuzzyStreet`.
-///    Coordinates come from mid_street when available (so a fuzzy-matched
-///    street with no number resolves to the street centroid), else from
-///    the top fuzzy hit's own lat/lon.
-/// 4. Otherwise → `Confidence::NotFound`.
-pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddress {
+/// Per-call knobs for `search`.
+#[derive(Debug, Clone, Copy)]
+pub struct SearchOptions {
+    /// Maximum candidates returned (buildings, or rows when `expand`).
+    pub limit: usize,
+    /// One candidate per BeSt row instead of one per building.
+    pub expand: bool,
+    /// When false, the street-level tiers (`Tier::Street`,
+    /// `Tier::OrStreet`) are skipped: a query whose house number can't be
+    /// matched yields no candidates instead of a street approximation
+    /// (`--no-mid-street` / `mid_street_fallback=false`).
+    pub mid_street_fallback: bool,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self {
+            limit: 10,
+            expand: false,
+            mid_street_fallback: true,
+        }
+    }
+}
+
+/// The retrieval tiers, tried in this order; the first one with hits wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tier {
+    /// Strict street match + house-number filter.
+    Exact,
+    /// Strict street match, house number ignored (missing or not found).
+    Street,
+    /// OR-of-tokens street match + house-number filter.
+    OrWithNumber,
+    /// OR-of-tokens street match, house number ignored.
+    OrStreet,
+    /// Nothing matched.
+    None,
+}
+
+impl Tier {
+    const ORDER: [Tier; 4] = [
+        Tier::Exact,
+        Tier::Street,
+        Tier::OrWithNumber,
+        Tier::OrStreet,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Tier::Exact => "exact",
+            Tier::Street => "street",
+            Tier::OrWithNumber => "or_with_number",
+            Tier::OrStreet => "or_street",
+            Tier::None => "none",
+        }
+    }
+
+    fn match_type(self) -> MatchType {
+        match self {
+            Tier::Exact | Tier::Street | Tier::None => MatchType::Strict,
+            Tier::OrWithNumber | Tier::OrStreet => MatchType::Fuzzy,
+        }
+    }
+
+    /// Whether this tier honours the requested house number.
+    fn uses_house_number(self) -> bool {
+        matches!(self, Tier::Exact | Tier::OrWithNumber)
+    }
+
+    /// `(confidence, fallback_reason, house_number_delta)` for a hit from
+    /// this tier, given whether the query carried a house number.
+    fn labels(self, has_hn: bool) -> (Confidence, Option<FallbackReason>, Option<i32>) {
+        let missing_or = |r| {
+            Some(if has_hn {
+                r
+            } else {
+                FallbackReason::HouseNumberMissing
+            })
+        };
+        match self {
+            Tier::Exact => (Confidence::Exact, None, Some(0)),
+            Tier::Street => (
+                Confidence::MedianStreet,
+                missing_or(FallbackReason::HouseNumberOutOfRange),
+                None,
+            ),
+            Tier::OrWithNumber => (
+                Confidence::FuzzyStreet,
+                Some(FallbackReason::StreetSpellingFuzzy),
+                Some(0),
+            ),
+            Tier::OrStreet => (
+                Confidence::FuzzyStreet,
+                missing_or(FallbackReason::StreetSpellingFuzzy),
+                None,
+            ),
+            Tier::None => (Confidence::NotFound, Some(FallbackReason::NoMatch), None),
+        }
+    }
+}
+
+/// One ranked candidate.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    /// Building (or row) as stored; coordinates are the doc's own.
+    pub hit: HydratedHit,
+    pub confidence: Confidence,
+    pub fallback_reason: Option<FallbackReason>,
+    pub house_number_delta: Option<i32>,
+}
+
+/// Output of `search`.
+#[derive(Debug, Clone)]
+pub struct CandidateSet {
+    /// Best first; at most `SearchOptions::limit`.
+    pub candidates: Vec<Candidate>,
+    /// Raw rows fetched by the winning tier, before dedup.
+    pub raw_hits: usize,
+    pub tier: Tier,
+    /// The over-fetch hit `RAW_HIT_CAP`: some buildings may be missing
+    /// from the tail.
+    pub capped: bool,
+}
+
+impl CandidateSet {
+    fn empty() -> Self {
+        Self {
+            candidates: Vec::new(),
+            raw_hits: 0,
+            tier: Tier::None,
+            capped: false,
+        }
+    }
+}
+
+/// Ranked retrieval over the tiers in `Tier::ORDER`. Returns the
+/// candidates of the first tier with hits, after focus decay (when
+/// `query.focus_point` is set) and building dedup (unless `opts.expand`).
+pub fn search(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<CandidateSet> {
     let slots: Vec<Vec<String>> = query
         .street_tokens
         .iter()
         .map(|t| ctx.abbrev.expand(t))
         .collect();
-
-    let parsed_with_hn = ParsedQuery {
-        raw_query: String::new(),
-        street_tokens: query.street_tokens.clone(),
-        house_number: query.house_number.clone(),
-        postal_code: query.postal_code.clone(),
-    };
-    let parsed_without_hn = ParsedQuery {
-        raw_query: String::new(),
-        street_tokens: query.street_tokens.clone(),
-        house_number: None,
-        postal_code: query.postal_code.clone(),
-    };
-
+    let has_hn = query.house_number.is_some();
     let filters = FilterParams {
         region: query.region_filter.clone(),
+        postal_code: query.postal_code.clone(),
+    };
+    let parsed = |with_hn: bool| ParsedQuery {
+        raw_query: String::new(),
+        street_tokens: query.street_tokens.clone(),
+        house_number: if with_hn {
+            query.house_number.clone()
+        } else {
+            None
+        },
         postal_code: None,
     };
-
     let field = searchable_field(ctx.schema);
     let searcher = ctx.reader.searcher();
+    let raw_limit = raw_limit(opts.limit, opts.expand);
 
-    // Run a query and return the top hit.
-    let search_top1 =
-        |q: &dyn tantivy::query::Query| -> Option<(tantivy::Score, tantivy::DocAddress)> {
-            let res = if ctx.notability_enabled {
-                search_with_notability(&searcher, q, 1, ctx.addr_counts.clone())
-            } else {
-                search_score_only(&searcher, q, 1)
-            };
-            match res {
-                Ok(mut hits) => hits.pop(),
-                Err(e) => {
-                    warn!(error=%e, "resolver: tantivy search failed; treating as no-hit");
-                    None
-                }
+    for tier in Tier::ORDER {
+        let enabled = match tier {
+            Tier::Exact | Tier::OrWithNumber => has_hn,
+            Tier::Street | Tier::OrStreet => opts.mid_street_fallback,
+            Tier::None => false,
+        };
+        if !enabled {
+            continue;
+        }
+        let p = parsed(tier.uses_house_number());
+        let q = match tier {
+            Tier::Exact | Tier::Street => {
+                build_strict_query(field, &slots, &p, ctx.schema, &filters)
             }
+            _ => build_fuzzy_query(field, &slots, &p, ctx.schema, &filters),
         };
-
-    // --- Step 1: strict with house_number (Exact).
-    let exact_hit = if query.house_number.is_some() {
-        build_strict_query(field, &slots, &parsed_with_hn, ctx.schema, &filters)
-            .and_then(|q| search_top1(q.as_ref()))
-    } else {
-        None
-    };
-    if let Some((score, doc_addr)) = exact_hit {
-        if let Some(resolved) = finalize(
-            &searcher,
-            doc_addr,
-            score,
-            ctx.schema,
-            MatchType::Strict,
-            Confidence::Exact,
-            None,
-            Some(0),
-            None,
-        ) {
-            return resolved;
-        }
-        // Failed to hydrate / deserialize — fall through to attempt fallbacks.
-        warn!("resolver: exact hit materialization failed; falling through");
-    }
-
-    // --- Step 2: strict WITHOUT house_number (MedianStreet).
-    let median_hit = build_strict_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-        .and_then(|q| search_top1(q.as_ref()));
-    if let Some((score, doc_addr)) = median_hit {
-        let reason = if query.house_number.is_some() {
-            FallbackReason::HouseNumberOutOfRange
+        let Some(q) = q else { continue };
+        let top = if ctx.notability_enabled {
+            search_with_notability(&searcher, q.as_ref(), raw_limit, ctx.addr_counts.clone())?
         } else {
-            FallbackReason::HouseNumberMissing
+            search_score_only(&searcher, q.as_ref(), raw_limit)?
         };
-        let coords_override = lookup_median_for(&searcher, doc_addr, ctx);
-        if let Some(resolved) = finalize(
-            &searcher,
-            doc_addr,
-            score,
-            ctx.schema,
-            MatchType::Strict,
-            Confidence::MedianStreet,
-            Some(reason),
-            None,
-            coords_override,
-        ) {
-            return resolved;
+        if top.is_empty() {
+            continue;
         }
-        warn!("resolver: median hit materialization failed; falling through");
+        return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx);
     }
-
-    // --- Step 3: fuzzy without house_number (FuzzyStreet).
-    let fuzzy_hit = build_fuzzy_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-        .and_then(|q| search_top1(q.as_ref()));
-    if let Some((score, doc_addr)) = fuzzy_hit {
-        // Even on fuzzy, if mid_street has the centroid for the resolved
-        // street, prefer that over the top fuzzy hit's individual building
-        // coords. The user gets a more representative point.
-        let coords_override = lookup_median_for(&searcher, doc_addr, ctx);
-        let reason = if query.house_number.is_some() {
-            FallbackReason::StreetSpellingFuzzy
-        } else {
-            FallbackReason::HouseNumberMissing
-        };
-        if let Some(resolved) = finalize(
-            &searcher,
-            doc_addr,
-            score,
-            ctx.schema,
-            MatchType::Fuzzy,
-            Confidence::FuzzyStreet,
-            Some(reason),
-            None,
-            coords_override,
-        ) {
-            return resolved;
-        }
-    }
-
-    ResolvedAddress::not_found()
+    Ok(CandidateSet::empty())
 }
 
-#[allow(clippy::too_many_arguments)] // replaced by `search` in Phase 1
-/// Materialize a doc into a `ResolvedAddress`. Returns `None` if hydration
-/// or payload deserialization fails — the caller can either fall through
-/// to a less-confident pass or return `NotFound`.
-fn finalize(
+/// Materialise a tier's raw hits into ranked, labelled candidates.
+fn collect_candidates(
     searcher: &tantivy::Searcher,
-    doc_addr: tantivy::DocAddress,
-    score: tantivy::Score,
-    schema: &CrabSchema,
-    match_type: MatchType,
-    confidence: Confidence,
-    fallback_reason: Option<FallbackReason>,
-    house_number_delta: Option<i32>,
-    coords_override: Option<(f64, f64)>,
-) -> Option<ResolvedAddress> {
-    let doc: TantivyDocument = match searcher.doc(doc_addr) {
-        Ok(d) => d,
-        Err(e) => {
-            warn!(error=%e, "resolver: doc materialization failed");
-            return None;
-        }
-    };
-    let bgid = doc
-        .get_first(schema.building_group_id)
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let box_no = doc
-        .get_first(schema.box_number)
-        .and_then(|v| v.as_str())
-        .map(|x| x.to_string());
-    let addr_id = doc
-        .get_first(schema.best_id)
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let raw_hit = RawHit {
-        score,
-        building_group_id: bgid.clone(),
-        box_number: box_no,
-        address_id: addr_id,
-        match_type,
-        raw_index: 0,
-    };
-    let groups = group_by_building(std::slice::from_ref(&raw_hit));
-    let group = groups
-        .into_iter()
-        .next()
-        .expect("group_by_building on non-empty must return ≥1 group");
-
-    let mut hit = match hydrate(
-        &doc,
-        schema,
-        group.max_score,
-        group.match_type,
-        group.unit_count,
-        group.building_group_id,
-        None,
-    ) {
-        Ok(h) => h,
-        Err(e) => {
-            warn!(error=%e, "resolver: hydrate failed");
-            return None;
-        }
-    };
-
-    // Median / fuzzy paths swap in centroid coords if available.
-    if let Some((lat, lon)) = coords_override {
-        hit.lat = lat;
-        hit.lon = lon;
+    top: &[(tantivy::Score, tantivy::DocAddress)],
+    tier: Tier,
+    has_hn: bool,
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<CandidateSet> {
+    let mut docs: Vec<TantivyDocument> = Vec::with_capacity(top.len());
+    let mut raw_hits: Vec<RawHit> = Vec::with_capacity(top.len());
+    for (i, (score, addr)) in top.iter().enumerate() {
+        let doc: TantivyDocument = searcher.doc(*addr)?;
+        raw_hits.push(RawHit::from_doc(
+            &doc,
+            ctx.schema,
+            *score,
+            tier.match_type(),
+            i,
+        ));
+        docs.push(doc);
+    }
+    if let Some(focus) = query.focus_point {
+        apply_focus_decay(&mut raw_hits, focus, ctx.schema, &docs);
     }
 
-    let address: Option<Address> = serde_json::from_value(hit.payload.clone()).ok();
-    if address.is_none() {
-        warn!(bgid = %bgid, "resolver: address payload failed serde decode; returning None");
-        return None;
-    }
-
-    Some(ResolvedAddress {
-        address,
-        hit: Some(hit),
-        confidence,
-        house_number_delta,
-        street_match_score: group.max_score,
-        fallback_reason,
+    let (confidence, fallback_reason, house_number_delta) = tier.labels(has_hn);
+    let candidate = |idx: usize, score, unit_count, bgid| -> tantivy::Result<Candidate> {
+        let hit = hydrate(
+            &docs[idx],
+            ctx.schema,
+            score,
+            tier.match_type(),
+            unit_count,
+            bgid,
+            None,
+        )
+        .map_err(|e| tantivy::TantivyError::InternalError(e.to_string()))?;
+        Ok(Candidate {
+            hit,
+            confidence,
+            fallback_reason,
+            house_number_delta,
+        })
+    };
+    let candidates = if opts.expand {
+        raw_hits
+            .iter()
+            .take(opts.limit)
+            .map(|h| candidate(h.raw_index, h.score, 1, h.building_group_id.clone()))
+            .collect::<tantivy::Result<Vec<_>>>()?
+    } else {
+        group_by_building(&raw_hits)
+            .into_iter()
+            .take(opts.limit)
+            .map(|g| {
+                candidate(
+                    g.representative_index,
+                    g.max_score,
+                    g.unit_count,
+                    g.building_group_id,
+                )
+            })
+            .collect::<tantivy::Result<Vec<_>>>()?
+    };
+    Ok(CandidateSet {
+        candidates,
+        raw_hits: raw_hits.len(),
+        tier,
+        capped: !opts.expand && raw_hits.len() >= RAW_HIT_CAP,
     })
 }
 
-/// Pull the (street_key, postal_code) pair from a doc and look it up in the
-/// mid_street side-table. Returns `None` when the lookup misses (pre-v7
-/// index, street that has no median entry, etc.) — caller falls back to
-/// the doc's own coords.
-fn lookup_median_for(
-    searcher: &tantivy::Searcher,
-    doc_addr: tantivy::DocAddress,
-    ctx: &ResolverContext<'_>,
-) -> Option<(f64, f64)> {
-    let doc: TantivyDocument = searcher.doc(doc_addr).ok()?;
-    let bgid = doc
-        .get_first(ctx.schema.building_group_id)
-        .and_then(|v| v.as_str())?;
-    let postal = doc
-        .get_first(ctx.schema.postal_code)
-        .and_then(|v| v.as_str())?;
-    let street_key = street_key_from_bgid(bgid)?;
-    ctx.mid_street.lookup(street_key, postal)
+/// Resolve a single address with default options. Always returns a
+/// `ResolvedAddress` — Tantivy IO failures are logged and reported as
+/// `NotFound` rather than bubbled per row.
+pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddress {
+    resolve_with(query, &SearchOptions::default(), ctx)
 }
 
-/// Helper for batch callers: take a raw user-provided street string and produce
-/// the analyzed token vec that goes into `AddressQuery::street_tokens`. Mirrors
-/// what the HTTP `/geocode` handler does after parsing.
-#[allow(dead_code)] // consumed by Lot D once batch I/O lands
+/// `resolve` with explicit options (`limit` / `expand` are ignored).
+///
+/// Street-level outcomes (`MedianStreet`, and `FuzzyStreet` when the house
+/// number wasn't used) get the street's median coordinates from the
+/// mid-street side-table when it has them, so the point is representative
+/// of the street rather than of one arbitrary building on it.
+pub fn resolve_with(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> ResolvedAddress {
+    let opts = SearchOptions {
+        limit: 1,
+        expand: false,
+        ..*opts
+    };
+    let set = match search(query, &opts, ctx) {
+        Ok(s) => s,
+        Err(e) => {
+            warn!(error=%e, "resolver: tantivy search failed; treating as no-hit");
+            return ResolvedAddress::not_found();
+        }
+    };
+    let Some(c) = set.candidates.into_iter().next() else {
+        return ResolvedAddress::not_found();
+    };
+    let Ok(address) = serde_json::from_value::<Address>(c.hit.payload.clone()) else {
+        warn!(bgid = %c.hit.building_group_id, "resolver: payload failed serde decode");
+        return ResolvedAddress::not_found();
+    };
+    let mut hit = c.hit;
+    if !set.tier.uses_house_number()
+        && let Some((lat, lon)) = street_key_from_bgid(&hit.building_group_id)
+            .and_then(|k| ctx.mid_street.lookup(k, &address.postal_code))
+    {
+        hit.lat = lat;
+        hit.lon = lon;
+    }
+    ResolvedAddress {
+        street_match_score: hit.score,
+        address: Some(address),
+        hit: Some(hit),
+        confidence: c.confidence,
+        house_number_delta: c.house_number_delta,
+        fallback_reason: c.fallback_reason,
+    }
+}
+
+/// Helper for batch callers: take a raw user-provided street string and
+/// produce the analyzed token vec that goes into
+/// `AddressQuery::street_tokens`.
 pub fn analyze_street_input(index: &Index, raw: &str) -> Vec<String> {
     analyze(index, raw)
 }
@@ -596,6 +663,269 @@ mod tests {
         let r = resolve(&query(&ti, "Rue Paire", Some("4"), None), &c);
         assert_eq!(r.confidence, Confidence::Exact);
         assert_eq!(r.address.unwrap().house_number, "4");
+    }
+
+    fn opts(limit: usize) -> SearchOptions {
+        SearchOptions {
+            limit,
+            ..SearchOptions::default()
+        }
+    }
+
+    #[test]
+    fn search_tier_exact() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&query(&ti, "Avenue Louise", Some("32"), None), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+        assert_eq!(set.candidates.len(), 1);
+        let top = &set.candidates[0];
+        assert_eq!(top.confidence, Confidence::Exact);
+        assert_eq!(top.house_number_delta, Some(0));
+        assert_eq!(top.hit.match_type, MatchType::Strict);
+        assert!(!set.capped);
+    }
+
+    #[test]
+    fn search_tier_street_lists_buildings() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &query(&ti, "Avenue Louise", Some("999"), None),
+            &opts(20),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::Street);
+        assert_eq!(set.candidates.len(), 8, "every Louise building");
+        assert!(set.candidates.iter().all(|c| {
+            c.confidence == Confidence::MedianStreet
+                && c.fallback_reason == Some(FallbackReason::HouseNumberOutOfRange)
+        }));
+        let set = search(&query(&ti, "Avenue Louise", None, None), &opts(3), &c).unwrap();
+        assert_eq!(set.tier, Tier::Street);
+        assert_eq!(set.candidates.len(), 3);
+        assert_eq!(
+            set.candidates[0].fallback_reason,
+            Some(FallbackReason::HouseNumberMissing)
+        );
+    }
+
+    #[test]
+    fn search_tier_or_with_number_honours_the_number() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &query(&ti, "Louise Quetzal", Some("45"), None),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::OrWithNumber);
+        let top = &set.candidates[0];
+        assert_eq!(top.hit.payload["house_number"], "45");
+        assert_eq!(top.confidence, Confidence::FuzzyStreet);
+        assert_eq!(top.house_number_delta, Some(0));
+        assert_eq!(top.hit.match_type, MatchType::Fuzzy);
+    }
+
+    #[test]
+    fn search_tier_or_street() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &query(&ti, "Louise Quetzal", Some("999"), None),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::OrStreet);
+        assert_eq!(
+            set.candidates[0].fallback_reason,
+            Some(FallbackReason::StreetSpellingFuzzy)
+        );
+        assert_eq!(set.candidates[0].house_number_delta, None);
+    }
+
+    #[test]
+    fn search_no_match_is_empty() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&query(&ti, "Quetzal", Some("1"), None), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::None);
+        assert!(set.candidates.is_empty());
+        // Nothing at all to search for.
+        let set = search(&query(&ti, "", None, None), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::None);
+    }
+
+    #[test]
+    fn mid_street_fallback_off_skips_street_tiers() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let o = SearchOptions {
+            mid_street_fallback: false,
+            ..opts(5)
+        };
+        for (street, hn) in [
+            ("Avenue Louise", Some("999")),
+            ("Avenue Louise", None),
+            ("Louise Quetzal", Some("999")),
+        ] {
+            let set = search(&query(&ti, street, hn, None), &o, &c).unwrap();
+            assert_eq!(set.tier, Tier::None, "{street} {hn:?}");
+        }
+        let set = search(&query(&ti, "Avenue Louise", Some("10"), None), &o, &c).unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+        let r = resolve_with(&query(&ti, "Avenue Louise", Some("999"), None), &o, &c);
+        assert_eq!(r.confidence, Confidence::NotFound);
+    }
+
+    #[test]
+    fn postal_code_is_a_hard_filter() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &query(&ti, "Avenue Louise", Some("10"), Some("1000")),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        // 1000 has no Louise: every tier is filtered to nothing.
+        assert_eq!(set.tier, Tier::None);
+        let set = search(&query(&ti, "", None, Some("1050")), &opts(50), &c).unwrap();
+        assert_eq!(
+            set.candidates.len(),
+            11,
+            "postal-only query lists the postal code"
+        );
+    }
+
+    #[test]
+    fn region_filter_applies() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let mut q = query(&ti, "Avenue Louise", Some("10"), None);
+        q.region_filter = Some("BE-VLG".into());
+        assert_eq!(search(&q, &opts(5), &c).unwrap().tier, Tier::None);
+        q.region_filter = Some("BE-BRU".into());
+        assert_eq!(search(&q, &opts(5), &c).unwrap().tier, Tier::Exact);
+    }
+
+    #[test]
+    fn focus_point_reorders_street_candidates() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        // Louise n°50 sits at lat 50.8395; focus right on it.
+        let mut q = query(&ti, "Avenue Louise", None, None);
+        q.focus_point = Some((50.8395, 4.3567));
+        let set = search(&q, &opts(3), &c).unwrap();
+        assert_eq!(set.candidates[0].hit.payload["house_number"], "50");
+        // And on n°10 (lat 50.8355).
+        q.focus_point = Some((50.8355, 4.3567));
+        let set = search(&q, &opts(3), &c).unwrap();
+        assert_eq!(set.candidates[0].hit.payload["house_number"], "10");
+    }
+
+    #[test]
+    fn expand_returns_rows_not_buildings() {
+        let addrs: Vec<_> = ["1", "2", "3"]
+            .iter()
+            .map(|b| {
+                AddressBuilder::new(&format!("u{b}"), "9", "7")
+                    .street(Some("Rue Unique"), None)
+                    .box_no(b)
+                    .build()
+            })
+            .collect();
+        let ti = TestIndex::build(&addrs);
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let q = query(&ti, "Rue Unique", Some("7"), None);
+        let set = search(&q, &opts(10), &c).unwrap();
+        assert_eq!(set.candidates.len(), 1);
+        assert_eq!(set.candidates[0].hit.unit_count, 3);
+        assert_eq!(
+            set.candidates[0].hit.payload["box_number"], "1",
+            "lowest box represents"
+        );
+        let o = SearchOptions {
+            expand: true,
+            ..opts(10)
+        };
+        let set = search(&q, &o, &c).unwrap();
+        assert_eq!(set.candidates.len(), 3);
+        assert!(set.candidates.iter().all(|c| c.hit.unit_count == 1));
+    }
+
+    #[test]
+    fn overfetch_cap_is_reported() {
+        let addrs: Vec<_> = (0..2001)
+            .map(|i| {
+                AddressBuilder::new(&format!("c{i}"), "5", &i.to_string())
+                    .street(Some("Rue Longue"), None)
+                    .build()
+            })
+            .collect();
+        let ti = TestIndex::build(&addrs);
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&query(&ti, "Rue Longue", None, None), &opts(100), &c).unwrap();
+        assert!(set.capped);
+        assert_eq!(set.raw_hits, crate::dedup::RAW_HIT_CAP);
+        assert_eq!(set.candidates.len(), 100);
+    }
+
+    #[test]
+    fn resolve_agrees_with_search_top_candidate() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        for (street, hn) in [
+            ("Avenue Louise", Some("32")),
+            ("Avenue Louise", Some("999")),
+            ("Avenue Louise", None),
+            ("Louise Quetzal", Some("45")),
+            ("Rue Paire", Some("4")),
+            ("Quetzal", None),
+        ] {
+            let q = query(&ti, street, hn, None);
+            let set = search(&q, &opts(1), &c).unwrap();
+            let r = resolve(&q, &c);
+            match set.candidates.first() {
+                Some(top) => {
+                    assert_eq!(r.confidence, top.confidence, "{street} {hn:?}");
+                    assert_eq!(r.hit.unwrap().building_group_id, top.hit.building_group_id);
+                }
+                None => assert_eq!(r.confidence, Confidence::NotFound),
+            }
+        }
+    }
+
+    #[test]
+    fn fuzzy_with_number_keeps_building_coords() {
+        let ti = louise_index();
+        let (_d, mid) = sentinel_mid_street(51.0, 5.0);
+        let c = ctx(&ti, mid);
+        let r = resolve(&query(&ti, "Louise Quetzal", Some("45"), None), &c);
+        assert_eq!(r.confidence, Confidence::FuzzyStreet);
+        assert_eq!(r.house_number_delta, Some(0));
+        assert!(
+            (r.hit.unwrap().lat - 51.0).abs() > 0.1,
+            "number matched: no median swap"
+        );
+    }
+
+    #[test]
+    fn tier_strings() {
+        for (t, s) in [
+            (Tier::Exact, "exact"),
+            (Tier::Street, "street"),
+            (Tier::OrWithNumber, "or_with_number"),
+            (Tier::OrStreet, "or_street"),
+            (Tier::None, "none"),
+        ] {
+            assert_eq!(t.as_str(), s);
+        }
+        assert_eq!(Tier::None.labels(false).0, Confidence::NotFound);
+        assert_eq!(Tier::None.match_type(), MatchType::Strict);
     }
 
     #[test]

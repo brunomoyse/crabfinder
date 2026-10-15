@@ -235,3 +235,38 @@ async fn missing_q_is_400() {
     let (status, _) = app.get("/geocode?limit=3").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn features_carry_confidence() {
+    let app = App::new(&fixtures::louise_street());
+
+    let exact = app.ok(&geocode_uri("Avenue Louise 32 1050", "")).await;
+    let f = &features(&exact)[0];
+    assert_eq!(f["confidence"], "exact");
+    assert_eq!(f["house_number_delta"], 0);
+    assert!(f.get("fallback_reason").is_none());
+
+    // No such number: the street-level tier answers at the median house.
+    let median = app.ok(&geocode_uri("Avenue Louise 999 1050", "")).await;
+    let fs = features(&median);
+    assert!(!fs.is_empty());
+    assert_eq!(fs[0]["confidence"], "median_street");
+    assert_eq!(fs[0]["fallback_reason"], "house_number_out_of_range");
+    assert!(fs[0].get("house_number_delta").is_none());
+    assert_eq!(median["match_type"], "strict");
+
+    // No number at all → street level, reason house_number_missing.
+    let street = app.ok(&geocode_uri("Avenue Louise", "")).await;
+    assert_eq!(features(&street)[0]["confidence"], "median_street");
+    assert_eq!(
+        features(&street)[0]["fallback_reason"],
+        "house_number_missing"
+    );
+
+    // OR fallback → fuzzy_street.
+    let fuzzy = app.ok(&geocode_uri("Louise Nowhere 32", "")).await;
+    let fs = features(&fuzzy);
+    assert!(!fs.is_empty());
+    assert_eq!(fs[0]["confidence"], "fuzzy_street");
+    assert_eq!(fuzzy["match_type"], "fuzzy");
+}

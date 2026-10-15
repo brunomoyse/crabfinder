@@ -7,6 +7,7 @@ use crabfinder_indexer::index::CrabSchema;
 
 use crate::dedup::MatchType;
 use crate::hydrate::{HydratedHit, hydrate as hydrate_hit};
+use crate::resolver::Candidate;
 
 use super::error::ServiceError;
 
@@ -29,6 +30,17 @@ pub struct Feature {
     /// Great-circle distance in metres from the /reverse query point.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub distance_m: Option<f64>,
+    /// How well the feature matches the query (`/geocode` only). Same
+    /// vocabulary as the batch `confidence` column.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<&'static str>,
+    /// Why the match isn't `exact` (`/geocode` only; absent when exact).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<&'static str>,
+    /// Matched minus requested house number when the number was honoured
+    /// (`0` for an exact number); absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub house_number_delta: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -53,6 +65,20 @@ impl From<HydratedHit> for Feature {
             unit_count: h.unit_count,
             building_group_id: h.building_group_id,
             distance_m: h.distance_m,
+            confidence: None,
+            fallback_reason: None,
+            house_number_delta: None,
+        }
+    }
+}
+
+impl From<Candidate> for Feature {
+    fn from(c: Candidate) -> Self {
+        Feature {
+            confidence: Some(c.confidence.as_str()),
+            fallback_reason: c.fallback_reason.map(|r| r.as_str()),
+            house_number_delta: c.house_number_delta,
+            ..Feature::from(c.hit)
         }
     }
 }

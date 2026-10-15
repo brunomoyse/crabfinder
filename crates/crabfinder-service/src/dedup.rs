@@ -248,6 +248,39 @@ mod tests {
     }
 
     #[test]
+    fn raw_hit_from_doc_reads_fields_and_tolerates_gaps() {
+        let schema = CrabSchema::build();
+        let mut doc = TantivyDocument::default();
+        doc.add_text(schema.building_group_id, "ns|1|2");
+        doc.add_text(schema.box_number, "b");
+        doc.add_text(schema.best_id, "ns/9/1");
+        let h = RawHit::from_doc(&doc, &schema, 1.5, MatchType::Fuzzy, 7);
+        assert_eq!(h.building_group_id, "ns|1|2");
+        assert_eq!(h.box_number.as_deref(), Some("b"));
+        assert_eq!(h.address_id, "ns/9/1");
+        assert_eq!(
+            (h.score, h.match_type, h.raw_index),
+            (1.5, MatchType::Fuzzy, 7)
+        );
+        let h = RawHit::from_doc(
+            &TantivyDocument::default(),
+            &schema,
+            0.0,
+            MatchType::Strict,
+            0,
+        );
+        assert_eq!(h.building_group_id, "");
+        assert_eq!(h.box_number, None);
+    }
+
+    #[test]
+    fn raw_limit_overfetches_unless_expanded() {
+        assert_eq!(raw_limit(10, true), 10);
+        assert_eq!(raw_limit(10, false), 200);
+        assert_eq!(raw_limit(500, false), RAW_HIT_CAP);
+    }
+
+    #[test]
     fn empty_input_returns_empty() {
         assert!(group_by_building(&[]).is_empty());
     }

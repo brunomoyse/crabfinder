@@ -23,8 +23,6 @@
 //!   overridden at server config; we deliberately don't override here in
 //!   Lot E. A future operator dial would set `axum::extract::DefaultBodyLimit`.
 
-use std::sync::Arc;
-
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, FromRequest, Multipart, State},
@@ -40,7 +38,7 @@ use tracing::{error, info};
 
 use crate::AppState;
 use crate::query_builder::analyze;
-use crate::resolver::{AddressQuery, ResolverContext, resolve};
+use crate::resolver::{AddressQuery, SearchOptions, resolve_with};
 
 use super::dedup::{ClosureResolver, dedup_then_resolve};
 use super::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
@@ -68,10 +66,10 @@ const ROWS_PER_CHUNK: usize = 64;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct BatchOptions {
-    /// Toggle the `Confidence::MedianStreet` fallback. Default `true`.
-    /// When `false`, the resolver still runs but `MedianStreet` outcomes
-    /// degrade to `NotFound` (the caller may prefer empty lat/lng over a
-    /// centroid approximation).
+    /// Toggle the street-level fallbacks. Default `true`. When `false`,
+    /// rows whose house number can't be matched come back `not_found`
+    /// instead of `median_street` / street-level `fuzzy_street` (the caller
+    /// may prefer empty lat/lng over a street approximation).
     pub mid_street_fallback: bool,
     /// Output format. Only `"csv"` in Lot E; reserved for future GeoJSON.
     pub format: String,
@@ -205,21 +203,12 @@ fn run_resolve_to_channel(
     options: BatchOptions,
     tx: mpsc::Sender<Result<Bytes, std::io::Error>>,
 ) {
-    // Build ctx once; share by reference across resolver invocations.
-    let ctx = ResolverContext {
-        index: &state.index,
-        reader: &state.reader,
-        schema: &state.schema,
-        abbrev: state.abbrev.clone(),
-        addr_counts: state.addr_counts.clone(),
-        notability_enabled: state.notability_enabled,
-        mid_street: if options.mid_street_fallback {
-            state.mid_street.clone()
-        } else {
-            Arc::new(crate::mid_street::MidStreetIndex::empty())
-        },
+    let ctx = state.resolver_context();
+    let opts = SearchOptions {
+        mid_street_fallback: options.mid_street_fallback,
+        ..SearchOptions::default()
     };
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve(q, &ctx));
+    let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &opts, &ctx));
     let make_query = |row: &InputRow| AddressQuery {
         street_tokens: analyze(&state.index, &row.street),
         house_number: row.house_number.clone(),

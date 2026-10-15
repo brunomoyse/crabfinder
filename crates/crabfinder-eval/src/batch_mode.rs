@@ -15,24 +15,16 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
-use tantivy::{Index, IndexReader, ReloadPolicy};
 use tracing::{info, warn};
 
-use crabfinder_indexer::index::{CrabSchema, register_tokenizers};
-use crabfinder_indexer::meta::check_sidecar;
-use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
-
 use crabfinder_parser::parse;
-use crabfinder_service::abbreviation::AbbreviationMap;
-use crabfinder_service::addr_count::AddressCountIndex;
-use crabfinder_service::mid_street::MidStreetIndex;
 use crabfinder_service::query_builder::analyze;
-use crabfinder_service::resolver::{AddressQuery, Confidence, ResolverContext, resolve};
+use crabfinder_service::resolver::{AddressQuery, Confidence, SearchOptions, resolve_with};
+use crabfinder_service::{AppState, LoadOptions};
 
 use crate::eval_set::EvalQuery;
 
@@ -105,52 +97,20 @@ pub fn run(
         anyhow::bail!("no eval queries supplied; pass --eval-set");
     }
 
-    let meta = check_sidecar(&config.index).map_err(anyhow::Error::new)?;
+    let mut opts = LoadOptions::new(&config.index);
+    opts.abbreviation_dict = config.abbreviation_dict.clone();
+    opts.notability_enabled = config.notability_enabled;
+    opts.spatial = false;
+    let state = AppState::load(&opts)?;
     info!(
         index = %config.index.display(),
-        schema_version = meta.schema_version,
-        "batch-mode: index sidecar OK"
+        schema_version = state.meta.schema_version,
+        "batch-mode: index loaded"
     );
-
-    let schema = CrabSchema::build();
-    let index = Index::open_in_dir(&config.index)
-        .with_context(|| format!("opening Tantivy index at {:?}", config.index))?;
-    register_tokenizers(&index);
-    let reader: IndexReader = index
-        .reader_builder()
-        .reload_policy(ReloadPolicy::Manual)
-        .try_into()
-        .context("constructing IndexReader")?;
-
-    let abbrev = match config.abbreviation_dict.as_ref() {
-        Some(p) => AbbreviationMap::load(p, &index)
-            .with_context(|| format!("loading abbreviation dict {p:?}"))?,
-        None => AbbreviationMap::empty(),
-    };
-    let abbrev = Arc::new(abbrev);
-
-    let addr_counts = Arc::new(
-        AddressCountIndex::build(&reader, &schema).context("building address-count index")?,
-    );
-
-    let mid_street_path = config.index.join(MID_STREET_FILENAME);
-    let mid_street = if config.no_mid_street {
-        info!("batch-mode: --no-mid-street, MedianStreet fallback disabled");
-        Arc::new(MidStreetIndex::empty())
-    } else {
-        let m = MidStreetIndex::load(&mid_street_path)
-            .with_context(|| format!("loading mid_street side-file {mid_street_path:?}"))?;
-        Arc::new(m)
-    };
-
-    let ctx = ResolverContext {
-        index: &index,
-        reader: &reader,
-        schema: &schema,
-        abbrev: abbrev.clone(),
-        addr_counts: addr_counts.clone(),
-        notability_enabled: config.notability_enabled,
-        mid_street: mid_street.clone(),
+    let ctx = state.resolver_context();
+    let search_opts = SearchOptions {
+        mid_street_fallback: !config.no_mid_street,
+        ..SearchOptions::default()
     };
 
     let total = queries.len();
@@ -168,14 +128,14 @@ pub fn run(
                 warn!(id = %q.id, raw = %q.query_string, "batch-mode: parser produced no street tokens");
                 Vec::new()
             } else {
-                analyze(&index, &parsed.street_tokens.join(" "))
+                analyze(&state.index, &parsed.street_tokens.join(" "))
             },
             house_number: parsed.house_number,
             postal_code: parsed.postal_code,
             region_filter: None,
             focus_point: None,
         };
-        let r = resolve(&aq, &ctx);
+        let r = resolve_with(&aq, &search_opts, &ctx);
         decisions.push(EvalDecision {
             confidence: r.confidence,
             street_match_score: r.street_match_score,

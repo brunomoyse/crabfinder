@@ -8,6 +8,10 @@ COPY . .
 # Only the runtime binaries; crabfinder-eval (and its TLS stack) is a dev tool.
 # Cache mounts keep the registry and target dir across builds, so binaries are
 # copied out of target/ inside the same RUN.
+# The workspace release profile keeps debug info for local profiling; the
+# image doesn't need it, so drop it and strip symbols here.
+ENV CARGO_PROFILE_RELEASE_DEBUG=0 \
+    CARGO_PROFILE_RELEASE_STRIP=symbols
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked \

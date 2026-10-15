@@ -186,11 +186,18 @@ fn parse_leading_u32(s: &str) -> Option<u32> {
 mod tests {
     use super::*;
     use crabfinder_core::{
-        AddressId, BestId, BuildingGroupId, MultilingualName, MunicipalityId, PostalInfoId,
-        Region, Status, StreetId, StreetType, WgsCoord,
+        AddressId, BestId, BuildingGroupId, MultilingualName, MunicipalityId, PostalInfoId, Region,
+        Status, StreetId, StreetType, WgsCoord,
     };
 
-    fn fix(addr_oid: &str, street_oid: &str, house: &str, postal: &str, lat: f64, lon: f64) -> Address {
+    fn fix(
+        addr_oid: &str,
+        street_oid: &str,
+        house: &str,
+        postal: &str,
+        lat: f64,
+        lon: f64,
+    ) -> Address {
         let ns_addr = "https://databrussels.be/id/address".to_string();
         let ns_street = "https://databrussels.be/id/streetname".to_string();
         let ns_muni = "https://databrussels.be/id/municipality".to_string();
@@ -301,7 +308,10 @@ mod tests {
         let pc_len = bytes[p] as usize;
         p += 1 + pc_len;
         let lat = f64::from_le_bytes(bytes[p..p + 8].try_into().unwrap());
-        assert!((lat - 50.3).abs() < 1e-9, "expected 50.3 (#6's lat), got {lat}");
+        assert!(
+            (lat - 50.3).abs() < 1e-9,
+            "expected 50.3 (#6's lat), got {lat}"
+        );
     }
 
     #[test]

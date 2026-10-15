@@ -25,7 +25,7 @@ use crabfinder_core::{
     PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
 };
 use crabfinder_indexer::index::CrabIndexWriter;
-use crabfinder_indexer::meta::{write_sidecar, SCHEMA_VERSION, SIDECAR_FILENAME};
+use crabfinder_indexer::meta::{SCHEMA_VERSION, SIDECAR_FILENAME, write_sidecar};
 use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
 
 /// Path to the CLI binary cargo just built for this integration test.
@@ -100,26 +100,50 @@ fn build_test_index() -> tempfile::TempDir {
     let mut writer = CrabIndexWriter::create(dir.path()).unwrap();
     writer
         .add_address(&make_addr(
-            "100", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "10", "1050", 50.8300, 4.3500,
+            "100",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "10",
+            "1050",
+            50.8300,
+            4.3500,
         ))
         .unwrap();
     writer
         .add_address(&make_addr(
-            "101", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "20", "1050", 50.8310, 4.3510,
+            "101",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "20",
+            "1050",
+            50.8310,
+            4.3510,
         ))
         .unwrap();
     writer
         .add_address(&make_addr(
-            "102", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "30", "1050", 50.8320, 4.3520,
+            "102",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "30",
+            "1050",
+            50.8320,
+            4.3520,
         ))
         .unwrap();
     writer
         .add_address(&make_addr(
-            "200", "7", Some("Grand-Place"), Some("Grote Markt"),
-            "1", "1000", 50.8466, 4.3525,
+            "200",
+            "7",
+            Some("Grand-Place"),
+            Some("Grote Markt"),
+            "1",
+            "1000",
+            50.8466,
+            4.3525,
         ))
         .unwrap();
     writer.commit().unwrap();
@@ -136,7 +160,8 @@ fn write_mid_street_file(path: &Path) {
     f.write_all(b"CRBMID7\0").unwrap();
     f.write_all(&1u64.to_le_bytes()).unwrap();
     let street_key = "https://databrussels.be/id/streetname|3919";
-    f.write_all(&(street_key.len() as u32).to_le_bytes()).unwrap();
+    f.write_all(&(street_key.len() as u32).to_le_bytes())
+        .unwrap();
     f.write_all(street_key.as_bytes()).unwrap();
     let pc = "1050";
     f.write_all(&(pc.len() as u8).to_le_bytes()).unwrap();
@@ -204,8 +229,14 @@ fn cli_file_in_file_out_resolves_exact_match() {
     // lat/lng must be populated on exact matches.
     let lat_idx = col(&rows, "lat");
     let lng_idx = col(&rows, "lng");
-    assert!(!rows[1][lat_idx].is_empty(), "lat must be populated on exact");
-    assert!(!rows[1][lng_idx].is_empty(), "lng must be populated on exact");
+    assert!(
+        !rows[1][lat_idx].is_empty(),
+        "lat must be populated on exact"
+    );
+    assert!(
+        !rows[1][lng_idx].is_empty(),
+        "lng must be populated on exact"
+    );
 }
 
 // --- stdin → stdout streaming ----------------------------------------------

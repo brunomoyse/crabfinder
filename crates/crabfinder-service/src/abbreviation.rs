@@ -86,8 +86,8 @@ impl AbbreviationMap {
     pub fn load(path: &Path, index: &Index) -> Result<Self> {
         let body = fs::read_to_string(path)
             .with_context(|| format!("reading abbreviation dictionary {path:?}"))?;
-        let parsed: YamlFile = serde_saphyr::from_str(&body)
-            .with_context(|| format!("parsing {path:?} as YAML"))?;
+        let parsed: YamlFile =
+            serde_saphyr::from_str(&body).with_context(|| format!("parsing {path:?} as YAML"))?;
         if parsed.version != "v1" {
             warn!(version = %parsed.version, "abbreviation dict version != v1");
         }
@@ -174,7 +174,10 @@ impl AbbreviationMap {
             "abbreviation dictionary loaded"
         );
 
-        Ok(Self { standalone, suffix_rules })
+        Ok(Self {
+            standalone,
+            suffix_rules,
+        })
     }
 
     /// Expand a single analyzer-form token to the set of forms that should
@@ -230,10 +233,7 @@ mod tests {
     }
 
     fn write_tmp_yaml(body: &str) -> tempfile::NamedTempFile {
-        let mut f = tempfile::Builder::new()
-            .suffix(".yaml")
-            .tempfile()
-            .unwrap();
+        let mut f = tempfile::Builder::new().suffix(".yaml").tempfile().unwrap();
         f.write_all(body.as_bytes()).unwrap();
         f
     }
@@ -335,9 +335,18 @@ entries:
         // Platz (both → standalone branch). NL plein is `suffix` only and
         // must NOT fire on the standalone "pl" token.
         let exp = m.expand("pl");
-        assert!(exp.contains(&"place".to_string()), "missing place; got {exp:?}");
-        assert!(exp.contains(&"platz".to_string()), "missing platz; got {exp:?}");
-        assert!(!exp.contains(&"plein".to_string()), "plein leaked into standalone; got {exp:?}");
+        assert!(
+            exp.contains(&"place".to_string()),
+            "missing place; got {exp:?}"
+        );
+        assert!(
+            exp.contains(&"platz".to_string()),
+            "missing platz; got {exp:?}"
+        );
+        assert!(
+            !exp.contains(&"plein".to_string()),
+            "plein leaked into standalone; got {exp:?}"
+        );
     }
 
     #[test]
@@ -373,7 +382,10 @@ entries:
         let m = load_test_map();
         let exp = m.expand("str");
         // After analyzer fold: ["str", "strasse"]
-        assert!(exp.contains(&"strasse".to_string()), "missing strasse; got {exp:?}");
+        assert!(
+            exp.contains(&"strasse".to_string()),
+            "missing strasse; got {exp:?}"
+        );
     }
 
     #[test]

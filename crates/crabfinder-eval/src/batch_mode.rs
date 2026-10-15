@@ -130,8 +130,7 @@ pub fn run(
     let abbrev = Arc::new(abbrev);
 
     let addr_counts = Arc::new(
-        AddressCountIndex::build(&reader, &schema)
-            .context("building address-count index")?,
+        AddressCountIndex::build(&reader, &schema).context("building address-count index")?,
     );
 
     let mid_street_path = config.index.join(MID_STREET_FILENAME);
@@ -139,9 +138,8 @@ pub fn run(
         info!("batch-mode: --no-mid-street, MedianStreet fallback disabled");
         Arc::new(MidStreetIndex::empty())
     } else {
-        let m = MidStreetIndex::load(&mid_street_path).with_context(|| {
-            format!("loading mid_street side-file {mid_street_path:?}")
-        })?;
+        let m = MidStreetIndex::load(&mid_street_path)
+            .with_context(|| format!("loading mid_street side-file {mid_street_path:?}"))?;
         Arc::new(m)
     };
 
@@ -196,7 +194,10 @@ pub fn run(
         "batch-mode: resolution complete"
     );
 
-    let mut paths: Vec<String> = eval_set_paths.iter().map(|p| p.display().to_string()).collect();
+    let mut paths: Vec<String> = eval_set_paths
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
     paths.sort();
     let thresholds = build_thresholds(
         &decisions,
@@ -277,8 +278,7 @@ fn pick_quantile(sorted: &[f32], p: f64) -> f32 {
 fn write_thresholds(path: &Path, t: &ConfidenceThresholdsV1) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {parent:?}"))?;
+            std::fs::create_dir_all(parent).with_context(|| format!("creating {parent:?}"))?;
         }
     }
     let body = serde_json::to_string_pretty(t).context("serialising thresholds")?;
@@ -292,9 +292,7 @@ fn print_summary(t: &ConfidenceThresholdsV1) {
     println!("====== --mode=batch summary ======");
     println!(
         "n_queries={} n_resolved={} elapsed_ms={}",
-        t.computed_from.n_queries,
-        t.computed_from.n_resolved,
-        t.computed_from.elapsed_ms,
+        t.computed_from.n_queries, t.computed_from.n_resolved, t.computed_from.elapsed_ms,
     );
     println!("Confidence distribution:");
     for (k, v) in &t.summary {

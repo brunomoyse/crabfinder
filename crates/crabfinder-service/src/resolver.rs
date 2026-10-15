@@ -243,20 +243,21 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     // Helper closure to run a query and return the top hit. Takes a
     // `Box<dyn Query>` (Sized) — `Searcher::search` requires `Q: Sized`,
     // so we hold the Box and pass it through as `&Box<dyn Query>`.
-    let search_top1 = |q: &Box<dyn tantivy::query::Query>| -> Option<(tantivy::Score, tantivy::DocAddress)> {
-        let res = if ctx.notability_enabled {
-            search_with_notability(&searcher, q, 1, ctx.addr_counts.clone())
-        } else {
-            search_score_only(&searcher, q, 1)
-        };
-        match res {
-            Ok(mut hits) => hits.pop(),
-            Err(e) => {
-                warn!(error=%e, "resolver: tantivy search failed; treating as no-hit");
-                None
+    let search_top1 =
+        |q: &Box<dyn tantivy::query::Query>| -> Option<(tantivy::Score, tantivy::DocAddress)> {
+            let res = if ctx.notability_enabled {
+                search_with_notability(&searcher, q, 1, ctx.addr_counts.clone())
+            } else {
+                search_score_only(&searcher, q, 1)
+            };
+            match res {
+                Ok(mut hits) => hits.pop(),
+                Err(e) => {
+                    warn!(error=%e, "resolver: tantivy search failed; treating as no-hit");
+                    None
+                }
             }
-        }
-    };
+        };
 
     // --- Step 1: strict with house_number (Exact).
     let exact_hit = if query.house_number.is_some() {
@@ -284,9 +285,8 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     }
 
     // --- Step 2: strict WITHOUT house_number (MedianStreet).
-    let median_hit =
-        build_strict_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-            .and_then(|q| search_top1(&q));
+    let median_hit = build_strict_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
+        .and_then(|q| search_top1(&q));
     if let Some((score, doc_addr)) = median_hit {
         let reason = if query.house_number.is_some() {
             FallbackReason::HouseNumberOutOfRange
@@ -311,9 +311,8 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     }
 
     // --- Step 3: fuzzy without house_number (FuzzyStreet).
-    let fuzzy_hit =
-        build_fuzzy_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
-            .and_then(|q| search_top1(&q));
+    let fuzzy_hit = build_fuzzy_query(field, &slots, &parsed_without_hn, ctx.schema, &filters)
+        .and_then(|q| search_top1(&q));
     if let Some((score, doc_addr)) = fuzzy_hit {
         // Even on fuzzy, if mid_street has the centroid for the resolved
         // street, prefer that over the top fuzzy hit's individual building
@@ -465,8 +464,8 @@ mod tests {
     use crate::addr_count::AddressCountIndex;
     use crate::mid_street::MidStreetIndex;
     use crabfinder_core::{
-        Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName,
-        MunicipalityId, PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
+        Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName, MunicipalityId,
+        PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
     };
     use crabfinder_indexer::index::{CrabIndexWriter, CrabSchema, register_tokenizers};
     use crabfinder_indexer::meta::write_sidecar;
@@ -663,8 +662,16 @@ mod tests {
             focus_point: None,
         };
         let r = resolve(&q, &ctx);
-        assert_eq!(r.confidence, Confidence::MedianStreet, "got {:?}", r.confidence);
-        assert_eq!(r.fallback_reason, Some(FallbackReason::HouseNumberOutOfRange));
+        assert_eq!(
+            r.confidence,
+            Confidence::MedianStreet,
+            "got {:?}",
+            r.confidence
+        );
+        assert_eq!(
+            r.fallback_reason,
+            Some(FallbackReason::HouseNumberOutOfRange)
+        );
         assert_eq!(r.house_number_delta, None);
         let hit = r.hit.expect("median hit must populate HydratedHit");
         assert!(
@@ -699,7 +706,10 @@ mod tests {
         assert_eq!(r.confidence, Confidence::MedianStreet);
         assert_eq!(r.fallback_reason, Some(FallbackReason::HouseNumberMissing));
         let hit = r.hit.unwrap();
-        assert!((hit.lat - 51.123).abs() < 1e-9, "expected mid_street coords");
+        assert!(
+            (hit.lat - 51.123).abs() < 1e-9,
+            "expected mid_street coords"
+        );
     }
 
     /// When the side-table has no entry for this (street, postal), the

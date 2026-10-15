@@ -109,10 +109,7 @@ pub fn body_limit_layer() -> DefaultBodyLimit {
 /// Takes the raw `Request<Body>` so we can dispatch on `Content-Type`
 /// without committing the body to a single extractor early — multipart
 /// and JSON both want to consume the body, just differently.
-pub async fn batch_geocode(
-    State(state): State<AppState>,
-    request: Request<Body>,
-) -> Response {
+pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>) -> Response {
     let ct = request
         .headers()
         .get(CONTENT_TYPE)
@@ -319,8 +316,8 @@ async fn parse_json(body: Body) -> Result<(Vec<InputRow>, BatchOptions), HttpErr
     let bytes = axum::body::to_bytes(body, MULTIPART_BODY_LIMIT)
         .await
         .map_err(|e| bad_request(format!("read body: {e}")))?;
-    let parsed: JsonBody = serde_json::from_slice(&bytes)
-        .map_err(|e| bad_request(format!("parse json: {e}")))?;
+    let parsed: JsonBody =
+        serde_json::from_slice(&bytes).map_err(|e| bad_request(format!("parse json: {e}")))?;
     if parsed.addresses.len() > MAX_JSON_ADDRESSES {
         return Err(payload_too_large(format!(
             "JSON limit is {MAX_JSON_ADDRESSES} addresses (got {}); use multipart for larger payloads",

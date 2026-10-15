@@ -89,8 +89,8 @@ pub fn write_sidecar(index_dir: &Path) -> std::io::Result<()> {
         built_at_unix_secs: now_unix_secs(),
     };
     let path = sidecar_path(index_dir);
-    let body = serde_json::to_string_pretty(&meta)
-        .expect("serializing IndexMeta to JSON cannot fail");
+    let body =
+        serde_json::to_string_pretty(&meta).expect("serializing IndexMeta to JSON cannot fail");
     std::fs::write(&path, body)
 }
 
@@ -106,10 +106,17 @@ pub fn check_sidecar(index_dir: &Path) -> Result<IndexMeta, MetaError> {
                 path: index_dir.display().to_string(),
             });
         }
-        Err(source) => return Err(MetaError::Io { path: path_str, source }),
+        Err(source) => {
+            return Err(MetaError::Io {
+                path: path_str,
+                source,
+            });
+        }
     };
-    let meta: IndexMeta = serde_json::from_str(&body)
-        .map_err(|source| MetaError::Parse { path: path_str.clone(), source })?;
+    let meta: IndexMeta = serde_json::from_str(&body).map_err(|source| MetaError::Parse {
+        path: path_str.clone(),
+        source,
+    })?;
     if meta.schema_version != SCHEMA_VERSION {
         return Err(MetaError::VersionMismatch {
             path: index_dir.display().to_string(),
@@ -168,7 +175,9 @@ mod tests {
         )
         .unwrap();
         match check_sidecar(tmp.path()) {
-            Err(MetaError::VersionMismatch { found, expected, .. }) => {
+            Err(MetaError::VersionMismatch {
+                found, expected, ..
+            }) => {
                 assert_eq!(found, SCHEMA_VERSION + 99);
                 assert_eq!(expected, SCHEMA_VERSION);
             }

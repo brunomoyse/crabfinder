@@ -50,7 +50,11 @@ impl fmt::Display for BestId {
     /// `{namespace}/{objectIdentifier}/{versionIdentifier}` canonical form.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ns = self.namespace.trim_end_matches('/');
-        write!(f, "{}/{}/{}", ns, self.object_identifier, self.version_identifier)
+        write!(
+            f,
+            "{}/{}/{}",
+            ns, self.object_identifier, self.version_identifier
+        )
     }
 }
 
@@ -84,10 +88,16 @@ macro_rules! typed_best_id {
 }
 
 typed_best_id!(AddressId, "BeSt ID for an Address record.");
-typed_best_id!(StreetId, "BeSt ID for a StreetName record (street or hamlet).");
+typed_best_id!(
+    StreetId,
+    "BeSt ID for a StreetName record (street or hamlet)."
+);
 typed_best_id!(MunicipalityId, "BeSt ID for a Municipality record.");
 typed_best_id!(PostalInfoId, "BeSt ID for a PostalInfo record.");
-typed_best_id!(PartOfMunicipalityId, "BeSt ID for a PartOfMunicipality record (Wallonia only).");
+typed_best_id!(
+    PartOfMunicipalityId,
+    "BeSt ID for a PartOfMunicipality record (Wallonia only)."
+);
 
 // --- BuildingGroupId --------------------------------------------------------
 
@@ -137,15 +147,25 @@ mod tests {
 
     #[test]
     fn canonical_form_strips_trailing_slash() {
-        let b = BestId::new("https://data.vlaanderen.be/id/adres/", "200001", "2023-11-01");
+        let b = BestId::new(
+            "https://data.vlaanderen.be/id/adres/",
+            "200001",
+            "2023-11-01",
+        );
         // The namespace has a trailing slash; the canonical form should not double up.
-        assert_eq!(b.to_string(), "https://data.vlaanderen.be/id/adres/200001/2023-11-01");
+        assert_eq!(
+            b.to_string(),
+            "https://data.vlaanderen.be/id/adres/200001/2023-11-01"
+        );
     }
 
     #[test]
     fn join_key_excludes_version() {
         let b = sample_addr();
-        assert_eq!(b.join_key(), ("https://databrussels.be/id/address", "615867"));
+        assert_eq!(
+            b.join_key(),
+            ("https://databrussels.be/id/address", "615867")
+        );
     }
 
     #[test]
@@ -167,7 +187,11 @@ mod tests {
 
     #[test]
     fn building_group_id_is_stable() {
-        let s = StreetId(BestId::new("https://databrussels.be/id/streetname", "4568", "1"));
+        let s = StreetId(BestId::new(
+            "https://databrussels.be/id/streetname",
+            "4568",
+            "1",
+        ));
         let g1 = BuildingGroupId::from_parts(&s, "475");
         let g2 = BuildingGroupId::from_parts(&s, "475");
         assert_eq!(g1, g2);
@@ -179,7 +203,11 @@ mod tests {
 
     #[test]
     fn building_group_id_handles_alpha_house_numbers() {
-        let s = StreetId(BestId::new("https://databrussels.be/id/streetname", "4568", "1"));
+        let s = StreetId(BestId::new(
+            "https://databrussels.be/id/streetname",
+            "4568",
+            "1",
+        ));
         let g = BuildingGroupId::from_parts(&s, "12A");
         assert!(g.as_str().ends_with("|12A"));
     }

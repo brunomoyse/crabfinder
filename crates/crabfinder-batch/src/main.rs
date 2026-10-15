@@ -80,7 +80,9 @@ struct Args {
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .with_target(false)
         .with_writer(std::io::stderr) // keep stdout clean for the CSV output
         .init();
@@ -177,8 +179,9 @@ fn main() -> Result<()> {
 
 fn read_input(args: &Args) -> Result<Vec<InputRow>> {
     let raw: Vec<u8> = match args.input.as_deref() {
-        Some(p) if p.as_os_str() != "-" => std::fs::read(p)
-            .with_context(|| format!("reading input {p:?}"))?,
+        Some(p) if p.as_os_str() != "-" => {
+            std::fs::read(p).with_context(|| format!("reading input {p:?}"))?
+        }
         _ => read_all_stdin().context("reading stdin")?,
     };
     let delim = match args.delimiter {

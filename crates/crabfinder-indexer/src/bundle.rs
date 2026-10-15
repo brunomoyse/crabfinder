@@ -69,11 +69,9 @@ pub fn find_zip(best_dir: &Path, region: Region, entity: Entity) -> Result<PathB
         .collect();
 
     candidates.sort();
-    candidates.pop().ok_or_else(|| {
-        anyhow!(
-            "no zip starting with {needle_prefix:?} found in {best_dir:?}"
-        )
-    })
+    candidates
+        .pop()
+        .ok_or_else(|| anyhow!("no zip starting with {needle_prefix:?} found in {best_dir:?}"))
 }
 
 /// Scan `best_dir` and return the regions for which an Address zip is

@@ -17,7 +17,7 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
 
-use crate::metrics::{Metrics, MetricBucket, LatencyBucket};
+use crate::metrics::{LatencyBucket, MetricBucket, Metrics};
 use crate::runner::QueryResult;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,8 +49,7 @@ pub fn write_reports(
     output_json: &Path,
     output_md: Option<&Path>,
 ) -> Result<()> {
-    let wall_clock = results.iter().map(|r| r.latency_ms).sum::<f64>() / 1000.0
-        / 8.0_f64.max(1.0); // approximate; better than 0
+    let wall_clock = results.iter().map(|r| r.latency_ms).sum::<f64>() / 1000.0 / 8.0_f64.max(1.0); // approximate; better than 0
     let report = Report {
         report_version: "1".to_string(),
         service_url: service_url.to_string(),
@@ -87,10 +86,12 @@ pub fn write_reports(
         })
         .collect();
     let detail_json = serde_json::to_string(&detail_rows).context("serialising detail rows")?;
-    let detail_file = fs::File::create(&detail_path)
-        .with_context(|| format!("creating {detail_path:?}"))?;
+    let detail_file =
+        fs::File::create(&detail_path).with_context(|| format!("creating {detail_path:?}"))?;
     let mut encoder = GzEncoder::new(detail_file, Compression::default());
-    encoder.write_all(detail_json.as_bytes()).context("gzip write")?;
+    encoder
+        .write_all(detail_json.as_bytes())
+        .context("gzip write")?;
     encoder.finish().context("gzip finish")?;
 
     // 3. Markdown summary
@@ -106,7 +107,10 @@ pub fn write_reports(
 }
 
 fn detail_path_for(output_json: &Path) -> PathBuf {
-    let stem = output_json.file_stem().and_then(|s| s.to_str()).unwrap_or("report");
+    let stem = output_json
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("report");
     let parent = output_json.parent().unwrap_or(Path::new("."));
     parent.join(format!("{stem}-detail.json.gz"))
 }
@@ -184,9 +188,15 @@ fn bucket_table(s: &mut String, b: &MetricBucket) {
     s.push_str(&format!("| recall@1 | {:.3} |\n", b.recall_at_1));
     s.push_str(&format!("| recall@5 | {:.3} |\n", b.recall_at_5));
     s.push_str(&format!("| recall@10 | {:.3} |\n", b.recall_at_10));
-    s.push_str(&format!("| building_group_recall@1 | {:.3} |\n", b.building_group_recall_at_1));
+    s.push_str(&format!(
+        "| building_group_recall@1 | {:.3} |\n",
+        b.building_group_recall_at_1
+    ));
     s.push_str(&format!("| MRR | {:.3} |\n", b.mrr));
-    s.push_str(&format!("| strict_match_rate | {:.3} |\n", b.strict_match_rate));
+    s.push_str(&format!(
+        "| strict_match_rate | {:.3} |\n",
+        b.strict_match_rate
+    ));
 }
 
 fn latency_table(s: &mut String, l: &LatencyBucket) {
@@ -197,7 +207,11 @@ fn latency_table(s: &mut String, l: &LatencyBucket) {
     ));
 }
 
-fn region_variant_table(s: &mut String, map: &std::collections::HashMap<String, MetricBucket>, header: &str) {
+fn region_variant_table(
+    s: &mut String,
+    map: &std::collections::HashMap<String, MetricBucket>,
+    header: &str,
+) {
     s.push_str(&format!(
         "| {header} | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |\n"
     ));
@@ -231,7 +245,9 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         baseline_path.display(),
         current_path.display()
     ));
-    s.push_str(&format!("_Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._\n\n"));
+    s.push_str(&format!(
+        "_Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._\n\n"
+    ));
 
     s.push_str("## Overall (Tier A) — Δ\n\n");
     bucket_diff_table(&mut s, &baseline.metrics.overall, &current.metrics.overall);
@@ -276,10 +292,20 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
     ));
 
     s.push_str("\n## By region — Δ\n\n");
-    map_diff_table(&mut s, &baseline.metrics.by_region, &current.metrics.by_region, "Region");
+    map_diff_table(
+        &mut s,
+        &baseline.metrics.by_region,
+        &current.metrics.by_region,
+        "Region",
+    );
 
     s.push_str("\n## By variant — Δ\n\n");
-    map_diff_table(&mut s, &baseline.metrics.by_variant, &current.metrics.by_variant, "Variant");
+    map_diff_table(
+        &mut s,
+        &baseline.metrics.by_variant,
+        &current.metrics.by_variant,
+        "Variant",
+    );
 
     s.push_str("\n## Adversarial — by category — Δ\n\n");
     map_diff_table(
@@ -306,7 +332,9 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         }
     }
     if changes == 0 {
-        s.push_str("_No state changes — all known_failure entries continue to behave as documented._\n");
+        s.push_str(
+            "_No state changes — all known_failure entries continue to behave as documented._\n",
+        );
     }
 
     if let Some(parent) = output_md.parent() {
@@ -322,9 +350,17 @@ fn bucket_diff_table(s: &mut String, base: &MetricBucket, cur: &MetricBucket) {
         ("recall@1", base.recall_at_1, cur.recall_at_1),
         ("recall@5", base.recall_at_5, cur.recall_at_5),
         ("recall@10", base.recall_at_10, cur.recall_at_10),
-        ("bgid_recall@1", base.building_group_recall_at_1, cur.building_group_recall_at_1),
+        (
+            "bgid_recall@1",
+            base.building_group_recall_at_1,
+            cur.building_group_recall_at_1,
+        ),
         ("MRR", base.mrr, cur.mrr),
-        ("strict_match_rate", base.strict_match_rate, cur.strict_match_rate),
+        (
+            "strict_match_rate",
+            base.strict_match_rate,
+            cur.strict_match_rate,
+        ),
     ];
     for (k, b, c) in pairs {
         s.push_str(&format!("| {k} | {:.3} | {:.3} | {:+.3} |\n", b, c, c - b));
@@ -381,6 +417,9 @@ impl MetricBucket {
 
 // Used in the diff aggregator
 #[allow(dead_code)]
-fn safe_get<'a>(map: &'a std::collections::HashMap<String, MetricBucket>, k: &str) -> Option<&'a MetricBucket> {
+fn safe_get<'a>(
+    map: &'a std::collections::HashMap<String, MetricBucket>,
+    k: &str,
+) -> Option<&'a MetricBucket> {
     map.get(k)
 }

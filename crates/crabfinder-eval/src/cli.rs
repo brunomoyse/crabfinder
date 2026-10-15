@@ -10,7 +10,11 @@ use anyhow::Result;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
-#[command(name = "crabfinder-eval", version, about = "crabfinder evaluation runner")]
+#[command(
+    name = "crabfinder-eval",
+    version,
+    about = "crabfinder evaluation runner"
+)]
 pub struct Args {
     // --- Generate mode (Step 3) ---------------------------------------------
     /// Generate a synthetic eval set from an existing Tantivy index.

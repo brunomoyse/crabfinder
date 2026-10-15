@@ -57,8 +57,8 @@ impl MidStreetIndex {
             );
             return Ok(Self::empty());
         }
-        let f = File::open(path)
-            .with_context(|| format!("opening mid_street side-file {path:?}"))?;
+        let f =
+            File::open(path).with_context(|| format!("opening mid_street side-file {path:?}"))?;
         let mut r = BufReader::new(f);
 
         let mut magic = [0u8; 8];
@@ -185,9 +185,10 @@ mod tests {
 
     #[test]
     fn missing_file_returns_empty_index() {
-        let m =
-            MidStreetIndex::load(std::path::Path::new("/tmp/definitely-not-a-real-mid-file.bin"))
-                .unwrap();
+        let m = MidStreetIndex::load(std::path::Path::new(
+            "/tmp/definitely-not-a-real-mid-file.bin",
+        ))
+        .unwrap();
         assert_eq!(m.len(), 0);
     }
 
@@ -221,7 +222,9 @@ mod tests {
         assert!(
             err.to_string().contains("street_key_len")
                 || err.to_string().contains("entry 0")
-                || err.chain().any(|c| c.to_string().contains("failed to fill whole buffer")),
+                || err
+                    .chain()
+                    .any(|c| c.to_string().contains("failed to fill whole buffer")),
             "expected EOF-style error, got {err:?}"
         );
     }
@@ -246,7 +249,9 @@ mod tests {
         let err = MidStreetIndex::load(f.path()).unwrap_err();
         assert!(
             err.to_string().contains("lon")
-                || err.chain().any(|c| c.to_string().contains("failed to fill whole buffer")),
+                || err
+                    .chain()
+                    .any(|c| c.to_string().contains("failed to fill whole buffer")),
             "expected truncated-lon error, got {err:?}"
         );
     }
@@ -257,10 +262,7 @@ mod tests {
             street_key_from_bgid("https://x.be|3919|32"),
             Some("https://x.be|3919")
         );
-        assert_eq!(
-            street_key_from_bgid("ns|oid|hn"),
-            Some("ns|oid")
-        );
+        assert_eq!(street_key_from_bgid("ns|oid|hn"), Some("ns|oid"));
         // No pipe → None (defensive; the indexer always emits pipes).
         assert_eq!(street_key_from_bgid("nope"), None);
     }

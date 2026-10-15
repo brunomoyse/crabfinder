@@ -32,13 +32,13 @@ use crabfinder_core::{
 use crabfinder_indexer::index::{CrabIndexWriter, CrabSchema, register_tokenizers};
 use crabfinder_indexer::meta::write_sidecar;
 use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
+use crabfinder_service::AppState;
 use crabfinder_service::abbreviation::AbbreviationMap;
 use crabfinder_service::addr_count::AddressCountIndex;
 use crabfinder_service::batch;
 use crabfinder_service::chrono_lite;
 use crabfinder_service::mid_street::MidStreetIndex;
 use crabfinder_service::spatial::SpatialIndex;
-use crabfinder_service::AppState;
 
 // --- fixtures ---------------------------------------------------------------
 
@@ -96,23 +96,51 @@ fn fixtures() -> Vec<Address> {
     vec![
         // Avenue Louise n°10 — exact match target.
         make_addr(
-            "100", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "10", None, "1050", 50.8300, 4.3500,
+            "100",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "10",
+            None,
+            "1050",
+            50.8300,
+            4.3500,
         ),
         // Avenue Louise n°20 — second building, used for median.
         make_addr(
-            "101", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "20", None, "1050", 50.8310, 4.3510,
+            "101",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "20",
+            None,
+            "1050",
+            50.8310,
+            4.3510,
         ),
         // Avenue Louise n°30 — third, used for median (the middle one).
         make_addr(
-            "102", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "30", None, "1050", 50.8320, 4.3520,
+            "102",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "30",
+            None,
+            "1050",
+            50.8320,
+            4.3520,
         ),
         // Grand-Place 1 1000 — different street, used to verify isolation.
         make_addr(
-            "200", "7", Some("Grand-Place"), Some("Grote Markt"),
-            "1", None, "1000", 50.8466, 4.3525,
+            "200",
+            "7",
+            Some("Grand-Place"),
+            Some("Grote Markt"),
+            "1",
+            None,
+            "1000",
+            50.8466,
+            4.3525,
         ),
     ]
 }
@@ -187,7 +215,8 @@ fn write_mid_street_file(path: &Path) {
     // BestId for the street: "{ns}/{oid}/{ver}" — the StreetId's
     // BuildingGroupId encodes "{ns}|{oid}|{house}".
     let street_key = "https://databrussels.be/id/streetname|3919";
-    f.write_all(&(street_key.len() as u32).to_le_bytes()).unwrap();
+    f.write_all(&(street_key.len() as u32).to_le_bytes())
+        .unwrap();
     f.write_all(street_key.as_bytes()).unwrap();
     let pc = "1050";
     f.write_all(&(pc.len() as u8).to_le_bytes()).unwrap();
@@ -256,8 +285,14 @@ async fn raw_csv_body_returns_streamed_csv_with_header() {
     assert_eq!(rows.len(), 3, "1-in-1-out broken: got {rows:?}");
     assert_eq!(rows[0][0], "id");
     let confidence_idx = col(&rows, "confidence");
-    assert_eq!(rows[1][confidence_idx], "exact", "Louise n°10 must be exact");
-    assert_eq!(rows[2][confidence_idx], "exact", "Grand-Place 1 must be exact");
+    assert_eq!(
+        rows[1][confidence_idx], "exact",
+        "Louise n°10 must be exact"
+    );
+    assert_eq!(
+        rows[2][confidence_idx], "exact",
+        "Grand-Place 1 must be exact"
+    );
 }
 
 // --- JSON path --------------------------------------------------------------
@@ -295,8 +330,7 @@ async fn json_body_resolves_addresses_and_streams_csv() {
     // we expect MedianStreet (fallback to median of the street).
     let row_b = rows.iter().find(|r| r[id_idx] == "b").expect("row b");
     assert_eq!(
-        row_b[confidence_idx],
-        "median_street",
+        row_b[confidence_idx], "median_street",
         "Louise 999 must fall back to median_street (got fallback_reason={})",
         row_b[fallback_idx]
     );
@@ -383,10 +417,7 @@ async fn mid_street_fallback_disabled_changes_coords_not_confidence() {
     // exactly 50.831.
     let lat: f64 = rows[1][lat_idx].parse().expect("parse lat");
     // Loose bound: somewhere on Louise, not at the precomputed median.
-    assert!(
-        (lat - 50.83).abs() < 0.01,
-        "lat outside Louise band: {lat}"
-    );
+    assert!((lat - 50.83).abs() < 0.01, "lat outside Louise band: {lat}");
 }
 
 // --- malformed input --------------------------------------------------------
@@ -449,11 +480,7 @@ async fn input_with_duplicates_preserves_order_and_count() {
     assert_eq!(rows.len(), 6, "header + 5 rows = 6 lines");
 
     let id_idx = col(&rows, "id");
-    let ids: Vec<&str> = rows
-        .iter()
-        .skip(1)
-        .map(|r| r[id_idx].as_str())
-        .collect();
+    let ids: Vec<&str> = rows.iter().skip(1).map(|r| r[id_idx].as_str()).collect();
     assert_eq!(ids, vec!["1", "2", "3", "4", "5"], "order broken");
 
     // Duplicate rows share a confidence verdict.

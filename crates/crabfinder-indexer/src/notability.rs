@@ -53,8 +53,8 @@ impl NotabilityMap {
     /// (rare but possible if two notability_ids share a target) takes the
     /// MAX multiplier — most-famous wins.
     pub fn load(path: &Path) -> Result<Self> {
-        let body = fs::read_to_string(path)
-            .with_context(|| format!("reading whitelist {path:?}"))?;
+        let body =
+            fs::read_to_string(path).with_context(|| format!("reading whitelist {path:?}"))?;
         let parsed: WhitelistFile = serde_saphyr::from_str(&body)
             .with_context(|| format!("parsing whitelist {path:?} as YAML"))?;
 
@@ -109,10 +109,7 @@ mod tests {
     use std::io::Write;
 
     fn write_tmp(yaml: &str) -> tempfile::NamedTempFile {
-        let mut f = tempfile::Builder::new()
-            .suffix(".yaml")
-            .tempfile()
-            .unwrap();
+        let mut f = tempfile::Builder::new().suffix(".yaml").tempfile().unwrap();
         f.write_all(yaml.as_bytes()).unwrap();
         f
     }

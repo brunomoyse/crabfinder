@@ -200,9 +200,7 @@ mod tests {
         // The payload is the serialized Address — verify a couple of fields
         // came through.
         assert_eq!(
-            hit.payload
-                .get("house_number")
-                .and_then(|v| v.as_str()),
+            hit.payload.get("house_number").and_then(|v| v.as_str()),
             Some("32")
         );
         assert_eq!(

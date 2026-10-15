@@ -29,9 +29,7 @@ use tracing::{info, warn};
 
 use crabfinder_core::{Address, MultilingualName, Region};
 
-use crate::eval_set::{
-    SyntheticCorpus, SyntheticEvalSet, SyntheticQuery, VariantType,
-};
+use crate::eval_set::{SyntheticCorpus, SyntheticEvalSet, SyntheticQuery, VariantType};
 
 /// Field handles we need from the index schema (Phase 5 v3).
 struct Fields {
@@ -73,13 +71,20 @@ pub fn generate_mvp(
     dump_date: &str,
     scale: f64,
 ) -> Result<()> {
-    info!(?index_path, ?output_path, seed, scale, "generator: starting");
+    info!(
+        ?index_path,
+        ?output_path,
+        seed,
+        scale,
+        "generator: starting"
+    );
 
     let targets = Targets {
         brussels: ((MVP_TARGETS.brussels as f64) * scale).round() as usize,
         flanders: ((MVP_TARGETS.flanders as f64) * scale).round() as usize,
         wallonia: ((MVP_TARGETS.wallonia as f64) * scale).round() as usize,
-        boosted_cross_language: ((MVP_TARGETS.boosted_cross_language as f64) * scale).round() as usize,
+        boosted_cross_language: ((MVP_TARGETS.boosted_cross_language as f64) * scale).round()
+            as usize,
     };
     info!(
         brussels = targets.brussels,
@@ -102,8 +107,12 @@ pub fn generate_mvp(
     let brussels_count = pools.get(&Region::Brussels).map(|m| m.len()).unwrap_or(0);
     let flanders_count = pools.get(&Region::Flanders).map(|m| m.len()).unwrap_or(0);
     let wallonia_count = pools.get(&Region::Wallonia).map(|m| m.len()).unwrap_or(0);
-    info!(brussels = brussels_count, flanders = flanders_count, wallonia = wallonia_count,
-          "generator: bgid pools built");
+    info!(
+        brussels = brussels_count,
+        flanders = flanders_count,
+        wallonia = wallonia_count,
+        "generator: bgid pools built"
+    );
 
     // 3. Sample bgids per region with seeded RNG
     let mut rng = ChaCha20Rng::seed_from_u64(seed);
@@ -116,10 +125,14 @@ pub fn generate_mvp(
         .chain(wallonia_samples.iter())
         .copied()
         .collect();
-    info!(total_random = random_sample_addrs.len(), "generator: random sample drawn");
+    info!(
+        total_random = random_sample_addrs.len(),
+        "generator: random sample drawn"
+    );
 
     // 4. Materialize addresses for the random samples
-    let mut random_addresses: Vec<(DocAddress, Address)> = Vec::with_capacity(random_sample_addrs.len());
+    let mut random_addresses: Vec<(DocAddress, Address)> =
+        Vec::with_capacity(random_sample_addrs.len());
     let mut chosen_bgids_random: std::collections::HashSet<String> =
         std::collections::HashSet::new();
     for addr in &random_sample_addrs {
@@ -204,7 +217,11 @@ pub fn generate_mvp(
         std::fs::create_dir_all(parent).ok();
     }
     set.save(output_path)?;
-    info!(?output_path, total_queries = set.queries.len(), "generator: written");
+    info!(
+        ?output_path,
+        total_queries = set.queries.len(),
+        "generator: written"
+    );
 
     // Per-variant breakdown
     let mut by_variant: HashMap<&'static str, usize> = HashMap::new();
@@ -241,7 +258,11 @@ pub fn generate_mvp(
     for r in ["brussels", "flanders", "wallonia"] {
         let fires = cross_language_fire_by_region.get(r).copied().unwrap_or(0);
         let samples = samples_by_region.get(r).copied().unwrap_or(0);
-        let pct = if samples > 0 { 100.0 * fires as f64 / samples as f64 } else { 0.0 };
+        let pct = if samples > 0 {
+            100.0 * fires as f64 / samples as f64
+        } else {
+            0.0
+        };
         println!("  {r:<10}: {fires:>3} / {samples:>3} ({pct:.1}%)");
     }
 
@@ -325,8 +346,12 @@ fn sample_bgids(
     let mut sorted_bgids: Vec<&String> = pool.keys().collect();
     sorted_bgids.sort();
     if sorted_bgids.len() < target {
-        warn!(?region, available = sorted_bgids.len(), target,
-              "region pool smaller than target; using all available");
+        warn!(
+            ?region,
+            available = sorted_bgids.len(),
+            target,
+            "region pool smaller than target; using all available"
+        );
     }
     let actual_target = target.min(sorted_bgids.len());
     let chosen = sorted_bgids
@@ -484,11 +509,8 @@ pub(crate) fn build_abbreviated(
         ("laan", "ln."),
     ];
     // DE: suffix attached to compound — e.g. "Rathausplatz" → "Rathauspl.".
-    let de_suffix_map: &[(&str, &str)] = &[
-        ("straße", "str."),
-        ("strasse", "str."),
-        ("platz", "pl."),
-    ];
+    let de_suffix_map: &[(&str, &str)] =
+        &[("straße", "str."), ("strasse", "str."), ("platz", "pl.")];
 
     match lang {
         "fr" => {
@@ -576,11 +598,11 @@ pub(crate) fn build_cross_language(addr: &Address) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crabfinder_core::{
-        Address, Coordinates, MultilingualName, Region, Status, StreetType, WgsCoord,
-    };
     use crabfinder_core::ids::{
         AddressId, BestId, BuildingGroupId, MunicipalityId, PostalInfoId, StreetId,
+    };
+    use crabfinder_core::{
+        Address, Coordinates, MultilingualName, Region, Status, StreetType, WgsCoord,
     };
 
     fn ml(fr: Option<&str>, nl: Option<&str>, de: Option<&str>) -> MultilingualName {
@@ -595,11 +617,7 @@ mod tests {
         BestId::new(ns, oid, "1")
     }
 
-    fn make_addr(
-        region: Region,
-        street: MultilingualName,
-        muni: MultilingualName,
-    ) -> Address {
+    fn make_addr(region: Region, street: MultilingualName, muni: MultilingualName) -> Address {
         Address {
             id: AddressId(bid("test", "1")),
             street_id: StreetId(bid("test", "1")),
@@ -617,7 +635,10 @@ mod tests {
             postal_code: "2000".into(),
             postal_name: ml(None, Some("ANTWERPEN"), None),
             part_of_municipality_name: None,
-            coordinates: Coordinates::Wgs84(WgsCoord { lat: 51.0, lon: 4.0 }),
+            coordinates: Coordinates::Wgs84(WgsCoord {
+                lat: 51.0,
+                lon: 4.0,
+            }),
             building_group_id: BuildingGroupId("bgid-1".into()),
         }
     }
@@ -741,31 +762,19 @@ mod tests {
 
     #[test]
     fn abbreviated_fr_prefix() {
-        let out = build_abbreviated(
-            "Avenue Louise 32, 1050 Ixelles",
-            "Avenue Louise",
-            "fr",
-        );
+        let out = build_abbreviated("Avenue Louise 32, 1050 Ixelles", "Avenue Louise", "fr");
         assert_eq!(out.as_deref(), Some("Av. Louise 32, 1050 Ixelles"));
     }
 
     #[test]
     fn abbreviated_nl_suffix() {
-        let out = build_abbreviated(
-            "Stationsstraat 1, 2000 Antwerpen",
-            "Stationsstraat",
-            "nl",
-        );
+        let out = build_abbreviated("Stationsstraat 1, 2000 Antwerpen", "Stationsstraat", "nl");
         assert_eq!(out.as_deref(), Some("Stationsstr. 1, 2000 Antwerpen"));
     }
 
     #[test]
     fn abbreviated_de_suffix() {
-        let out = build_abbreviated(
-            "Rathausplatz 15, 4700 Eupen",
-            "Rathausplatz",
-            "de",
-        );
+        let out = build_abbreviated("Rathausplatz 15, 4700 Eupen", "Rathausplatz", "de");
         assert_eq!(out.as_deref(), Some("Rathauspl. 15, 4700 Eupen"));
     }
 

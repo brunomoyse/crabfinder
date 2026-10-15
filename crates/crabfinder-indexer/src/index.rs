@@ -50,7 +50,9 @@ pub fn build_text_analyzer() -> TextAnalyzer {
 /// **before** any read or write that touches a field configured with
 /// `set_tokenizer(TOKENIZER_NAME)`.
 pub fn register_tokenizers(index: &Index) {
-    index.tokenizers().register(TOKENIZER_NAME, build_text_analyzer());
+    index
+        .tokenizers()
+        .register(TOKENIZER_NAME, build_text_analyzer());
 }
 
 // --- Field names ------------------------------------------------------------
@@ -293,11 +295,7 @@ mod tests {
     #[test]
     fn schema_exposes_expected_fields() {
         let s = CrabSchema::build();
-        let names: Vec<&str> = s
-            .schema
-            .fields()
-            .map(|(_, e)| e.name())
-            .collect();
+        let names: Vec<&str> = s.schema.fields().map(|(_, e)| e.name()).collect();
         let expected = [
             FIELD_BEST_ID,
             FIELD_SEARCHABLE,
@@ -331,4 +329,3 @@ mod tests {
         );
     }
 }
-

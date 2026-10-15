@@ -112,12 +112,7 @@ pub async fn health_check(client: &Client, base: &str) -> Result<()> {
 }
 
 /// Execute one /geocode query against the service.
-async fn execute_one(
-    client: &Client,
-    base: &str,
-    limit: usize,
-    query: EvalQuery,
-) -> QueryResult {
+async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery) -> QueryResult {
     let t0 = Instant::now();
     let url = format!("{base}/geocode");
     let resp_result = client
@@ -185,10 +180,7 @@ async fn execute_one(
 ///
 /// Aborts mid-run if connection-level errors exceed 5% of queries executed
 /// (the "connection_refused → service-degraded" case from file 14 §4).
-pub async fn run_eval(
-    config: &RunnerConfig,
-    queries: Vec<EvalQuery>,
-) -> Result<Vec<QueryResult>> {
+pub async fn run_eval(config: &RunnerConfig, queries: Vec<EvalQuery>) -> Result<Vec<QueryResult>> {
     let client = Client::builder()
         .timeout(config.timeout)
         .build()
@@ -250,18 +242,13 @@ pub async fn run_eval(
 
     info!(
         total = results.len(),
-        transport_errs,
-        http_5xx_errs,
-        "runner: eval complete"
+        transport_errs, http_5xx_errs, "runner: eval complete"
     );
     Ok(results)
 }
 
 /// Dry-run: execute the first 50 queries, project full-run wall-clock.
-pub async fn dry_run(
-    config: &RunnerConfig,
-    mut queries: Vec<EvalQuery>,
-) -> Result<()> {
+pub async fn dry_run(config: &RunnerConfig, mut queries: Vec<EvalQuery>) -> Result<()> {
     let total_planned = queries.len();
     let dry_n = 50.min(total_planned);
     queries.truncate(dry_n);
@@ -354,7 +341,11 @@ pub async fn validate_eval_set(
     println!();
     println!("====== --validate-eval-set summary ======");
     println!("Queries validated: {total}");
-    println!("Missing expected_* IDs in top-50: {} ({:.2}%)", missing.len(), missing_pct);
+    println!(
+        "Missing expected_* IDs in top-50: {} ({:.2}%)",
+        missing.len(),
+        missing_pct
+    );
     if missing.len() <= 20 {
         for id in &missing {
             println!("  MISSING: {id}");

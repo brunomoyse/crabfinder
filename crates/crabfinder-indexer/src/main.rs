@@ -18,7 +18,9 @@ use crabfinder_indexer::index::CrabIndexWriter;
 use crabfinder_indexer::meta::write_sidecar;
 use crabfinder_indexer::mid_street::{MID_STREET_FILENAME, MidStreetBuilder};
 use crabfinder_indexer::notability::NotabilityMap;
-use crabfinder_indexer::pipeline::{IngestRegion, load_dictionaries, stream_resolved_addresses, StreamReport};
+use crabfinder_indexer::pipeline::{
+    IngestRegion, StreamReport, load_dictionaries, stream_resolved_addresses,
+};
 
 /// Expected per-region status-filter rejection rate, derived from the
 /// Phase 5 Step 4 full-corpus indexing run (see `11-best-data-verified.md`
@@ -68,7 +70,11 @@ impl RegionArg {
 }
 
 #[derive(Debug, Parser)]
-#[command(name = "crabfinder-indexer", version, about = "Index BeSt addresses into Tantivy.")]
+#[command(
+    name = "crabfinder-indexer",
+    version,
+    about = "Index BeSt addresses into Tantivy."
+)]
 struct Args {
     /// Directory containing the BeSt zip bundle (e.g. ./best-full-latest).
     #[arg(long)]
@@ -106,7 +112,9 @@ struct Args {
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .with_target(false)
         .init();
 
@@ -121,8 +129,9 @@ fn main() -> Result<()> {
     info!(regions = ?regions, "regions selected");
 
     let notability_map = match args.notability_whitelist.as_ref() {
-        Some(p) => NotabilityMap::load(p)
-            .with_context(|| format!("loading notability whitelist {p:?}"))?,
+        Some(p) => {
+            NotabilityMap::load(p).with_context(|| format!("loading notability whitelist {p:?}"))?
+        }
         None => {
             info!("no --notability-whitelist supplied; all docs get notability_score = 1.0");
             NotabilityMap::empty()
@@ -152,12 +161,8 @@ fn main() -> Result<()> {
 
         let t_pass2 = Instant::now();
         let mut stamped: u64 = 0;
-        let report = stream_resolved_addresses(
-            &args.best_dir,
-            *region,
-            &dicts,
-            args.limit,
-            |addr| {
+        let report =
+            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |addr| {
                 if samples_printed < args.print_samples {
                     samples_printed += 1;
                     println!(
@@ -175,9 +180,8 @@ fn main() -> Result<()> {
                 // mid_street::record() for the exact semantics.
                 mid_street_builder.record(&addr);
                 Ok(true)
-            },
-        )
-        .with_context(|| format!("Pass 2: streaming {region:?}"))?;
+            })
+            .with_context(|| format!("Pass 2: streaming {region:?}"))?;
         let pass2_ms = t_pass2.elapsed().as_millis();
         info!(?region, elapsed_ms = pass2_ms, %report, notability_stamped = stamped, "Pass 2 done");
 
@@ -245,7 +249,10 @@ fn main() -> Result<()> {
         total, total_stamped, notability_map.n_entries, notability_map.n_unique_bgids
     );
     println!("  commit: {commit_ms}ms");
-    println!("  wall-clock total: {total_ms}ms ({:.1} min)", total_ms as f64 / 60_000.0);
+    println!(
+        "  wall-clock total: {total_ms}ms ({:.1} min)",
+        total_ms as f64 / 60_000.0
+    );
 
     if let Ok(size) = total_dir_size(&args.output) {
         let mb = size as f64 / 1024.0 / 1024.0;

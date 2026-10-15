@@ -31,8 +31,7 @@ use crabfinder_core::{LambertCoord, WgsCoord};
 /// ships with `crs-definitions` 0.4.0 drops the towgs84 line. Without it,
 /// the inverse projection lands on the BD72 ellipsoid (Hayford) and is never
 /// shifted onto WGS84, producing a systematic ~110 m offset.
-const LAMBERT72_PROJ_STRING: &str =
-    "+proj=lcc +lat_1=49.8333339 +lat_2=51.16666723333333 +lat_0=90 \
+const LAMBERT72_PROJ_STRING: &str = "+proj=lcc +lat_1=49.8333339 +lat_2=51.16666723333333 +lat_0=90 \
      +lon_0=4.367486666666666 +x_0=150000.013 +y_0=5400088.438 \
      +ellps=intl \
      +towgs84=-106.869,52.2978,-103.724,0.3366,-0.4570,1.8422,-1.2747 \
@@ -49,8 +48,8 @@ impl Reprojector {
     pub fn new() -> Result<Self> {
         let from = Proj::from_user_string(LAMBERT72_PROJ_STRING)
             .context("compiling Lambert 72 proj-string")?;
-        let to = Proj::from_user_string(WGS84_PROJ_STRING)
-            .context("compiling WGS84 proj-string")?;
+        let to =
+            Proj::from_user_string(WGS84_PROJ_STRING).context("compiling WGS84 proj-string")?;
         Ok(Self { from, to })
     }
 

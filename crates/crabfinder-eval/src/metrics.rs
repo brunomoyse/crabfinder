@@ -94,9 +94,10 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
         // Known_failure → tracking panel, NOT aggregates
         if r.query.expected_to_fail {
             let (subcategory, _category) = match &r.query.source {
-                EvalQuerySource::Adversarial { subcategory, category } => {
-                    (subcategory.clone(), category.as_str())
-                }
+                EvalQuerySource::Adversarial {
+                    subcategory,
+                    category,
+                } => (subcategory.clone(), category.as_str()),
                 _ => ("?".to_string(), "?"),
             };
             let (top_bgid, top_mt) = r
@@ -141,7 +142,10 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
                 street_primary_lang,
                 boosted,
             } => {
-                by_region.entry(region.clone()).or_default().add(rank, bid_rank, strict);
+                by_region
+                    .entry(region.clone())
+                    .or_default()
+                    .add(rank, bid_rank, strict);
                 by_variant
                     .entry(variant_type.as_str().to_string())
                     .or_default()
@@ -172,9 +176,18 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
 
     m.overall = overall_acc.into_bucket();
     m.latency = compute_latency(&mut latency_samples);
-    m.by_region = by_region.into_iter().map(|(k, v)| (k, v.into_bucket())).collect();
-    m.by_variant = by_variant.into_iter().map(|(k, v)| (k, v.into_bucket())).collect();
-    m.by_language = by_language.into_iter().map(|(k, v)| (k, v.into_bucket())).collect();
+    m.by_region = by_region
+        .into_iter()
+        .map(|(k, v)| (k, v.into_bucket()))
+        .collect();
+    m.by_variant = by_variant
+        .into_iter()
+        .map(|(k, v)| (k, v.into_bucket()))
+        .collect();
+    m.by_language = by_language
+        .into_iter()
+        .map(|(k, v)| (k, v.into_bucket()))
+        .collect();
     m.by_adversarial_category = by_adv
         .into_iter()
         .map(|(k, v)| (k, v.into_bucket()))
@@ -204,8 +217,7 @@ where
     if expected.is_empty() {
         return 0;
     }
-    let exp_set: std::collections::HashSet<&str> =
-        expected.iter().map(String::as_str).collect();
+    let exp_set: std::collections::HashSet<&str> = expected.iter().map(String::as_str).collect();
     for (i, f) in features.iter().enumerate() {
         let k = key(f);
         if !k.is_empty() && exp_set.contains(k.as_str()) {
@@ -293,7 +305,9 @@ fn compute_latency(samples: &mut Vec<f64>) -> LatencyBucket {
     let pick = |q: f64| -> f64 {
         // Nearest-rank percentile (1-indexed). Matches Tantivy/Pelias eval
         // conventions where p99 of 100 samples is the 99th-largest.
-        let idx = ((q * n as f64).ceil() as usize).saturating_sub(1).min(n - 1);
+        let idx = ((q * n as f64).ceil() as usize)
+            .saturating_sub(1)
+            .min(n - 1);
         samples[idx]
     };
     LatencyBucket {
@@ -327,7 +341,13 @@ mod tests {
         }
     }
 
-    fn result_with_top(q: EvalQuery, top_bgid: &str, top_best: &str, mt: &str, latency: f64) -> QueryResult {
+    fn result_with_top(
+        q: EvalQuery,
+        top_bgid: &str,
+        top_best: &str,
+        mt: &str,
+        latency: f64,
+    ) -> QueryResult {
         QueryResult {
             query: q,
             features: vec![(top_bgid.into(), top_best.into(), mt.into())],
@@ -342,7 +362,12 @@ mod tests {
     fn recall_at_1_seven_of_ten_correct_top1() {
         let results: Vec<QueryResult> = (0..10)
             .map(|i| {
-                let q = synth_q(&format!("q{i}"), &format!("bgid-{i}"), &format!("best-{i}"), "flanders");
+                let q = synth_q(
+                    &format!("q{i}"),
+                    &format!("bgid-{i}"),
+                    &format!("best-{i}"),
+                    "flanders",
+                );
                 let (top_bgid, top_best) = if i < 7 {
                     (format!("bgid-{i}"), format!("best-{i}")) // hit
                 } else {

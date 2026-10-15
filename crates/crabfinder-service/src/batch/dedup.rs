@@ -142,7 +142,13 @@ pub fn output_row_from(input: InputRow, resolved: ResolvedAddress) -> OutputRow 
     let (matched_street, matched_house_number, matched_postal_code, best_id) =
         match resolved.address.as_ref() {
             Some(a) => (
-                Some(a.street_name.fr.clone().or(a.street_name.nl.clone()).unwrap_or_default()),
+                Some(
+                    a.street_name
+                        .fr
+                        .clone()
+                        .or(a.street_name.nl.clone())
+                        .unwrap_or_default(),
+                ),
                 Some(a.house_number.clone()),
                 Some(a.postal_code.clone()),
                 Some(a.id.to_string()),
@@ -323,8 +329,8 @@ mod tests {
 
     #[test]
     fn output_row_carries_confidence_and_fallback_reason() {
-        use crate::hydrate::HydratedHit;
         use crate::dedup::MatchType;
+        use crate::hydrate::HydratedHit;
 
         let row = make_input("42", "Av Louise", Some("99999"), Some("1050"));
         let resolved = ResolvedAddress {
@@ -347,7 +353,10 @@ mod tests {
         let out = output_row_from(row, resolved);
         assert_eq!(out.id, "42");
         assert_eq!(out.confidence, "median_street");
-        assert_eq!(out.fallback_reason.as_deref(), Some("house_number_out_of_range"));
+        assert_eq!(
+            out.fallback_reason.as_deref(),
+            Some("house_number_out_of_range")
+        );
         assert_eq!(out.lat, Some(50.83));
         assert_eq!(out.street_match_score, Some(12.5));
         assert_eq!(out.house_number_delta, None);

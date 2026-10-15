@@ -8,7 +8,9 @@
 use std::sync::Arc;
 
 use tantivy::collector::TopDocs;
-use tantivy::query::{BooleanQuery, BoostQuery, Occur, PhraseQuery, Query as TantivyQuery, TermQuery};
+use tantivy::query::{
+    BooleanQuery, BoostQuery, Occur, PhraseQuery, Query as TantivyQuery, TermQuery,
+};
 use tantivy::schema::IndexRecordOption;
 use tantivy::{DocId, Index, Score, SegmentReader, Term};
 
@@ -144,8 +146,10 @@ pub fn build_strict_query(
         // (slot[0]); abbreviation expansions don't participate in phrase
         // ordering.
         if slots.len() >= 2 {
-            let phrase_terms: Vec<Term> =
-                slots.iter().map(|s| Term::from_field_text(field, &s[0])).collect();
+            let phrase_terms: Vec<Term> = slots
+                .iter()
+                .map(|s| Term::from_field_text(field, &s[0]))
+                .collect();
             let phrase = PhraseQuery::new(phrase_terms);
             let boosted: Box<dyn TantivyQuery> = Box::new(BoostQuery::new(Box::new(phrase), 3.0));
             text_branches.push((Occur::Should, boosted));
@@ -187,7 +191,10 @@ pub fn build_strict_query(
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
         clauses.push((Occur::Must, tq));
     }
-    let postal = filters.postal_code.as_deref().or(parsed.postal_code.as_deref());
+    let postal = filters
+        .postal_code
+        .as_deref()
+        .or(parsed.postal_code.as_deref());
     if let Some(pc) = postal {
         let term = Term::from_field_text(schema.postal_code, pc);
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
@@ -229,10 +236,7 @@ mod strict_tests {
     fn analyze_splits_on_hyphen() {
         let index = empty_index_with_tokenizer();
         // Hyphen is a hard separator (see indexer's TextAnalyzer config).
-        assert_eq!(
-            analyze(&index, "Grote-Ringlaan"),
-            vec!["grote", "ringlaan"]
-        );
+        assert_eq!(analyze(&index, "Grote-Ringlaan"), vec!["grote", "ringlaan"]);
     }
 
     #[test]
@@ -280,13 +284,7 @@ mod strict_tests {
             region: None,
             postal_code: Some("1050".into()),
         };
-        let q = build_strict_query(
-            searchable_field(&schema),
-            &[],
-            &parsed,
-            &schema,
-            &filters,
-        );
+        let q = build_strict_query(searchable_field(&schema), &[], &parsed, &schema, &filters);
         assert!(q.is_some(), "filter alone must produce a query");
     }
 
@@ -377,7 +375,10 @@ pub fn build_fuzzy_query(
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
         clauses.push((Occur::Must, tq));
     }
-    let postal = filters.postal_code.as_deref().or(parsed.postal_code.as_deref());
+    let postal = filters
+        .postal_code
+        .as_deref()
+        .or(parsed.postal_code.as_deref());
     if let Some(pc) = postal {
         let term = Term::from_field_text(schema.postal_code, pc);
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));

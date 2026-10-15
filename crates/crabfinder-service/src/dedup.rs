@@ -109,7 +109,11 @@ pub fn group_by_building(hits: &[RawHit]) -> Vec<Group> {
 
     // Third pass: sort by max_score descending. Sort is stable, so ties
     // preserve the insertion order set in pass 1.
-    groups.sort_by(|a, b| b.max_score.partial_cmp(&a.max_score).unwrap_or(std::cmp::Ordering::Equal));
+    groups.sort_by(|a, b| {
+        b.max_score
+            .partial_cmp(&a.max_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     groups
 }
 
@@ -130,7 +134,11 @@ fn pick_representative<'a>(members: &[&'a RawHit]) -> &'a RawHit {
 /// Returns Ordering::Less if `a` is the better representative.
 fn rep_cmp(a: &RawHit, b: &RawHit) -> std::cmp::Ordering {
     // Higher score wins → invert ordering on score.
-    match b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal) {
+    match b
+        .score
+        .partial_cmp(&a.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+    {
         std::cmp::Ordering::Equal => {}
         ord => return ord,
     }
@@ -229,11 +237,21 @@ mod tests {
         // If we used sum, B would beat A. With max, A wins.
         let mut h = vec![hit("A|1", 10.0, Some("1"), "a/1", MatchType::Strict, 0)];
         for i in 0..11 {
-            h.push(hit("B|1", 1.0, Some(&format!("{i:02}")), &format!("b/{i}"), MatchType::Fuzzy, 1 + i));
+            h.push(hit(
+                "B|1",
+                1.0,
+                Some(&format!("{i:02}")),
+                &format!("b/{i}"),
+                MatchType::Fuzzy,
+                1 + i,
+            ));
         }
         let g = group_by_building(&h);
         assert_eq!(g.len(), 2);
-        assert_eq!(g[0].building_group_id, "A|1", "A must rank first with max scoring");
+        assert_eq!(
+            g[0].building_group_id, "A|1",
+            "A must rank first with max scoring"
+        );
         assert_eq!(g[0].max_score, 10.0);
         assert_eq!(g[0].match_type, MatchType::Strict);
         assert_eq!(g[1].building_group_id, "B|1");
@@ -252,7 +270,11 @@ mod tests {
             hit("B|1", 2.0, Some("3"), "addr/3", MatchType::Fuzzy, 2),
         ];
         let g = group_by_building(&h);
-        assert_eq!(g[0].match_type, MatchType::Strict, "any strict member → group strict");
+        assert_eq!(
+            g[0].match_type,
+            MatchType::Strict,
+            "any strict member → group strict"
+        );
         // Representative is the strict one because it has the highest score.
         assert_eq!(g[0].representative_index, 1);
     }

@@ -25,7 +25,7 @@ fn decode_text(t: &BytesText<'_>) -> Result<String> {
 }
 
 use crabfinder_core::{
-    BestId, Language, Municipality, MunicipalityId, MultilingualName, PartOfMunicipality,
+    BestId, Language, MultilingualName, Municipality, MunicipalityId, PartOfMunicipality,
     PartOfMunicipalityId, PostalInfo, PostalInfoId, Status, Street, StreetId, StreetType,
 };
 
@@ -41,7 +41,9 @@ struct CodeFields {
 impl CodeFields {
     fn into_best_id(self) -> Result<BestId> {
         if self.namespace.is_empty() || self.object_identifier.is_empty() {
-            return Err(anyhow!("missing namespace or objectIdentifier in <com:code>"));
+            return Err(anyhow!(
+                "missing namespace or objectIdentifier in <com:code>"
+            ));
         }
         Ok(BestId::new(
             self.namespace,
@@ -94,7 +96,10 @@ pub fn read_municipalities<R: BufRead>(reader: R) -> Result<Vec<Municipality>> {
                 if in_record && end_is(&e, b"tns:municipality") {
                     in_record = false;
                     let id = MunicipalityId::new(code.clone().into_best_id()?);
-                    out.push(Municipality { id, names: names.clone() });
+                    out.push(Municipality {
+                        id,
+                        names: names.clone(),
+                    });
                 }
             }
             Event::Text(t) if in_record => {
@@ -178,7 +183,10 @@ pub fn read_postal_infos<R: BufRead>(reader: R) -> Result<Vec<PostalInfo>> {
                 if in_record && end_is(&e, b"tns:postalInfo") {
                     in_record = false;
                     let id = PostalInfoId::new(code.clone().into_best_id()?);
-                    out.push(PostalInfo { id, names: names.clone() });
+                    out.push(PostalInfo {
+                        id,
+                        names: names.clone(),
+                    });
                 }
             }
             Event::Text(t) if in_record => {
@@ -221,7 +229,10 @@ pub fn read_parts_of_municipality<R: BufRead>(reader: R) -> Result<Vec<PartOfMun
                 if in_record && end_is(&e, b"tns:partOfMunicipality") {
                     in_record = false;
                     let id = PartOfMunicipalityId::new(code.clone().into_best_id()?);
-                    out.push(PartOfMunicipality { id, names: names.clone() });
+                    out.push(PartOfMunicipality {
+                        id,
+                        names: names.clone(),
+                    });
                 }
             }
             Event::Text(t) if in_record => {

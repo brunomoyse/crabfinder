@@ -82,8 +82,7 @@ impl SyntheticEvalSet {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let body = serde_json::to_string_pretty(self)
-            .context("serialising SyntheticEvalSet")?;
+        let body = serde_json::to_string_pretty(self).context("serialising SyntheticEvalSet")?;
         fs::write(path, body).with_context(|| format!("writing {path:?}"))
     }
 }
@@ -351,10 +350,7 @@ queries:
         assert_eq!(set.queries.len(), 2);
         let n = &set.queries[0];
         assert_eq!(n.category, AdversarialCategory::Notability);
-        assert_eq!(
-            n.expected_building_group_id_set.as_ref().unwrap().len(),
-            2
-        );
+        assert_eq!(n.expected_building_group_id_set.as_ref().unwrap().len(), 2);
         assert!(n.regression_marker);
 
         let k = &set.queries[1];

@@ -74,7 +74,10 @@ impl AddressCountIndex {
                 .context("opening store reader (Pass 1)")?;
             for doc_res in store.iter::<TantivyDocument>(seg.alive_bitset()) {
                 let doc = doc_res.context("reading doc (Pass 1)")?;
-                if let Some(bgid) = doc.get_first(schema.building_group_id).and_then(|v| v.as_str()) {
+                if let Some(bgid) = doc
+                    .get_first(schema.building_group_id)
+                    .and_then(|v| v.as_str())
+                {
                     let key = street_key_from_bgid(bgid);
                     *street_counts.entry(key.to_string()).or_insert(0) += 1;
                 }
@@ -93,7 +96,10 @@ impl AddressCountIndex {
             let mut doc_id: u32 = 0;
             for doc_res in store.iter::<TantivyDocument>(seg.alive_bitset()) {
                 let doc = doc_res.context("reading doc (Pass 2)")?;
-                if let Some(bgid) = doc.get_first(schema.building_group_id).and_then(|v| v.as_str()) {
+                if let Some(bgid) = doc
+                    .get_first(schema.building_group_id)
+                    .and_then(|v| v.as_str())
+                {
                     let key = street_key_from_bgid(bgid);
                     if let Some(&c) = street_counts.get(key) {
                         counts[doc_id as usize] = c;
@@ -130,10 +136,7 @@ mod tests {
             street_key_from_bgid("https://databrussels.be/id/streetname|2461|1"),
             "https://databrussels.be/id/streetname|2461"
         );
-        assert_eq!(
-            street_key_from_bgid("ns|oid|12A"),
-            "ns|oid"
-        );
+        assert_eq!(street_key_from_bgid("ns|oid|12A"), "ns|oid");
     }
 
     #[test]

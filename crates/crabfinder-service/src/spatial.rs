@@ -129,7 +129,13 @@ impl SpatialIndex {
     /// The R-tree iterates by squared planar distance on (lon, lat). We
     /// oversearch by 2× to catch the ~1.5× lat/lon scale mismatch at
     /// Belgium's latitude, then resort by exact Haversine.
-    pub fn nearest(&self, lat: f64, lon: f64, limit: usize, radius_m: Option<f64>) -> Vec<SpatialHit> {
+    pub fn nearest(
+        &self,
+        lat: f64,
+        lon: f64,
+        limit: usize,
+        radius_m: Option<f64>,
+    ) -> Vec<SpatialHit> {
         if limit == 0 || self.point_count == 0 {
             return Vec::new();
         }
@@ -290,7 +296,11 @@ mod tests {
         let idx = SpatialIndex::from_points(pts);
 
         let hits_in_500m = idx.nearest(50.8467, 4.3525, 10, Some(500.0));
-        assert_eq!(hits_in_500m.len(), 1, "only the query point itself is <500m");
+        assert_eq!(
+            hits_in_500m.len(),
+            1,
+            "only the query point itself is <500m"
+        );
 
         let hits_in_2000m = idx.nearest(50.8467, 4.3525, 10, Some(2000.0));
         assert_eq!(hits_in_2000m.len(), 3, "all three within 2km");
@@ -320,8 +330,14 @@ mod tests {
         // Antwerp ≈ 51.2194, 4.4025
         let hits = idx.nearest(51.2194, 4.4025, 1, None);
         assert_eq!(hits.len(), 1);
-        assert!(hits[0].distance_m > 30_000.0, "Antwerp→Brussels should be >30km");
-        assert!(hits[0].distance_m < 50_000.0, "Antwerp→Brussels should be <50km");
+        assert!(
+            hits[0].distance_m > 30_000.0,
+            "Antwerp→Brussels should be >30km"
+        );
+        assert!(
+            hits[0].distance_m < 50_000.0,
+            "Antwerp→Brussels should be <50km"
+        );
     }
 
     #[test]

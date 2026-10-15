@@ -56,7 +56,11 @@ use crabfinder_service::query_builder::{
 use crabfinder_service::spatial::{SharedSpatialIndex, SpatialHit, SpatialIndex};
 
 #[derive(Debug, Parser)]
-#[command(name = "crabfinder-service", version, about = "Serve crabfinder over HTTP.")]
+#[command(
+    name = "crabfinder-service",
+    version,
+    about = "Serve crabfinder over HTTP."
+)]
 struct Args {
     /// Path to the Tantivy index directory.
     #[arg(long, env = "CRABFINDER_INDEX")]
@@ -156,8 +160,8 @@ async fn main() -> Result<()> {
     // Build the per-segment address-count index used by /geocode's
     // combined tweak_score as a tiebreaker on ambiguous queries.
     let t_ac = std::time::Instant::now();
-    let addr_counts = AddressCountIndex::build(&reader, &schema)
-        .context("building AddressCountIndex")?;
+    let addr_counts =
+        AddressCountIndex::build(&reader, &schema).context("building AddressCountIndex")?;
     info!(
         elapsed_ms = t_ac.elapsed().as_millis(),
         n_docs = addr_counts.n_docs,
@@ -170,7 +174,9 @@ async fn main() -> Result<()> {
     // Schema-v7: load the mid_street side-table. Missing file → empty index
     // (logged warning), so a v6-built index still boots — only the batch
     // resolver's `Confidence::MedianStreet` is disabled.
-    let mid_street_path = args.index.join(crabfinder_indexer::mid_street::MID_STREET_FILENAME);
+    let mid_street_path = args
+        .index
+        .join(crabfinder_indexer::mid_street::MID_STREET_FILENAME);
     let mid_street = MidStreetIndex::load(&mid_street_path)
         .with_context(|| format!("loading mid_street side-file {mid_street_path:?}"))?;
     let mid_street = Arc::new(mid_street);
@@ -203,7 +209,12 @@ async fn main() -> Result<()> {
             "/batch/geocode",
             axum::routing::post(batch::batch_geocode).route_layer(batch::body_limit_layer()),
         )
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .with_state(state);
 
     let addr: SocketAddr = SocketAddr::new(args.host, args.port);
@@ -581,7 +592,10 @@ async fn geocode(
     };
 
     // Top-level summary: strict if any returned feature is strict, else fuzzy.
-    let top_level_mt_str = if features.iter().any(|f| f.match_type == MatchType::Strict.as_str()) {
+    let top_level_mt_str = if features
+        .iter()
+        .any(|f| f.match_type == MatchType::Strict.as_str())
+    {
         "strict"
     } else if features.is_empty() {
         top_level_mt.as_str()
@@ -757,7 +771,9 @@ async fn reverse(
     // block can have hundreds of units sharing very close coordinates.
     let raw_limit = (limit * RAW_HIT_MULTIPLIER).min(RAW_HIT_CAP);
 
-    let spatial_hits = s.spatial.nearest(params.lat, params.lng, raw_limit, params.radius_m);
+    let spatial_hits = s
+        .spatial
+        .nearest(params.lat, params.lng, raw_limit, params.radius_m);
     let raw_hit_count = spatial_hits.len();
 
     // Materialise docs + RawHits. Score = -distance_m so dedup's max-score
@@ -766,7 +782,15 @@ async fn reverse(
     let mut docs: Vec<TantivyDocument> = Vec::with_capacity(spatial_hits.len());
     let mut raw_hits: Vec<RawHit> = Vec::with_capacity(spatial_hits.len());
     let mut distances: Vec<f64> = Vec::with_capacity(spatial_hits.len());
-    for (i, SpatialHit { doc_addr, distance_m, .. }) in spatial_hits.iter().enumerate() {
+    for (
+        i,
+        SpatialHit {
+            doc_addr,
+            distance_m,
+            ..
+        },
+    ) in spatial_hits.iter().enumerate()
+    {
         let doc = searcher
             .doc::<TantivyDocument>(*doc_addr)
             .map_err(|e| ServiceError::Internal(anyhow::anyhow!("Tantivy doc: {e}")))?;
@@ -888,8 +912,8 @@ fn hydrate(
 mod tests {
     use super::*;
     use crabfinder_core::{
-        Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName,
-        MunicipalityId, PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
+        Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName, MunicipalityId,
+        PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
     };
     use crabfinder_indexer::index::CrabIndexWriter;
     use crabfinder_indexer::meta::{
@@ -971,54 +995,123 @@ mod tests {
         // `building_group_id` (street_oid=3919, house=32) → dedup target.
         for (i, box_no) in ["1", "2", "3", "4", "5"].iter().enumerate() {
             out.push(make_addr(
-                &format!("10{i}"), "3919", Some("Avenue Louise"), Some("Louizalaan"),
-                "32", Some(box_no), "1050", 50.8345, 4.3567,
+                &format!("10{i}"),
+                "3919",
+                Some("Avenue Louise"),
+                Some("Louizalaan"),
+                "32",
+                Some(box_no),
+                "1050",
+                50.8345,
+                4.3567,
             ));
         }
         // Avenue Louise #32A — single unit, distinct building_group_id.
         out.push(make_addr(
-            "120", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "32A", Some("1"), "1050", 50.8345, 4.3568,
+            "120",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "32A",
+            Some("1"),
+            "1050",
+            50.8345,
+            4.3568,
         ));
         // Avenue Louise #34 — single unit.
         out.push(make_addr(
-            "121", "3919", Some("Avenue Louise"), Some("Louizalaan"),
-            "34", Some("1"), "1050", 50.8346, 4.3569,
+            "121",
+            "3919",
+            Some("Avenue Louise"),
+            Some("Louizalaan"),
+            "34",
+            Some("1"),
+            "1050",
+            50.8346,
+            4.3569,
         ));
         let extra: Vec<Address> = vec![
             // Grote-Ringlaan (NL) / Boulevard de la Grande Ceinture (FR).
             make_addr(
-                "200", "4962",
-                Some("Boulevard de la Grande Ceinture"), Some("Grote-Ringlaan"),
-                "1", Some("0001"), "1070", 50.8466, 4.2981,
+                "200",
+                "4962",
+                Some("Boulevard de la Grande Ceinture"),
+                Some("Grote-Ringlaan"),
+                "1",
+                Some("0001"),
+                "1070",
+                50.8466,
+                4.2981,
             ),
             // Grand-Place (FR) / Grote Markt (NL) — the actual one.
             make_addr(
-                "300", "7", Some("Grand-Place"), Some("Grote Markt"),
-                "1", None, "1000", 50.8466, 4.3525,
+                "300",
+                "7",
+                Some("Grand-Place"),
+                Some("Grote Markt"),
+                "1",
+                None,
+                "1000",
+                50.8466,
+                4.3525,
             ),
             make_addr(
-                "301", "7", Some("Grand-Place"), Some("Grote Markt"),
-                "5", None, "1000", 50.8467, 4.3526,
+                "301",
+                "7",
+                Some("Grand-Place"),
+                Some("Grote Markt"),
+                "5",
+                None,
+                "1000",
+                50.8467,
+                4.3526,
             ),
             // Rue de la Loi (FR) / Wetstraat (NL).
             make_addr(
-                "400", "100", Some("Rue de la Loi"), Some("Wetstraat"),
-                "16", None, "1000", 50.8453, 4.3658,
+                "400",
+                "100",
+                Some("Rue de la Loi"),
+                Some("Wetstraat"),
+                "16",
+                None,
+                "1000",
+                50.8453,
+                4.3658,
             ),
             make_addr(
-                "401", "100", Some("Rue de la Loi"), Some("Wetstraat"),
-                "200", None, "1000", 50.8457, 4.3712,
+                "401",
+                "100",
+                Some("Rue de la Loi"),
+                Some("Wetstraat"),
+                "200",
+                None,
+                "1000",
+                50.8457,
+                4.3712,
             ),
             // Synthetic distractor that contains "loi" as a token.
             make_addr(
-                "500", "101", Some("Rue Loi-Belliard"), Some("Loi-Belliardstraat"),
-                "1", None, "1040", 50.8400, 4.3700,
+                "500",
+                "101",
+                Some("Rue Loi-Belliard"),
+                Some("Loi-Belliardstraat"),
+                "1",
+                None,
+                "1040",
+                50.8400,
+                4.3700,
             ),
             // Accent fixture: Place Saint-Étienne / Sint-Étiennestraat.
             make_addr(
-                "600", "102", Some("Place Saint-Étienne"), Some("Sint-Étiennestraat"),
-                "1", None, "1040", 50.8350, 4.3800,
+                "600",
+                "102",
+                Some("Place Saint-Étienne"),
+                Some("Sint-Étiennestraat"),
+                "1",
+                None,
+                "1040",
+                50.8350,
+                4.3800,
             ),
         ];
         out.extend(extra);
@@ -1079,12 +1172,18 @@ mod tests {
         let mut top_level_mt = MatchType::Strict;
         let mut top_docs: Vec<(f32, tantivy::DocAddress)> = Vec::new();
 
-        if let Some(q) = build_strict_query(field, &slots, &parsed, schema, &FilterParams::default()) {
-            top_docs = search_with_notability(&searcher, &q, raw_limit, addr_counts.clone()).unwrap();
+        if let Some(q) =
+            build_strict_query(field, &slots, &parsed, schema, &FilterParams::default())
+        {
+            top_docs =
+                search_with_notability(&searcher, &q, raw_limit, addr_counts.clone()).unwrap();
         }
         if top_docs.is_empty() {
-            if let Some(q) = build_fuzzy_query(field, &slots, &parsed, schema, &FilterParams::default()) {
-                top_docs = search_with_notability(&searcher, &q, raw_limit, addr_counts.clone()).unwrap();
+            if let Some(q) =
+                build_fuzzy_query(field, &slots, &parsed, schema, &FilterParams::default())
+            {
+                top_docs =
+                    search_with_notability(&searcher, &q, raw_limit, addr_counts.clone()).unwrap();
                 if !top_docs.is_empty() {
                     top_level_mt = MatchType::Fuzzy;
                 }
@@ -1321,12 +1420,17 @@ mod tests {
         let mut match_type = "strict";
         let mut top_docs: Vec<(f32, tantivy::DocAddress)> = Vec::new();
 
-        if let Some(q) = build_strict_query(field, &slots, &parsed, schema, &FilterParams::default()) {
+        if let Some(q) =
+            build_strict_query(field, &slots, &parsed, schema, &FilterParams::default())
+        {
             top_docs = search_with_notability(&searcher, &q, limit, addr_counts.clone()).unwrap();
         }
         if top_docs.is_empty() {
-            if let Some(q) = build_fuzzy_query(field, &slots, &parsed, schema, &FilterParams::default()) {
-                top_docs = search_with_notability(&searcher, &q, limit, addr_counts.clone()).unwrap();
+            if let Some(q) =
+                build_fuzzy_query(field, &slots, &parsed, schema, &FilterParams::default())
+            {
+                top_docs =
+                    search_with_notability(&searcher, &q, limit, addr_counts.clone()).unwrap();
                 if !top_docs.is_empty() {
                     match_type = "fuzzy";
                 }
@@ -1504,10 +1608,19 @@ mod tests {
     #[test]
     fn dedup_collapses_louise_32_to_one_feature() {
         let (_dir, schema, index) = build_test_index();
-        let (features, _, raw) =
-            run_geocode(&index, &schema, "Avenue Louise 32", 10, /* expand */ false);
+        let (features, _, raw) = run_geocode(
+            &index,
+            &schema,
+            "Avenue Louise 32",
+            10,
+            /* expand */ false,
+        );
         assert_eq!(features.len(), 1, "expected one collapsed building");
-        assert_eq!(feat_unit_count(&features[0]), 5, "Louise 32 has 5 fixture boxes");
+        assert_eq!(
+            feat_unit_count(&features[0]),
+            5,
+            "Louise 32 has 5 fixture boxes"
+        );
         assert_eq!(feat_hn(&features[0]), "32");
         assert_eq!(raw, 5, "5 raw hits should have been fetched");
     }
@@ -1515,8 +1628,13 @@ mod tests {
     #[test]
     fn expand_true_returns_phase_2_shape() {
         let (_dir, schema, index) = build_test_index();
-        let (features, _, raw) =
-            run_geocode(&index, &schema, "Avenue Louise 32", 10, /* expand */ true);
+        let (features, _, raw) = run_geocode(
+            &index,
+            &schema,
+            "Avenue Louise 32",
+            10,
+            /* expand */ true,
+        );
         assert_eq!(features.len(), 5, "expand=true returns one feature per row");
         for f in &features {
             assert_eq!(feat_unit_count(f), 1, "expanded features have unit_count=1");
@@ -1530,8 +1648,13 @@ mod tests {
     #[test]
     fn singleton_building_unit_count_is_one() {
         let (_dir, schema, index) = build_test_index();
-        let (features, _, _) =
-            run_geocode(&index, &schema, "Grote-Ringlaan", 5, /* expand */ false);
+        let (features, _, _) = run_geocode(
+            &index,
+            &schema,
+            "Grote-Ringlaan",
+            5,
+            /* expand */ false,
+        );
         assert!(!features.is_empty());
         assert_eq!(feat_unit_count(&features[0]), 1);
     }
@@ -1544,7 +1667,11 @@ mod tests {
         let (_dir, schema, index) = build_test_index();
         let (features, _, _) =
             run_geocode(&index, &schema, "Grand-Place", 5, /* expand */ false);
-        assert_eq!(features.len(), 2, "two different house numbers, two buildings");
+        assert_eq!(
+            features.len(),
+            2,
+            "two different house numbers, two buildings"
+        );
         for f in &features {
             assert_eq!(feat_unit_count(f), 1);
         }
@@ -1561,7 +1688,10 @@ mod tests {
         assert_eq!(features.len(), 2, "limit=2 → exactly 2 buildings");
         // The oversearch should have fetched all 7 Louise rows so dedup is
         // well-formed; the truncation happens AFTER grouping.
-        assert!(raw >= 7, "oversearch should fetch all Louise rows (got {raw})");
+        assert!(
+            raw >= 7,
+            "oversearch should fetch all Louise rows (got {raw})"
+        );
     }
 
     /// Score aggregation must be max, not sum. We rely on the pure-function
@@ -1578,8 +1708,7 @@ mod tests {
         let (_dir, schema, index) = build_test_index();
         // "Étienne" → only the Étienne fixture matches; everything else is
         // missing the token. The (singleton, strict) feature must rank first.
-        let (features, _, _) =
-            run_geocode(&index, &schema, "Étienne", 10, /* expand */ false);
+        let (features, _, _) = run_geocode(&index, &schema, "Étienne", 10, /* expand */ false);
         assert!(!features.is_empty());
         let top_fr = features[0]
             .properties
@@ -1653,8 +1782,13 @@ mod tests {
     fn building_units_returns_all_five_in_stable_order() {
         let (_dir, schema, index) = build_test_index();
         // First find the building_group_id by searching.
-        let (features, _, _) =
-            run_geocode(&index, &schema, "Avenue Louise 32", 5, /* expand */ false);
+        let (features, _, _) = run_geocode(
+            &index,
+            &schema,
+            "Avenue Louise 32",
+            5,
+            /* expand */ false,
+        );
         assert_eq!(features.len(), 1);
         let bgid = features[0].building_group_id.clone();
         assert!(bgid.contains("|3919|32"), "unexpected bgid: {bgid}");
@@ -1756,10 +1890,7 @@ mod tests {
             .and_then(|s| s.as_str())
             .unwrap_or("")
             .to_lowercase();
-        assert!(
-            fr.contains("grand-place"),
-            "expected Grand-Place, got {fr}"
-        );
+        assert!(fr.contains("grand-place"), "expected Grand-Place, got {fr}");
         assert!(
             features[0].distance_m.unwrap() < 5.0,
             "distance should be ~0m, got {:?}",
@@ -1881,5 +2012,4 @@ mod tests {
         assert!(!features.is_empty());
         assert!(features[0].distance_m.unwrap() < 1e-6);
     }
-
 }

@@ -94,11 +94,7 @@ pub fn sniff_delimiter(sample: &[u8]) -> u8 {
     };
     let semis = slice.iter().filter(|&&b| b == b';').count();
     let commas = slice.iter().filter(|&&b| b == b',').count();
-    if semis > commas {
-        b';'
-    } else {
-        b','
-    }
+    if semis > commas { b';' } else { b',' }
 }
 
 /// Read CSV rows from `r`. The caller is responsible for delimiter detection
@@ -119,13 +115,16 @@ pub fn read_rows<R: Read + 'static>(
         .flexible(true)
         .trim(csv::Trim::All)
         .from_reader(r);
-    reader.into_deserialize::<InputRow>().enumerate().map(|(idx, res)| {
-        res.map_err(|e| BatchError::Read {
-            // +2: +1 for 0-based index, +1 for the header row.
-            line: (idx as u64) + 2,
-            source: e,
+    reader
+        .into_deserialize::<InputRow>()
+        .enumerate()
+        .map(|(idx, res)| {
+            res.map_err(|e| BatchError::Read {
+                // +2: +1 for 0-based index, +1 for the header row.
+                line: (idx as u64) + 2,
+                source: e,
+            })
         })
-    })
 }
 
 /// CSV writer wrapper. Holds an open `csv::Writer<W>` and exposes
@@ -287,7 +286,11 @@ mod tests {
             let mut w = BatchWriter::new(&mut buf);
             w.flush().unwrap();
         }
-        assert!(buf.is_empty(), "expected zero bytes, got {} bytes", buf.len());
+        assert!(
+            buf.is_empty(),
+            "expected zero bytes, got {} bytes",
+            buf.len()
+        );
     }
 
     // --- degraded-input cases (the docs promise specific behaviour here,
@@ -335,7 +338,7 @@ mod tests {
         let mut bytes: Vec<u8> = b"id,street,house_number,postal_code\n\
                                    1,Avenue Louise,32,1050\n\
                                    2,"
-            .to_vec();
+        .to_vec();
         bytes.extend_from_slice(&[0xFF, 0xFE]); // invalid UTF-8 in street
         bytes.extend_from_slice(b",71,1040\n");
         let cur = Cursor::new(bytes);

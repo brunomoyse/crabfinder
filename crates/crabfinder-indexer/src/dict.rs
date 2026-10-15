@@ -9,9 +9,7 @@
 
 use std::collections::HashMap;
 
-use crabfinder_core::{
-    BestId, Municipality, PartOfMunicipality, PostalInfo, Street,
-};
+use crabfinder_core::{BestId, Municipality, PartOfMunicipality, PostalInfo, Street};
 
 type JoinKey = (String, String);
 
@@ -68,7 +66,9 @@ impl<V> VersionedDict<V> {
     /// Iterate the most-recent version of each (ns, oid) entry. Order is
     /// HashMap-arbitrary — callers that need stability should sort.
     pub fn iter_latest(&self) -> impl Iterator<Item = &V> {
-        self.inner.values().filter_map(|versions| versions.last().map(|(_, v)| v))
+        self.inner
+            .values()
+            .filter_map(|versions| versions.last().map(|(_, v)| v))
     }
 }
 

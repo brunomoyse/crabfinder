@@ -26,6 +26,14 @@ pub enum VariantType {
     CrossLanguage,
     Casing,
     Abbreviated,
+    /// One-character edit in the longest street word (v2).
+    Typo,
+    /// Canonical query with the box number spelled out (`bte` / `bus`).
+    BoxNumber,
+    /// House number ≥ 1000 next to a postal code: both are 4 digits.
+    HighHouseNumber,
+    /// Commas between every part and a `B-` postal prefix.
+    MessyPunctuation,
 }
 
 impl VariantType {
@@ -37,6 +45,10 @@ impl VariantType {
             VariantType::CrossLanguage => "cross_language",
             VariantType::Casing => "casing",
             VariantType::Abbreviated => "abbreviated",
+            VariantType::Typo => "typo",
+            VariantType::BoxNumber => "box_number",
+            VariantType::HighHouseNumber => "high_house_number",
+            VariantType::MessyPunctuation => "messy_punctuation",
         }
     }
 }

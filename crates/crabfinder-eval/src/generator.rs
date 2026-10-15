@@ -55,6 +55,9 @@ struct Targets {
     flanders: usize,
     wallonia: usize,
     boosted_cross_language: usize,
+    /// Extra samples whose house number is ≥ 1000 — too rare in the random
+    /// pool to measure the 4-digit house-number / postal-code clash.
+    boosted_high_house_number: usize,
 }
 
 const MVP_TARGETS: Targets = Targets {
@@ -62,6 +65,7 @@ const MVP_TARGETS: Targets = Targets {
     flanders: 250,
     wallonia: 150,
     boosted_cross_language: 200,
+    boosted_high_house_number: 100,
 };
 
 pub fn generate_mvp(
@@ -84,6 +88,8 @@ pub fn generate_mvp(
         flanders: ((MVP_TARGETS.flanders as f64) * scale).round() as usize,
         wallonia: ((MVP_TARGETS.wallonia as f64) * scale).round() as usize,
         boosted_cross_language: ((MVP_TARGETS.boosted_cross_language as f64) * scale).round()
+            as usize,
+        boosted_high_house_number: ((MVP_TARGETS.boosted_high_house_number as f64) * scale).round()
             as usize,
     };
     info!(
@@ -145,7 +151,7 @@ pub fn generate_mvp(
     let mut queries: Vec<SyntheticQuery> = Vec::new();
     let mut next_id: usize = 1;
     for (_addr, address) in &random_addresses {
-        for (variant_type, query_string) in generate_variants(address) {
+        for (variant_type, query_string) in generate_variants(address, seed) {
             queries.push(SyntheticQuery {
                 id: format!("mvp-v1-{:06}", next_id),
                 sample_best_id: address.id.to_string(),
@@ -167,13 +173,14 @@ pub fn generate_mvp(
     // 6. Boosted cross_language: scan additional pool entries until we collect
     //    `boosted_cross_language` samples where the firing policy fires AND
     //    bgid wasn't already used in the random pool.
-    let boosted_addresses = collect_boosted_crosslang(
+    let boosted_addresses = collect_boosted(
         &searcher,
         &fields,
         &pools,
         &chosen_bgids_random,
         targets.boosted_cross_language,
         &mut rng,
+        should_fire_cross_language,
     )?;
     info!(
         boosted_collected = boosted_addresses.len(),
@@ -184,7 +191,7 @@ pub fn generate_mvp(
     // For boosted samples, emit ONLY the cross_language variant.
     for (_addr, address) in &boosted_addresses {
         let variant = build_cross_language(address)
-            .expect("collect_boosted_crosslang only returns addresses where firing succeeds");
+            .expect("collect_boosted only returns addresses where firing succeeds");
         queries.push(SyntheticQuery {
             id: format!("mvp-v1-{:06}", next_id),
             sample_best_id: address.id.0.to_string(),
@@ -202,9 +209,48 @@ pub fn generate_mvp(
         next_id += 1;
     }
 
+    // 6b. Boosted high house numbers: emit only that variant.
+    let mut used = chosen_bgids_random.clone();
+    used.extend(
+        boosted_addresses
+            .iter()
+            .map(|(_, a)| a.building_group_id.0.clone()),
+    );
+    let high = collect_boosted(
+        &searcher,
+        &fields,
+        &pools,
+        &used,
+        targets.boosted_high_house_number,
+        &mut rng,
+        |a| build_high_house_number(a).is_some(),
+    )?;
+    info!(
+        boosted_collected = high.len(),
+        target = targets.boosted_high_house_number,
+        "generator: boosted high_house_number pool collected"
+    );
+    for (_addr, address) in &high {
+        queries.push(SyntheticQuery {
+            id: format!("mvp-v1-{:06}", next_id),
+            sample_best_id: address.id.0.to_string(),
+            sample_building_group_id: address.building_group_id.0.clone(),
+            sample_region: region_iso(address.region).to_string(),
+            sample_street_primary_lang: street_primary_lang(&address.street_name)
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "?".to_string()),
+            variant_type: VariantType::HighHouseNumber,
+            boosted: true,
+            query_string: build_high_house_number(address).expect("filtered above"),
+            expected_best_id: address.id.0.to_string(),
+            expected_building_group_id: address.building_group_id.0.clone(),
+        });
+        next_id += 1;
+    }
+
     // 7. Write JSON
     let set = SyntheticEvalSet {
-        version: "mvp-v1".to_string(),
+        version: "v2".to_string(),
         seed,
         corpus: SyntheticCorpus {
             schema_version: 3,
@@ -251,6 +297,11 @@ pub fn generate_mvp(
         "with_postal",
         "cross_language",
         "casing",
+        "abbreviated",
+        "typo",
+        "box_number",
+        "high_house_number",
+        "messy_punctuation",
     ] {
         println!("  {v:<16}: {}", by_variant.get(v).copied().unwrap_or(0));
     }
@@ -373,16 +424,17 @@ fn read_address(
         .with_context(|| format!("parsing Address payload at {:?}", addr))
 }
 
-fn collect_boosted_crosslang(
+/// Walk the pools (minus `chosen_bgids_random`) in a seeded shuffled order
+/// and keep the first `target` addresses accepted by `keep`.
+fn collect_boosted(
     searcher: &tantivy::Searcher,
     fields: &Fields,
     pools: &HashMap<Region, HashMap<String, DocAddress>>,
     chosen_bgids_random: &std::collections::HashSet<String>,
     target: usize,
     rng: &mut ChaCha20Rng,
+    keep: impl Fn(&Address) -> bool,
 ) -> Result<Vec<(DocAddress, Address)>> {
-    // Shuffle a flat list of (bgid, addr) entries from pools, then walk in
-    // shuffled order picking the first `target` where cross_language fires.
     let mut candidates: Vec<(String, DocAddress)> = Vec::new();
     for pool in pools.values() {
         for (bgid, addr) in pool.iter() {
@@ -402,7 +454,7 @@ fn collect_boosted_crosslang(
             break;
         }
         let address = read_address(searcher, fields, addr)?;
-        if should_fire_cross_language(&address) {
+        if keep(&address) {
             out.push((addr, address));
         }
     }
@@ -433,11 +485,12 @@ fn pick_in_lang<'a>(name: &'a MultilingualName, lang: &str) -> Option<&'a String
     }
 }
 
-/// Generate the MVP variant taxonomy: at minimum 4 variants
-/// (canonical, minimal, with_postal, casing) plus cross_language when the
-/// firing policy fires, plus the abbreviation variant (Phase 6 §3.3).
-pub(crate) fn generate_variants(addr: &Address) -> Vec<(VariantType, String)> {
-    let mut out: Vec<(VariantType, String)> = Vec::with_capacity(6);
+/// Generate the variant taxonomy: at minimum 5 variants (canonical,
+/// minimal, with_postal, casing, messy_punctuation) plus cross_language,
+/// abbreviated, typo, box_number and high_house_number when they apply.
+/// `seed` makes the typo edit reproducible per (seed, address).
+pub(crate) fn generate_variants(addr: &Address, seed: u64) -> Vec<(VariantType, String)> {
+    let mut out: Vec<(VariantType, String)> = Vec::with_capacity(10);
 
     let lang = match street_primary_lang(&addr.street_name) {
         Some(l) => l,
@@ -471,8 +524,95 @@ pub(crate) fn generate_variants(addr: &Address) -> Vec<(VariantType, String)> {
     if let Some(abbr) = build_abbreviated(&canonical, &street_primary, lang) {
         out.push((VariantType::Abbreviated, abbr));
     }
+    if let Some(typo) = typo_street(&street_primary, typo_seed(seed, &addr.id.to_string())) {
+        out.push((
+            VariantType::Typo,
+            canonical.replacen(&street_primary, &typo, 1),
+        ));
+    }
+    if let Some(b) = addr.box_number.as_deref().filter(|b| !b.is_empty()) {
+        let kw = if lang == "fr" { "bte" } else { "bus" };
+        out.push((
+            VariantType::BoxNumber,
+            format!("{street_primary} {hn} {kw} {b}, {postal} {muni_primary}"),
+        ));
+    }
+    if let Some(h) = build_high_house_number(addr) {
+        out.push((VariantType::HighHouseNumber, h));
+    }
+    out.push((
+        VariantType::MessyPunctuation,
+        format!("{street_primary}, {hn}, B-{postal}, {muni_primary}"),
+    ));
 
     out
+}
+
+/// `{street} {hn} {postal} {muni}` when the house number's numeric prefix
+/// is ≥ 1000, so it sits next to the (also 4-digit) postal code.
+pub(crate) fn build_high_house_number(addr: &Address) -> Option<String> {
+    let digits: String = addr
+        .house_number
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.parse::<u32>().ok()? < 1000 {
+        return None;
+    }
+    let lang = street_primary_lang(&addr.street_name)?;
+    let street = pick_in_lang(&addr.street_name, lang)?;
+    let muni = pick_in_lang(&addr.municipality_name, lang)
+        .or(addr.municipality_name.fr.as_ref())
+        .or(addr.municipality_name.nl.as_ref())
+        .or(addr.municipality_name.de.as_ref())?;
+    Some(format!(
+        "{street} {} {} {muni}",
+        addr.house_number, addr.postal_code
+    ))
+}
+
+/// FNV-1a over `(seed, id)` — a stable per-address seed for the typo edit.
+fn typo_seed(seed: u64, id: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ seed;
+    for b in id.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// Apply one edit (substitution, deletion, transposition or insertion) to
+/// the longest word of `street` with ≥ 5 letters, never touching its first
+/// letter. `None` when no word is long enough.
+pub(crate) fn typo_street(street: &str, seed: u64) -> Option<String> {
+    use rand::RngExt;
+    let word = street
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| w.chars().count() >= 5)
+        .max_by_key(|w| w.chars().count())?;
+    let chars: Vec<char> = word.chars().collect();
+    let mut rng = ChaCha20Rng::seed_from_u64(seed);
+    let letters: Vec<char> = "abcdefghijklmnopqrstuvwxyz".chars().collect();
+    let pos = rng.random_range(1..chars.len());
+    let mut edited = chars.clone();
+    match rng.random_range(0..4u8) {
+        0 => {
+            let cur = chars[pos].to_ascii_lowercase();
+            let pick = letters
+                .iter()
+                .copied()
+                .filter(|c| *c != cur)
+                .collect::<Vec<_>>();
+            edited[pos] = pick[rng.random_range(0..pick.len())];
+        }
+        1 => {
+            edited.remove(pos);
+        }
+        2 if pos + 1 < chars.len() && chars[pos] != chars[pos + 1] => edited.swap(pos, pos + 1),
+        _ => edited.insert(pos, letters[rng.random_range(0..letters.len())]),
+    }
+    let edited: String = edited.into_iter().collect();
+    Some(street.replacen(word, &edited, 1))
 }
 
 /// Rewrite the canonical query string so its street-type word is replaced
@@ -728,35 +868,162 @@ mod tests {
     }
 
     #[test]
-    fn generate_variants_emits_four_minimum_plus_optional_crosslang() {
+    fn generate_variants_emits_base_set_plus_optional_variants() {
         // Bilingual NL+FR "Louizalaan"/"Avenue Louise": primary-lang picker
         // chooses NL → street_primary = "Louizalaan" (in the NL suffix map).
-        // No cross_language (street has 2 langs), abbreviated DOES fire.
-        // Total: 4 base + abbreviated = 5.
+        // No cross_language (street has 2 langs); abbreviated and typo fire.
+        // Total: 5 base (incl. messy_punctuation) + abbreviated + typo = 7.
         let addr_no_cl = make_addr(
             Region::Brussels,
             ml(Some("Avenue Louise"), Some("Louizalaan"), None),
             ml(Some("Bruxelles"), Some("Brussel"), None),
         );
-        let vars_no_cl = generate_variants(&addr_no_cl);
+        let vars_no_cl = generate_variants(&addr_no_cl, 1);
         let kinds = kinds_of(&vars_no_cl);
-        assert_eq!(vars_no_cl.len(), 5, "got kinds: {:?}", kinds);
+        assert_eq!(vars_no_cl.len(), 7, "got kinds: {:?}", kinds);
         assert!(kinds.contains(&VariantType::Abbreviated));
+        assert!(kinds.contains(&VariantType::Typo));
+        assert!(kinds.contains(&VariantType::MessyPunctuation));
+        assert!(!kinds.contains(&VariantType::BoxNumber));
+        assert!(!kinds.contains(&VariantType::HighHouseNumber));
 
         // NL-monolingual "Grote Markt" with FR muni alias "Anvers".
         // Cross_language fires; "Markt" is not in the NL suffix map so
-        // abbreviated does NOT fire. Total: 4 base + cross_language = 5.
+        // abbreviated does NOT fire. Total: 5 base + cross_language + typo.
         let addr_with_cl = make_addr(
             Region::Flanders,
             ml(None, Some("Grote Markt"), None),
             ml(Some("Anvers"), Some("Antwerpen"), None),
         );
-        let vars = generate_variants(&addr_with_cl);
+        let vars = generate_variants(&addr_with_cl, 1);
         let kinds = kinds_of(&vars);
-        assert_eq!(vars.len(), 5, "got kinds: {:?}", kinds);
+        assert_eq!(vars.len(), 7, "got kinds: {:?}", kinds);
         assert!(kinds.contains(&VariantType::Canonical));
         assert!(kinds.contains(&VariantType::CrossLanguage));
         assert!(!kinds.contains(&VariantType::Abbreviated));
+    }
+
+    fn variant(v: &[(VariantType, String)], kind: VariantType) -> Option<&str> {
+        v.iter().find(|(k, _)| *k == kind).map(|(_, q)| q.as_str())
+    }
+
+    #[test]
+    fn box_high_number_and_messy_variants() {
+        let mut addr = make_addr(
+            Region::Brussels,
+            ml(Some("Chaussée de Waterloo"), None, None),
+            ml(Some("Uccle"), Some("Ukkel"), None),
+        );
+        addr.house_number = "1357".into();
+        addr.postal_code = "1180".into();
+        addr.box_number = Some("3".into());
+        let vars = generate_variants(&addr, 1);
+        assert_eq!(
+            variant(&vars, VariantType::BoxNumber),
+            Some("Chaussée de Waterloo 1357 bte 3, 1180 Uccle")
+        );
+        assert_eq!(
+            variant(&vars, VariantType::HighHouseNumber),
+            Some("Chaussée de Waterloo 1357 1180 Uccle")
+        );
+        assert_eq!(
+            variant(&vars, VariantType::MessyPunctuation),
+            Some("Chaussée de Waterloo, 1357, B-1180, Uccle")
+        );
+
+        // Dutch street → `bus` keyword; empty box → no variant.
+        let mut nl = make_addr(
+            Region::Flanders,
+            ml(None, Some("Meir"), None),
+            ml(None, Some("Antwerpen"), None),
+        );
+        nl.box_number = Some("2".into());
+        assert!(
+            variant(&generate_variants(&nl, 1), VariantType::BoxNumber)
+                .unwrap()
+                .contains(" bus 2,")
+        );
+        nl.box_number = Some(String::new());
+        assert!(variant(&generate_variants(&nl, 1), VariantType::BoxNumber).is_none());
+    }
+
+    #[test]
+    fn high_house_number_needs_four_digits() {
+        let mut addr = make_addr(
+            Region::Flanders,
+            ml(None, Some("Meir"), None),
+            ml(None, Some("Antwerpen"), None),
+        );
+        addr.house_number = "999".into();
+        assert!(build_high_house_number(&addr).is_none());
+        addr.house_number = "1000A".into();
+        assert_eq!(
+            build_high_house_number(&addr).as_deref(),
+            Some("Meir 1000A 2000 Antwerpen")
+        );
+        addr.house_number = "A1".into();
+        assert!(build_high_house_number(&addr).is_none());
+    }
+
+    /// Optimal-string-alignment distance (Damerau with adjacent swaps).
+    fn osa(a: &str, b: &str) -> usize {
+        let a: Vec<char> = a.chars().collect();
+        let b: Vec<char> = b.chars().collect();
+        let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+        for (i, row) in d.iter_mut().enumerate() {
+            row[0] = i;
+        }
+        for j in 0..=b.len() {
+            d[0][j] = j;
+        }
+        for i in 1..=a.len() {
+            for j in 1..=b.len() {
+                let cost = usize::from(a[i - 1] != b[j - 1]);
+                d[i][j] = (d[i - 1][j] + 1)
+                    .min(d[i][j - 1] + 1)
+                    .min(d[i - 1][j - 1] + cost);
+                if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                    d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
+                }
+            }
+        }
+        d[a.len()][b.len()]
+    }
+
+    #[test]
+    fn typo_is_one_edit_on_longest_word_and_deterministic() {
+        let street = "Rue de la Station";
+        for seed in 0..200u64 {
+            let t = typo_street(street, seed).unwrap();
+            assert_eq!(t, typo_street(street, seed).unwrap(), "deterministic");
+            assert!(t.starts_with("Rue de la S"), "first letter kept: {t}");
+            assert_eq!(osa(street, &t), 1, "{street} → {t}");
+        }
+        // Different seeds actually produce different edits.
+        let distinct: std::collections::HashSet<String> =
+            (0..50).map(|s| typo_street(street, s).unwrap()).collect();
+        assert!(distinct.len() > 10);
+    }
+
+    #[test]
+    fn typo_skips_short_streets() {
+        assert!(typo_street("Rue du Lac", 1).is_none());
+        assert!(typo_street("", 1).is_none());
+    }
+
+    #[test]
+    fn typo_seed_depends_on_seed_and_id() {
+        assert_eq!(typo_seed(1, "a"), typo_seed(1, "a"));
+        assert_ne!(typo_seed(1, "a"), typo_seed(2, "a"));
+        assert_ne!(typo_seed(1, "a"), typo_seed(1, "b"));
+    }
+
+    #[test]
+    fn new_variant_types_have_stable_names() {
+        assert_eq!(VariantType::Typo.as_str(), "typo");
+        assert_eq!(VariantType::BoxNumber.as_str(), "box_number");
+        assert_eq!(VariantType::HighHouseNumber.as_str(), "high_house_number");
+        assert_eq!(VariantType::MessyPunctuation.as_str(), "messy_punctuation");
     }
 
     #[test]

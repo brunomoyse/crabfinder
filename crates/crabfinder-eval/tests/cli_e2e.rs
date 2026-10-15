@@ -12,7 +12,7 @@ use axum::routing::get;
 use clap::Parser;
 use crabfinder_core::{Address, Region};
 use crabfinder_eval::cli::{Args, run_with};
-use crabfinder_eval::eval_set::{EvalSet, SyntheticEvalSet, flatten};
+use crabfinder_eval::eval_set::{EvalSet, SyntheticEvalSet, VariantType, flatten};
 use crabfinder_eval::report::Report;
 use crabfinder_eval::runner::{RunnerConfig, run_eval};
 use crabfinder_service::{AppState, LoadOptions, http};
@@ -155,7 +155,12 @@ fn generate(ti: &TestIndex, out: &Path, seed: &str) {
 #[test]
 fn generate_run_and_diff_end_to_end() {
     let addrs = corpus();
-    let ti = TestIndex::build_with_mid_street(&addrs);
+    // With a localities file, so the wrong_postal variant has postal
+    // codes to pick from.
+    let ti = TestIndex::build_with_places(
+        &addrs,
+        "osm_id,place,name,name_fr,name_nl,name_de,lat,lon\n",
+    );
     let tmp = TempDir::new().unwrap();
 
     // Generate: reproducible by seed, all three regions sampled.
@@ -175,6 +180,22 @@ fn generate_run_and_diff_end_to_end() {
             "{region} not sampled"
         );
     }
+    let wrong: Vec<_> = set
+        .queries
+        .iter()
+        .filter(|q| q.variant_type == VariantType::WrongPostal)
+        .collect();
+    assert!(!wrong.is_empty());
+    // Appended after every other variant.
+    let first_wrong = set
+        .queries
+        .iter()
+        .position(|q| q.variant_type == VariantType::WrongPostal);
+    assert!(
+        set.queries[first_wrong.unwrap()..]
+            .iter()
+            .all(|q| q.variant_type == VariantType::WrongPostal)
+    );
 
     // Full run against the live router: synthetic + adversarial.
     let url = serve_index(&ti);

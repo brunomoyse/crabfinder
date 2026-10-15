@@ -52,6 +52,7 @@ Selon le cas, crabfinder retourne des coordonnées à plusieurs niveaux de préc
 | Bâtiment exact | Numéro de rue présent dans BeSt | `exact` |
 | Bâtiment voisin | Numéro absent de BeSt, un numéro proche existe | `nearest_same_side`, `nearest_any_side` |
 | Centroïde de rue (médian) | Pas de numéro, ou aucun assez proche | `median_street` |
+| Bâtiment ou rue dans une commune voisine | Rien dans le code postal donné, la même rue juste à côté | `adjacent_commune` |
 | Bâtiment exact, rue approchée | Faute de frappe ou match partiel sur le nom de rue | `fuzzy_street` |
 | Centre du village / de la commune | La requête ne nomme qu'un lieu | `locality` |
 | Pas de coordonnées | Rien de plausible | `not_found` |

@@ -14,6 +14,7 @@ is set (any method, any header).
 | `GET /geocode` | Free text or structured fields → ranked addresses |
 | `GET /reverse` | Coordinates → nearest addresses |
 | `GET /building/{building_group_id}/units` | Every BeSt row of one building |
+| `GET /lookup?id=…` | Addresses by BeSt id |
 | `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row |
 | `GET /metrics` | Prometheus text exposition (unless `--no-metrics`) |
 
@@ -63,8 +64,8 @@ over 10 000 addresses.
   "index_path": "./index-current",
   "index_docs": 6886637,
   "uptime_secs": 42,
-  "schema_version": 9,
-  "index_built_at_unix_secs": 1792100762,
+  "schema_version": 10,
+  "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
 ```
@@ -85,12 +86,13 @@ not neither (400).
 | `street` | string | — | Structured: street name |
 | `housenumber` | string | — | Structured: `12`, `12A` |
 | `box` | string | — | Structured: box/unit; picks the unit shown, never filters |
-| `postcode` | string | — | Structured: 4 digits (else 400); a hard filter |
+| `postcode` | string | — | Structured: 4 digits (else 400); part of the address, so relaxed like a parsed one when nothing matches inside it (`adjacent_commune`) |
 | `city` | string | — | Structured: municipality or locality, matched like street words |
 | `limit` | int | 10 | Features returned after dedup, clamped to 1–100 |
 | `expand` | bool | false | One feature per BeSt row instead of per building |
 | `region` | string | — | Hard filter: `BE-BRU`/`BE-VLG`/`BE-WAL`, or `brussels`/`bruxelles`/`brussel`/`bru`, `flanders`/`vlaanderen`/`flandre`/`vlg`, `wallonia`/`wallonie`/`wal` |
-| `postal_code` | string | — | Hard filter; overrides a postal code parsed from `q` (a 4-digit token in `q` is then read as the house number) |
+| `postal_code` | string | — | Hard filter, never relaxed; overrides a postal code parsed from `q` (a 4-digit token in `q` is then read as the house number) |
+| `bbox` | string | — | Hard filter `min_lon,min_lat,max_lon,max_lat` (else 400 `invalid bbox '…' (expected min_lon,min_lat,max_lon,max_lat)`) |
 | `focus_point` | string | — | `lat,lng` inside Belgium: soft re-rank, scores × `exp(-d / 25 km)` |
 | `lang` | string | — | `fr`, `nl` or `de` for `properties.label`; default: the address's own language (Brussels/Wallonia fr, Flanders nl, 4700–4791 de) |
 
@@ -119,10 +121,20 @@ The search tries, in order, and the first step with hits wins:
 3. **Street + locality** — `<street> <place>` where the place isn't the
    street's municipality (an OSM hamlet, a neighbouring commune): the
    street searched inside that place's area.
-4. **OR fallback** — any query word, with then without the number.
+4. **Around the postal code** — nothing matched inside the given postal
+   code: the strict tiers again without it, within 20 km of the code's
+   centre and nearest first (`confidence: adjacent_commune`,
+   `fallback_reason: postal_code_mismatch`). `Avenue Louise 54 1000` →
+   Avenue Louise 54, **1050**. This also runs when step 2 only found the
+   street (or a nearest number on another street object, or one 20 or
+   more away): the exact number just across the boundary wins. Not with
+   `postal_code=` (a hard filter) or an unknown postal code.
+5. **OR fallback** — any query word, with then without the number.
 
-Strict ranking is `BM25 × notability × (1 + 0.005 × ln(1 + addresses on
-the street))`, with a bonus for adjacent word pairs. Results are
+Strict ranking is `(BM25 + bonuses) × notability × (1 + 0.005 × ln(1 +
+addresses on the street))`. Bonuses: adjacent word pairs, and a constant
+10 when a leading run of the street words is a street's whole name, so
+`Markt` finds *Markt* (Bruges) before *Grote Markt*. Results are
 over-fetched (`limit × 20`, at most 2000; none with `expand`), then
 collapsed by `building_group_id`; a feature's `score` is the best of its
 units.
@@ -204,10 +216,10 @@ Per-feature fields:
 
 | Field | Meaning |
 |---|---|
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `locality` (see table below) |
-| `fallback_reason` | Absent when `exact`; else `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `street_missing` |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` (see table below) |
+| `fallback_reason` | Absent when `exact`; else `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` |
 | `house_number_delta` | Matched − requested number when a number was honoured (`0` = exact); absent otherwise |
-| `match_type` | `strict` (every street word matched), `typo` (edit-distance corrected), `fuzzy` (OR fallback), `spatial` (nearest buildings to a locality centre) |
+| `match_type` | `strict` (every street word matched), `typo` (edit-distance corrected), `fuzzy` (OR fallback), `spatial` (nearest buildings to a locality centre), `id` (`/lookup`) |
 | `unit_count` | BeSt rows collapsed into this feature (1 with `expand`) |
 | `building_group_id` | `{street namespace}\|{street id}\|{house number}`; pass it to `/building/…/units` |
 | `properties.label` | The address on one line in `lang` (`Wetstraat 16 bus 3, 1000 Brussel`) |
@@ -220,6 +232,7 @@ Per-feature fields:
 | `nearest_any_side` | the closest number on the other side (the street has no number of that parity) |
 | `median_street` | the street (median house number); number missing or too far |
 | `fuzzy_street` | a typo-corrected or OR-fallback street match (with the number when it exists) |
+| `adjacent_commune` | found outside the given postal code, near it; `house_number_delta` says whether the number matched (`0`), was approximated, or was ignored (absent) |
 | `locality` | a building near the centre of the place the query names |
 
 More examples: `Avenue Loiuse 32 Ixelles` → Avenue Louise 32,
@@ -238,6 +251,20 @@ street_spelling_fuzzy`. `Spontin` →
 
 `focus_point` only re-ranks the over-fetched pool; when one street name
 dominates nationally, use `region` or `postal_code` as a hard filter.
+
+## `GET /lookup`
+
+`GET /lookup?id=<best_id>[,<best_id>…]&lang=nl` — up to 50 BeSt ids
+(400 beyond, or when empty), in the canonical
+`{namespace}/{objectIdentifier}/{versionIdentifier}` form of the batch
+`best_id` column. Features come back in the order asked, ids not in the
+index under `missing`:
+
+```json
+{"type": "FeatureCollection", "count": 1, "missing": ["nope/1/1"],
+ "features": [{"properties": {"label": "Wetstraat 16, 1000 Brussel", "…": "…"},
+               "match_type": "id", "score": 1.0, "unit_count": 1, "…": "…"}]}
+```
 
 ## `GET /reverse`
 

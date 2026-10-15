@@ -44,9 +44,17 @@ Each random bgid generates 6–9 query variants:
 - `box_number` — emitted when the address has a box, with the box keyword
   of the street's language (`Floréallaan 154 bus 1, 1180 Ukkel`)
 
+- `wrong_postal` — `Street HN Postal` with the postal code whose centre
+  is nearest to the address among the *other* codes (from the index's
+  localities file): the neighbouring-commune mistake. Emitted for every
+  random sample, after all other queries.
+
 The boosted pools emit only their own variant (`cross_language`,
 `high_house_number`). The current set is
-`eval/belgium-2026-10-15-v2.json` (seed 1, 3,742 queries).
+`eval/belgium-2026-10-15-v3.json` (seed 1, 4,244 queries);
+`eval/belgium-2026-10-15-v2.json` (3,742, no `wrong_postal`, generated
+on an earlier build of the same dump) is kept for the pre-v2
+comparison.
 
 Use `--scale N` to multiply all per-region targets uniformly (e.g.
 `--scale 4.0` gives ~2800 bgids → ~11k queries). Useful for tightening
@@ -83,7 +91,7 @@ The report shows the levels scored next to each category, e.g.
 ```bash
 ./target/release/crabfinder-eval --generate-eval-set --mvp \
   --index ./index-belgium \
-  --output eval/belgium-2026-10-15-v2.json \
+  --output eval/belgium-2026-10-15-v3.json \
   --seed 1 \
   --scale 1.0 \
   --dump-date 2026-10-15
@@ -95,7 +103,7 @@ Reproducible — same `--seed` + same index emits the same eval set.
 
 ```bash
 ./target/release/crabfinder-eval \
-  --eval-set eval/belgium-2026-10-15-v2.json \
+  --eval-set eval/belgium-2026-10-15-v3.json \
   --eval-set eval/adversarial-belgium-v1.yaml \
   --service http://127.0.0.1:8080 \
   --parallel 8 \
@@ -130,7 +138,7 @@ known-failure state changes. For per-query regressions, compare the two
 
 ```bash
 ./target/release/crabfinder-eval --validate-eval-set \
-  --eval-set eval/belgium-2026-10-15-v2.json \
+  --eval-set eval/belgium-2026-10-15-v3.json \
   --eval-set eval/adversarial-belgium-v1.yaml \
   --service http://127.0.0.1:8080 \
   --max-missing-pct 5.0
@@ -181,11 +189,11 @@ behavior.
 ## Baseline
 
 `reports/v2-baseline.json` is the current promoted baseline: BeSt dump of
-2026-10-15, schema v9, `eval/belgium-2026-10-15-v2.json` +
+2026-10-15, schema v10, `eval/belgium-2026-10-15-v3.json` +
 `eval/adversarial-belgium-v1.yaml`, OSM places, full notability
 whitelist, full abbreviation dict. `reports/pre-v2-baseline.json` is the
-v1 code on the same data — the comparison point for the v2 work
-(`reports/v2-vs-pre-v2.md`). `reports/mvp-v1-baseline.json` is the
+v1 code on the same data and the v2 set — the comparison point for the
+v2 work (`reports/v2-vs-pre-v2.md`, on the shared v2 set). `reports/mvp-v1-baseline.json` is the
 original MVP baseline on the 2026-05-19 dump; per-phase v2 diffs are in
 `reports/archive/v2-phases/`.
 

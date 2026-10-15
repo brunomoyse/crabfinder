@@ -52,6 +52,7 @@ Depending on the case, crabfinder returns coordinates at different precision lev
 | Exact building | House number present in BeSt | `exact` |
 | Neighbouring building | House number absent from BeSt, a close number exists | `nearest_same_side`, `nearest_any_side` |
 | Street centroid (median) | No house number, or none close enough | `median_street` |
+| Building or street in a neighbouring commune | Nothing inside the given postal code, the same street just next door | `adjacent_commune` |
 | Exact building, approximately matched street | Typo or partial match on the street name | `fuzzy_street` |
 | Village / municipality centre | The query only names a place | `locality` |
 | No coordinates | Nothing plausible | `not_found` |

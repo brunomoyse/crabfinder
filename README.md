@@ -9,6 +9,7 @@ and from the command line.
 GET /geocode?q=Rue de la Loi 16 bte 3, B-1000 Bruxelles
 GET /geocode?street=Grote Markt&housenumber=1&city=Antwerpen&lang=nl
 GET /reverse?lat=50.8466&lng=4.3525&lang=de
+GET /lookup?id=https://databrussels.be/id/address/210225/1
 POST /batch/geocode            (CSV in, CSV or GeoJSON out)
 ```
 
@@ -25,6 +26,11 @@ What it handles:
 - **Missing house numbers** — the nearest existing number on the same
   side of the street, else the street itself, with an explicit
   `confidence` and `house_number_delta`.
+- **Wrong postal codes** — when nothing matches inside the given code,
+  the address is found next door (`Avenue Louise 54 1000` → Avenue Louise
+  54, 1050) and flagged `adjacent_commune`.
+- **Exact names first** — `Markt` is Bruges' Markt, not every Grote
+  Markt; `Grand-Place` is Brussels.
 - **Hamlets and villages** — OpenStreetMap places (`Maredsous`,
   `Spontin`) resolve to the locality when no street is named.
 - **Positions for every address** — the ~140k Walloon addresses BeSt
@@ -75,22 +81,28 @@ connections once the reverse-geocoding R-tree is built (~5 s).
 
 ## Quality
 
-From [`reports/v2-baseline.md`](reports/v2-baseline.md) (BeSt dump of
-2026-10-15; 3,840 queries: 3,742 synthetic across 10 query variants + 98
-hand-written adversarial cases):
+On the BeSt dump of 2026-10-15 (`docs/eval.md`). v1 vs v2 on the shared
+set (`eval/belgium-2026-10-15-v2.json` + 98 hand-written adversarial
+cases, 3,840 queries; [`reports/v2-vs-pre-v2.md`](reports/v2-vs-pre-v2.md)):
 
 | | v1 (pre-v2 baseline) | v2 |
 |---|---|---|
-| recall@1 | 0.842 | **0.967** |
+| recall@1 | 0.842 | **0.971** |
 | recall@10 | 0.910 | **0.991** |
 | typo variant recall@1 | 0.366 | **0.988** |
 | 4-digit house numbers | 0.158 | **1.000** |
-| messy punctuation (`Street, 10, B-1150, City`) | 0.884 | **0.998** |
+| messy punctuation (`Street, 10, B-1150, City`) | 0.884 | **1.000** |
 | hamlets (adversarial) | 0.667 | **1.000** |
-| p95 / p99 `/geocode` latency | 19.0 / 51.1 ms | **7.4 / 11.5 ms** |
+| landmarks (adversarial notability) | 0.933 | **1.000** |
+| p95 / p99 `/geocode` latency | 19.0 / 51.1 ms | **7.2 / 11.9 ms** |
+
+The promoted baseline [`reports/v2-baseline.md`](reports/v2-baseline.md)
+adds 500 `wrong_postal` queries (the neighbouring commune's postal code):
+recall@1 0.004 before the postal-code relaxation, **0.958** after; 0.969 overall
+on its 4,342 queries.
 
 Latency is HTTP loopback, 8 concurrent clients. The `minimal` variant
-(street + number, no postal code or municipality: 0.778) is bounded by
+(street + number, no postal code or municipality: 0.792) is bounded by
 genuine ambiguity — most Belgian street names exist in several
 municipalities.
 

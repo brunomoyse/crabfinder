@@ -25,6 +25,7 @@ Le service écoute **en IPv4 uniquement** sur `127.0.0.1:8080` par défaut. Inte
 | `GET` | `/geocode` | Géocodage direct (adresse → coordonnées) |
 | `GET` | `/reverse` | Géocodage inverse (coordonnées → adresse) |
 | `GET` | `/building/{id}/units` | Lister toutes les unités d'un bâtiment |
+| `GET` | `/lookup` | Adresses par identifiant BeSt |
 | `POST` | `/batch/geocode` | Voir [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Métriques Prometheus (sauf si démarré avec `--no-metrics`) |
 
@@ -40,8 +41,8 @@ curl "http://127.0.0.1:8080/health"
   "index_path": "./index-belgium",
   "index_docs": 6886637,
   "uptime_secs": 1234,
-  "schema_version": 9,
-  "index_built_at_unix_secs": 1792100762,
+  "schema_version": 10,
+  "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
 ```
@@ -62,7 +63,8 @@ L'endpoint principal. Une adresse en entrée — en texte libre **ou** en champs
 | `lang` | string | langue de chaque adresse | `fr`, `nl` ou `de` : langue de `properties.label`. |
 | `expand` | bool | `false` | À `true`, renvoie un feature par ligne BeSt, sans déduplication par bâtiment. Utile pour lister les boîtes d'un même bâtiment. |
 | `region` | string | — | Filtre dur : `brussels`, `flanders`, `wallonia` (ou `BE-BRU`, `BE-VLG`, `BE-WAL`, ou les variantes `bruxelles`, `vlaanderen`, `wallonie`…). |
-| `postal_code` | string | — | Filtre dur sur le code postal (4 chiffres). L'emporte sur tout code postal lu dans `q`. |
+| `postal_code` | string | — | Filtre dur sur le code postal (4 chiffres). L'emporte sur tout code postal lu dans `q`, et ne se replie jamais sur un code postal voisin. |
+| `bbox` | string | — | Filtre dur : `min_lon,min_lat,max_lon,max_lat` (WGS84, ordre GeoJSON). Seulement les adresses dans le rectangle. |
 | `focus_point` | string | — | `"lat,lng"` WGS84 en Belgique. Re-classement doux : les candidats proches du point remontent. Demi-vie 25 km. |
 
 Donne soit `q`, soit les champs structurés, pas les deux.
@@ -136,7 +138,7 @@ Quand tes données sont déjà découpées, envoie les champs plutôt que `q` :
 | `street` | Nom de rue, dans l'une ou l'autre langue. |
 | `housenumber` | Numéro (`12`, `12A`). |
 | `box` | Boîte / unité. Jamais un filtre : elle choisit quelle unité du bâtiment est renvoyée. |
-| `postcode` | Code postal à 4 chiffres, filtre dur. Toute autre valeur donne un 400. |
+| `postcode` | Code postal à 4 chiffres (toute autre valeur donne un 400). Fait partie de l'adresse, comme un code postal dans `q` : quand rien n'y correspond, la rue est cherchée à côté (`adjacent_commune`). |
 | `city` | Nom de commune ou de localité, cherché avec les mots de rue. |
 
 Il faut au moins `street`, `city` ou `postcode`.
@@ -253,6 +255,7 @@ Une rue suivie d'un nom de lieu marche aussi quand ce lieu n'est pas la commune 
 | `typo` | Un mot de rue mal orthographié a été corrigé (voir [Fautes de frappe](#fautes-de-frappe)). |
 | `fuzzy` | La passe stricte n'a rien donné ; le service s'est rabattu sur « n'importe lequel des mots ». Match plus lâche, à vérifier. |
 | `spatial` | Trouvé par position, pas par le texte : `/reverse`, et les adresses autour d'un lieu pour une recherche de lieu. |
+| `id` | Retrouvé par identifiant BeSt (`/lookup`). |
 
 Le `match_type` de premier niveau vaut `strict` si **au moins un** feature renvoyé est strict, `fuzzy` sinon.
 
@@ -355,6 +358,26 @@ curl "http://127.0.0.1:8080/building/${ENCODED}/units"
 
 Réponse : une `FeatureCollection` avec `building_group_id`, `count` et un feature par unité (chacun avec son `label`), triés par numéro de boîte (l'unité sans boîte en premier). Un identifiant inconnu renvoie `count: 0`.
 
+## `GET /lookup` — adresses par identifiant BeSt
+
+Tu as stocké des `best_id` (d'un batch ou de `properties.id`) et tu veux récupérer les adresses, sans chercher. Passe jusqu'à 50 identifiants séparés par des virgules ; `lang` fonctionne comme pour `/geocode`.
+
+```bash
+curl -G "http://127.0.0.1:8080/lookup" \
+  --data-urlencode "id=https://databrussels.be/id/address/210225/1,nope/1/1" \
+  --data lang=nl
+```
+
+Réponse : une `FeatureCollection` avec `count`, les features **dans l'ordre demandé** (`match_type: "id"`) et une liste `missing` des identifiants qui n'existent pas (par exemple retirés après une mise à jour BeSt) :
+
+```
+count = 1
+missing = ["nope/1/1"]
+features[0].properties.label = "Wetstraat 16, 1000 Brussel"
+```
+
+Un `id` vide donne un 400 (`id is empty`), plus de 50 aussi (`too many ids: 51 (max 50)`).
+
 ## Filtres et stratégies de désambiguïsation
 
 ### Quand utiliser `region`
@@ -369,6 +392,20 @@ Quand ton flux a déjà un CP propre et que tu veux interdire au service de cher
 # Même si q contient "1000", le filtre force 1050
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&postal_code=1050"
 ```
+
+Sans lui, un code postal dans `q` (ou `postcode`) fait partie de l'adresse et peut être corrigé : `Avenue Louise 54 1000` renvoie `Avenue Louise 54, 1050` avec `confidence: adjacent_commune`, parce que le 54 est à 1050. Avec `q=Avenue Louise 54&postal_code=1000`, le service reste dans 1000 et n'y trouve qu'un match approximatif.
+
+### Quand utiliser `bbox`
+
+Ta carte montre une zone, ou tes données sont connues pour tenir dans un rectangle : `bbox=min_lon,min_lat,max_lon,max_lat` ne garde que les adresses à l'intérieur, à toutes les étapes.
+
+```bash
+curl -G "http://127.0.0.1:8080/geocode" --data-urlencode "q=Rue de la Loi 16" \
+  --data-urlencode "bbox=4.36,50.84,4.37,50.85"
+# → "Rue de la Loi 16, 1000 Bruxelles"
+```
+
+Une boîte malformée (pas 4 nombres, min ≥ max, hors bornes) donne un 400 : `invalid bbox '1,2,3' (expected min_lon,min_lat,max_lon,max_lat)`.
 
 ### Quand utiliser `focus_point`
 
@@ -404,7 +441,7 @@ Tout corps d'erreur est du JSON : `{"error": "<message>"}`.
 
 | Code | Cause |
 |---|---|
-| `400 Bad Request` | Paramètre manquant ou malformé : ni `q` ni champ structuré, `q` combiné avec des champs structurés, `postcode` qui n'a pas 4 chiffres, `region` ou `lang` inconnu, `lat`/`lng` hors bornes, `focus_point` malformé… |
+| `400 Bad Request` | Paramètre manquant ou malformé : ni `q` ni champ structuré, `q` combiné avec des champs structurés, `postcode` qui n'a pas 4 chiffres, `region` ou `lang` inconnu, `lat`/`lng` hors bornes, `focus_point` ou `bbox` malformé, identifiants `/lookup` vides ou trop nombreux… |
 | `404 Not Found` | Chemin inconnu (corps vide). |
 | `503 Service Unavailable` | Délai dépassé (`request timed out after 10000 ms`). |
 

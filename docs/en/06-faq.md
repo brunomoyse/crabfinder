@@ -13,10 +13,11 @@ You built the index with an older `crabfinder-indexer`, or you updated the code 
     --best-dir ./best-full-latest \
     --output ./index-belgium \
     --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv
+    --places data/osm-places-be-v1.csv \
+    --overwrite
 ```
 
-The operation overwrites the existing index. Expect ~1.5-3 min on a full dump. Or run `scripts/refresh_best.sh`, which also downloads a fresh dump (see [`02-installation.md`](02-installation.md#refreshing-the-data)).
+`--overwrite` deletes the old index in `--output` before building (without it, the indexer refuses a folder that already holds one). Expect ~1.5-3 min on a full dump. Or run `scripts/refresh_best.sh`, which also downloads a fresh dump (see [`02-installation.md`](02-installation.md#refreshing-the-data)).
 
 ### "index at … is missing .crab-meta.json"
 
@@ -49,6 +50,10 @@ Switch port via `--port 8081` or `CRABFINDER_PORT=8081`.
 The service binds IPv4 only. On some systems `localhost` resolves to IPv6 (`::1`) first. Always use `127.0.0.1` in your curls.
 
 ## Indexing errors
+
+### "… already holds an index; pass --overwrite to replace it"
+
+The `--output` folder already contains an index. The indexer refuses to write into it: indexing over an existing index would store every address twice. Either point `--output` at a new folder (what `scripts/refresh_best.sh` does, with dated `index-<date>` folders), or add `--overwrite` to delete the old index first. Don't use `--overwrite` on the folder a running service is reading: build elsewhere and swap (see [below](#can-i-re-index-while-the-service-is-running)).
 
 ### "no ZIP found for region Brussels (Entity::Address) in ./best-full-latest"
 
@@ -107,6 +112,7 @@ Rare but happens. Typical causes:
 - Ambiguous query ("Kerkstraat 1" exists in dozens of municipalities) → the response says `ambiguous: true`; add PC, `region` or `focus_point`.
 - A local toponym not boosted in notability (the whitelist doesn't cover everything). You can add an entry to `data/notability-whitelist-v1.yaml` and re-index.
 - Typo: the fuzzy pass can surface a wrong candidate.
+- A short street name that is also part of longer names: a street named exactly what you typed ranks first. "Markt" gives Bruges' Markt, not one of the many "Grote Markt"; "Grand-Place" gives Brussels. If you meant a longer name, type it in full or add the postal code.
 
 Inspect `query.parsed` (`street_tokens`, `house_number`, `box_number`, `postal_code`) and `query.reading` in the `/geocode` response: if the parser carved the query wrong, everything downstream is off. Bump `limit` to check whether the correct answer is in the top-3 or top-5.
 
@@ -152,6 +158,16 @@ curl -X POST .../batch/geocode -H "Content-Type: application/json" \
 ```
 
 Nearest-number results (`nearest_*`) are kept: they are real neighbouring addresses, not street approximations.
+
+### My postal codes are sometimes wrong
+
+Common in real files: the address sits right on a commune boundary, or someone typed the postal code of the main municipality (1000 instead of 1050). When nothing matches inside the given postal code, crabfinder looks for the same street in the communes around it (within ~20 km) and returns it with `confidence=adjacent_commune` and `fallback_reason=postal_code_mismatch`:
+
+```
+1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
+```
+
+The postal code actually found is in `matched_postal_code`; compare it with your input to spot the rows to fix at the source. An exact match inside the given postal code always wins over the neighbour. If you'd rather never leave your postal code (`/geocode` only), pass it as the `postal_code=` filter instead of inside the query: that filter is strict and never relaxed. Details in [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune--found-next-door).
 
 ## Multi-process and index sharing
 
@@ -254,7 +270,7 @@ A request waited longer than `--request-timeout-ms` (default 10 s), slot wait in
 
 Check:
 - That you've read [`02-installation.md`](02-installation.md) if it's a setup problem.
-- That your index is `schema_version=9` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
+- That your index is `schema_version=10` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
 - That the binaries are release builds (`./target/release/...`, not `./target/debug/...`).
 
 Then capture:

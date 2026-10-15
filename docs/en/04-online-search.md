@@ -25,6 +25,7 @@ The service listens on **IPv4 only** on `127.0.0.1:8080` by default. Always quer
 | `GET` | `/geocode` | Forward geocoding (address → coordinates) |
 | `GET` | `/reverse` | Reverse geocoding (coordinates → address) |
 | `GET` | `/building/{id}/units` | List all units in a building |
+| `GET` | `/lookup` | Addresses by BeSt id |
 | `POST` | `/batch/geocode` | See [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Prometheus metrics (unless started with `--no-metrics`) |
 
@@ -40,8 +41,8 @@ curl "http://127.0.0.1:8080/health"
   "index_path": "./index-belgium",
   "index_docs": 6886637,
   "uptime_secs": 1234,
-  "schema_version": 9,
-  "index_built_at_unix_secs": 1792100762,
+  "schema_version": 10,
+  "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
 ```
@@ -62,7 +63,8 @@ The main endpoint. One address in — as free text **or** as separate fields —
 | `lang` | string | each address's own | `fr`, `nl` or `de`: language of `properties.label`. |
 | `expand` | bool | `false` | If `true`, returns one feature per BeSt row without building-level dedup. Useful for listing boxes in a single building. |
 | `region` | string | — | Hard filter: `brussels`, `flanders`, `wallonia` (or `BE-BRU`, `BE-VLG`, `BE-WAL`, or variants `bruxelles`, `vlaanderen`, `wallonie`...). |
-| `postal_code` | string | — | Hard filter on postal code (4 digits). Wins over any postal code parsed from `q`. |
+| `postal_code` | string | — | Hard filter on postal code (4 digits). Wins over any postal code parsed from `q`, and never falls back to a neighbouring postal code. |
+| `bbox` | string | — | Hard filter: `min_lon,min_lat,max_lon,max_lat` (WGS84, GeoJSON order). Only addresses inside the rectangle. |
 | `focus_point` | string | — | `"lat,lng"` WGS84 inside Belgium. Soft re-rank: candidates close to the point move up. Half-life 25 km. |
 
 Give either `q` or the structured fields, not both.
@@ -136,7 +138,7 @@ When your data is already split, send the fields instead of `q`:
 | `street` | Street name, either language. |
 | `housenumber` | House number (`12`, `12A`). |
 | `box` | Box / unit. Never a filter: it picks which unit of the building is returned. |
-| `postcode` | 4-digit postal code, hard filter. Anything else is a 400. |
+| `postcode` | 4-digit postal code (anything else is a 400). Part of the address, like a postal code in `q`: when nothing matches inside it, the street is searched next door (`adjacent_commune`). |
 | `city` | Municipality or locality name, matched together with the street words. |
 
 At least one of `street`, `city` or `postcode` is required.
@@ -253,6 +255,7 @@ A street plus a place name also works when the place isn't the address's officia
 | `typo` | A misspelled street word was corrected (see [Typos](#typos)). |
 | `fuzzy` | The strict pass returned zero; the service fell back to "any of the words". Looser match, worth inspecting. |
 | `spatial` | Found by position, not by text: `/reverse`, and addresses around a place for a place-name query. |
+| `id` | Looked up by BeSt id (`/lookup`). |
 
 The top-level `match_type` is `strict` if **at least one** returned feature is strict, `fuzzy` otherwise.
 
@@ -355,6 +358,26 @@ curl "http://127.0.0.1:8080/building/${ENCODED}/units"
 
 Response: a `FeatureCollection` with `building_group_id`, `count` and one feature per unit (each with its `label`), sorted by box number (the unit without a box first). An unknown id returns `count: 0`.
 
+## `GET /lookup` — addresses by BeSt id
+
+You stored `best_id`s (from a batch run or `properties.id`) and want the addresses back, without searching. Pass up to 50 ids separated by commas; `lang` works as for `/geocode`.
+
+```bash
+curl -G "http://127.0.0.1:8080/lookup" \
+  --data-urlencode "id=https://databrussels.be/id/address/210225/1,nope/1/1" \
+  --data lang=nl
+```
+
+Response: a `FeatureCollection` with `count`, the features **in the order asked** (`match_type: "id"`) and a `missing` list of the ids that don't exist (for example retired after a BeSt refresh):
+
+```
+count = 1
+missing = ["nope/1/1"]
+features[0].properties.label = "Wetstraat 16, 1000 Brussel"
+```
+
+An empty `id` is a 400 (`id is empty`), more than 50 too (`too many ids: 51 (max 50)`).
+
 ## Filters and disambiguation strategies
 
 ### When to use `region`
@@ -369,6 +392,20 @@ When your feed already has the PC clean and you want to forbid the service from 
 # Even if q contains "1000", the filter forces 1050
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&postal_code=1050"
 ```
+
+Without it, a postal code in `q` (or `postcode`) is part of the address and may be corrected: `Avenue Louise 54 1000` returns `Avenue Louise 54, 1050` with `confidence: adjacent_commune`, because 54 is in 1050. With `q=Avenue Louise 54&postal_code=1000`, the service stays inside 1000 and only finds a fuzzy match there.
+
+### When to use `bbox`
+
+Your map shows one area, or your data is known to lie in a rectangle: `bbox=min_lon,min_lat,max_lon,max_lat` keeps only addresses inside it, for every tier.
+
+```bash
+curl -G "http://127.0.0.1:8080/geocode" --data-urlencode "q=Rue de la Loi 16" \
+  --data-urlencode "bbox=4.36,50.84,4.37,50.85"
+# → "Rue de la Loi 16, 1000 Bruxelles"
+```
+
+A malformed box (not 4 numbers, min ≥ max, out of range) is a 400: `invalid bbox '1,2,3' (expected min_lon,min_lat,max_lon,max_lat)`.
 
 ### When to use `focus_point`
 
@@ -404,7 +441,7 @@ Every error body is JSON: `{"error": "<message>"}`.
 
 | Code | Cause |
 |---|---|
-| `400 Bad Request` | Missing or malformed parameter: no `q` nor structured field, `q` combined with structured fields, `postcode` not 4 digits, unknown `region` or `lang`, out-of-range `lat`/`lng`, malformed `focus_point`… |
+| `400 Bad Request` | Missing or malformed parameter: no `q` nor structured field, `q` combined with structured fields, `postcode` not 4 digits, unknown `region` or `lang`, out-of-range `lat`/`lng`, malformed `focus_point` or `bbox`, empty or too many `/lookup` ids… |
 | `404 Not Found` | Unknown path (empty body). |
 | `503 Service Unavailable` | Deadline exceeded (`request timed out after 10000 ms`). |
 

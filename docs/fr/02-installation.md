@@ -105,8 +105,8 @@ Sortie typique (dump du 2026-10-15, portable Apple Silicon) :
   imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
   localities: 16045 (OSM places loaded: 12980)
   commit: 856ms
-  wall-clock total: 91279ms (1.5 min)
-  index size on disk: 2312810065 bytes (2205.7 MB / 2.15 GB)
+  wall-clock total: 93063ms (1.6 min)
+  index size on disk: 2394290026 bytes (2283.4 MB / 2.23 GB)
 ```
 
 Comment la lire :
@@ -118,11 +118,11 @@ Comment la lire :
 Le dossier `./index-belgium/` contient maintenant :
 
 - Les fichiers de segments Tantivy (`*.idx`, `*.pos`, `*.term`, etc.).
-- Un sidecar `.crab-meta.json` avec la version du schéma (actuellement **9**) et la date de construction.
+- Un sidecar `.crab-meta.json` avec la version du schéma (actuellement **10**) et la date de construction.
 - `mid-street-v1.bin` (~10 Mo) : les points de rue utilisés par le repli `median_street`.
 - `localities-v1.json` (~3 Mo) : les noms de lieux et leurs centres, pour les recherches de lieu.
 
-**Le dump BeSt utilisé est figé dans l'index.** Quand un nouveau dump est publié, tu refais l'étape 4 (remplacer les ZIP) puis l'étape 5 (reconstruire). Ce n'est pas une migration incrémentale.
+**Le dump BeSt utilisé est figé dans l'index.** Quand un nouveau dump est publié, tu refais l'étape 4 (remplacer les ZIP) puis l'étape 5 (reconstruire). Ce n'est pas une migration incrémentale. L'indexeur refuse un dossier `--output` qui contient déjà un index (sinon il ajouterait une deuxième copie de chaque adresse) : supprime-le d'abord, ou passe `--overwrite`.
 
 ### Options utiles
 
@@ -131,6 +131,7 @@ Le dossier `./index-belgium/` contient maintenant :
 | `--region brussels` (ou `flanders` / `wallonia`) | Tests, ou besoin régional seulement |
 | `--limit 1000` | Smoke test rapide (1000 adresses par région) |
 | `--print-samples 5` | Afficher 5 adresses parsées avant indexation pour valider visuellement |
+| `--overwrite` | Remplacer un index déjà présent dans `--output` (vérifié seulement une fois toutes les entrées chargées : un mauvais paramètre ne te coûte jamais l'ancien index) |
 | `--notability-whitelist CHEMIN` | Boost de classement des lieux emblématiques (voir plus bas) |
 | `--places CHEMIN` | Villages et hameaux OpenStreetMap (voir plus bas) |
 
@@ -154,7 +155,7 @@ Sortie attendue :
 
 ```
 INFO starting crabfinder-service index=./index-belgium port=8080
-INFO index sidecar OK schema_version=9 tokenizer=crab
+INFO index sidecar OK schema_version=10 tokenizer=crab
 INFO spatial index built points=6878576 elapsed_ms=1605
 INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
 INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
@@ -170,7 +171,7 @@ Test rapide depuis un autre terminal :
 ```bash
 curl "http://127.0.0.1:8080/health"
 # {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
-#  "schema_version":9,"index_built_at_unix_secs":1792100762,"version":"0.1.0"}
+#  "schema_version":10,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```

@@ -29,7 +29,7 @@ Huit valeurs, de la plus forte à la plus faible.
 | `median_street` | rue | Pas de numéro, ou un numéro trop loin de tout numéro existant. |
 | `fuzzy_street` | bâtiment ou rue | Nom de rue mal orthographié ou trouvé partiellement. |
 | `locality` | village / commune | La requête ne nomme qu'un lieu. |
-| `adjacent_commune` | — | Réservé, jamais émis pour l'instant. |
+| `adjacent_commune` | bâtiment ou rue | Rien ne correspond dans le code postal donné ; trouvé juste de l'autre côté de sa limite. |
 | `not_found` | aucune | Rien de plausible. |
 
 ### `exact` — match parfait
@@ -131,14 +131,39 @@ trouvé :  (rien)
 
 **Action** : enquêter ligne par ligne. Causes possibles :
 - Une faute trop lourde pour être corrigée (plus de 2 lettres, ou dans un mot court).
-- Mauvais code postal (la rue n'existe pas à ce CP).
+- Mauvais code postal *et* la rue n'existe pas non plus dans les 20 km autour du centre de ce CP (une rue proche donne `adjacent_commune`).
 - Adresse récente pas encore dans le dump BeSt (mise à jour nécessaire).
 - Adresse hors de Belgique.
 - Adresse retirée (seules les adresses BeSt en vigueur sont indexées).
 
-### `adjacent_commune` — réservé
+### `adjacent_commune` — trouvé à côté
 
-Défini dans le schéma de sortie (rue trouvée dans une commune voisine, mauvais CP en entrée) mais **pas encore émis**. Tes scripts peuvent l'ignorer pour l'instant.
+Le code postal fourni ne contient pas l'adresse, mais un code voisin oui. C'est l'erreur de saisie la plus courante : le code postal de la commune d'à côté, ou de l'autre moitié d'une rue qui traverse une limite.
+
+crabfinder intervient quand :
+
+- rien ne correspond à la rue dans le code postal, ou
+- la rue y existe mais pas le numéro, et le numéro exact existe sur **la même rue** juste de l'autre côté de la limite, ou le numéro le plus proche dans le code postal est à **20 ou plus**.
+
+Il cherche alors la rue dans un rayon de 20 km autour du centre du code postal, la plus proche d'abord.
+
+```
+entrée :  Avenue Louise 54 1000
+trouvé :  Avenue Louise 54, 1050 Bruxelles
+          confidence = adjacent_commune
+          fallback_reason = postal_code_mismatch
+          house_number_delta = 0
+
+entrée :  Kerkstraat 1 9000
+trouvé :  Kerkstraat 1, 9050 Gentbrugge/Ledeberg
+          confidence = adjacent_commune
+          fallback_reason = postal_code_mismatch
+          house_number_delta = 0
+```
+
+`house_number_delta` dit la qualité du match de l'autre côté : `0` = le numéro exact, non nul = un numéro voisin, vide = la rue seulement (pas de numéro fourni, ou aucun ne correspond).
+
+**Action** : généralement juste, mais compare `matched_postal_code` à ton entrée ; si tes codes postaux sont fiables et tes noms de rue pas, traite-le comme `fuzzy_street`. En ligne, `/geocode?postal_code=…` est un filtre strict et ne se replie jamais ainsi ; le code postal dans `q`, le paramètre structuré `postcode` et la colonne batch `postal_code` font partie de l'adresse et se replient.
 
 ## La taxonomie `fallback_reason`
 
@@ -150,7 +175,7 @@ Plus fine que `confidence`. Quand `confidence != exact`, elle dit **pourquoi** :
 | `house_number_out_of_range` | Un numéro était fourni mais n'existe pas pour cette rue dans BeSt. | `nearest_*`, `median_street` |
 | `street_spelling_fuzzy` | La rue n'a été trouvée qu'après correction de faute ou partiellement. | `fuzzy_street` |
 | `street_missing` | La requête nomme un lieu mais pas de rue. | `locality` |
-| `postal_code_mismatch` | Réservé (futur repli sur une commune voisine). | — |
+| `postal_code_mismatch` | Trouvé hors du code postal donné, à proximité. | `adjacent_commune` |
 | `no_match` | Rien trouvé du tout. | `not_found` |
 
 Cas combiné : une ligne avec `confidence=fuzzy_street, fallback_reason=house_number_missing` signifie « j'ai approximé la rue *et* tu n'as pas fourni de numéro ». C'est une double dégradation — à vérifier en priorité par rapport aux dégradations simples.
@@ -161,7 +186,7 @@ Numéro trouvé moins numéro demandé, rempli chaque fois que le numéro demand
 
 - `0` : le numéro demandé a été trouvé (`exact`, et `fuzzy_street` sur le bon bâtiment).
 - non nul : un voisin a été renvoyé (`nearest_*`) ; `26` = 26 numéros plus loin dans la rue, `-2` = 2 numéros plus bas.
-- vide : résultats à la rue et de lieu, `not_found`.
+- vide : résultats à la rue et de lieu (y compris un `adjacent_commune` à la rue), `not_found`.
 
 ## D'où viennent les coordonnées : `position_source`
 
@@ -230,7 +255,7 @@ Tu peux trier ton CSV géocodé par confiance + score pour traiter d'abord les c
 awk -F, 'NR==1 {print; next} {
   rank = ($10=="exact") ? 1 :
          ($10 ~ /^nearest_/) ? 2 :
-         ($10=="fuzzy_street") ? 3 :
+         ($10=="fuzzy_street" || $10=="adjacent_commune") ? 3 :
          ($10=="median_street") ? 4 :
          ($10=="locality") ? 5 : 9
   print rank","$0
@@ -249,6 +274,7 @@ ORDER BY CASE confidence
            WHEN 'nearest_same_side' THEN 2
            WHEN 'nearest_any_side'  THEN 2
            WHEN 'fuzzy_street'      THEN 3
+           WHEN 'adjacent_commune'  THEN 3
            WHEN 'median_street'     THEN 4
            WHEN 'locality'          THEN 5
            WHEN 'not_found'         THEN 9

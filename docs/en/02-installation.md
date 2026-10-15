@@ -105,8 +105,8 @@ Typical output (2026-10-15 dump, Apple Silicon laptop):
   imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
   localities: 16045 (OSM places loaded: 12980)
   commit: 856ms
-  wall-clock total: 91279ms (1.5 min)
-  index size on disk: 2312810065 bytes (2205.7 MB / 2.15 GB)
+  wall-clock total: 93063ms (1.6 min)
+  index size on disk: 2394290026 bytes (2283.4 MB / 2.23 GB)
 ```
 
 How to read it:
@@ -118,11 +118,11 @@ How to read it:
 The `./index-belgium/` folder now contains:
 
 - Tantivy segment files (`*.idx`, `*.pos`, `*.term`, etc.).
-- A `.crab-meta.json` sidecar with the schema version (currently **9**) and the build time.
+- A `.crab-meta.json` sidecar with the schema version (currently **10**) and the build time.
 - `mid-street-v1.bin` (~10 MB): the street-level points used by the `median_street` fallback.
 - `localities-v1.json` (~3 MB): the place names and centres used by locality queries.
 
-**The BeSt dump used is frozen into the index.** When a new dump comes out, redo step 4 (replace the ZIPs) then step 5 (rebuild). This is not an incremental migration.
+**The BeSt dump used is frozen into the index.** When a new dump comes out, redo step 4 (replace the ZIPs) then step 5 (rebuild). This is not an incremental migration. The indexer refuses an `--output` folder that already holds an index (it would otherwise append a second copy of every address): delete it first, or pass `--overwrite`.
 
 ### Handy flags
 
@@ -131,6 +131,7 @@ The `./index-belgium/` folder now contains:
 | `--region brussels` (or `flanders` / `wallonia`) | Tests, or you only need one region |
 | `--limit 1000` | Quick smoke test (1000 addresses per region) |
 | `--print-samples 5` | Print 5 parsed addresses before indexing to eyeball-check |
+| `--overwrite` | Replace an index already in `--output` (checked only once every input has loaded, so a bad flag never costs you the old index) |
 | `--notability-whitelist PATH` | Ranking boost for iconic places (see below) |
 | `--places PATH` | OpenStreetMap villages and hamlets (see below) |
 
@@ -154,7 +155,7 @@ Expected output:
 
 ```
 INFO starting crabfinder-service index=./index-belgium port=8080
-INFO index sidecar OK schema_version=9 tokenizer=crab
+INFO index sidecar OK schema_version=10 tokenizer=crab
 INFO spatial index built points=6878576 elapsed_ms=1605
 INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
 INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
@@ -170,7 +171,7 @@ Quick test from another terminal:
 ```bash
 curl "http://127.0.0.1:8080/health"
 # {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
-#  "schema_version":9,"index_built_at_unix_secs":1792100762,"version":"0.1.0"}
+#  "schema_version":10,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```

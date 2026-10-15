@@ -78,8 +78,8 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Copied from input**, audit trail (empty `street` on free-text rows). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | What crabfinder actually found in BeSt. Shows divergences (typo corrected, nearest number…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Empty on `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `locality` or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
-| `fallback_reason` | Empty if `confidence == exact`. Otherwise `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `street_missing` or `no_match`. |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
+| `fallback_reason` | Empty if `confidence == exact`. Otherwise `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` or `no_match`. |
 | `house_number_delta` | Matched number minus requested number: `0` when the requested number was found, e.g. `26` when 33 was asked and 59 returned. Empty for street-level and locality results. |
 | `street_match_score` | Raw BM25 score. Text-match quality indicator. Higher = better match. Empty on `not_found`. |
 | `building_group_id` | crabfinder's building identifier (`{street id}|{house number}`). Stable across dumps as long as BeSt's street id doesn't change. |
@@ -315,6 +315,17 @@ On the split-column example, row 3 (`Grand-Place`, no number) becomes `not_found
 ### Addresses without postal code
 
 Works, but quality strongly degraded. crabfinder can't filter by PC, so homonymous streets ("Kerkstraat" exists in hundreds of municipalities) come back in undefined order — such rows are usually flagged `ambiguous=true`. **Always provide the PC when you have it**.
+
+### Wrong postal code
+
+A postal code that doesn't hold the address is not fatal: when nothing matches inside it (or the street is there but the number isn't, and the exact number exists just across the boundary), crabfinder searches the street within 20 km of that postal code's centre and reports `adjacent_commune` / `postal_code_mismatch`. `matched_postal_code` then shows the real one:
+
+```
+id,street,house_number,postal_code,matched_street,matched_house_number,matched_postal_code,lat,lng,confidence,fallback_reason,house_number_delta
+1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
+```
+
+See [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune--found-next-door).
 
 ### Addresses with only a place name (no street)
 

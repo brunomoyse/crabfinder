@@ -56,9 +56,9 @@ AppState::load      open index, check sidecar, build R-tree + address-count
         └── crabfinder-eval     --batch-mode (in-process)
 ```
 
-## Index (schema v9)
+## Index (schema v10)
 
-`crabfinder_indexer::meta::SCHEMA_VERSION` is **9**; every reader checks
+`crabfinder_indexer::meta::SCHEMA_VERSION` is **10**; every reader checks
 `.crab-meta.json` and refuses a mismatch. Recent bumps:
 
 - **v7** — `mid-street-v1.bin` side-file (lower-median house number per
@@ -68,6 +68,10 @@ AppState::load      open index, check sidecar, build R-tree + address-count
 - **v9** — positions BeSt publishes as Lambert `0 0` are imputed instead
   of reprojected into France; `Address::position_source` + a FAST
   `position_source` field.
+- **v10** — raw `street_exact` field for the exact-name bonus.
+
+The indexer refuses an output directory that already holds an index
+(Tantivy would append a second copy) unless `--overwrite`.
 
 Fields (`CrabSchema::build`):
 
@@ -75,6 +79,7 @@ Fields (`CrabSchema::build`):
 |---|---|---|
 | `best_id` | raw, stored | hydrate |
 | `searchable` | multi-valued TEXT, `crab` analyzer, no fieldnorms | street/municipality word matching |
+| `street_exact` | raw, multi-valued: each street name form analyzed and space-joined (`grand place`) | exact-name bonus |
 | `lat`, `lon` | f64 FAST + stored | response, R-tree, area queries |
 | `notability_score` | f64 FAST | `tweak_score` boost |
 | `position_source` | u64 FAST | R-tree skips non-point-accurate positions |
@@ -126,7 +131,10 @@ postal codes. The service loads it into a name → localities map
 `data/notability-whitelist-v1.yaml` (`building_group_id → multiplier`)
 is joined at index time into `notability_score` (default 1.0) and
 multiplied into BM25 at query time, lifting landmarks (Grand-Place,
-Atomium, …) above namesakes.
+Atomium, …) above namesakes. Most landmark squares get 3.0; Brussels'
+Grand-Place, Antwerp's Grote Markt and Bruges' Markt get 3.5, so their
+bare names mean them rather than Tournai's Grand'Place or Leuven's Grote
+Markt.
 
 ## Resolver (`crabfinder_service::resolver`)
 
@@ -158,13 +166,25 @@ batch mode.
 4. **Locality-suffix readings**: `<street> <place>` where the place isn't
    in the street's text (an OSM hamlet, another commune): the street
    searched inside the place's area (≥ 3 km), focused on its centre.
-5. **OR tiers**: any word, with then without the number
+5. **Postal-code relaxation** (`search_postal_relaxed`): nothing matched
+   inside the query's postal code → the strict tiers without it, inside
+   20 km of the code's centre (`indexer::localities::postal_centres`)
+   with a 5 km distance decay, labelled `adjacent_commune` /
+   `postal_code_mismatch`. It also replaces a step-3 answer when that is
+   street-level, a nearest number on another street object, or one ≥ 20
+   off, and the exact number exists across the boundary; and a parser
+   alternative that doesn't match its number exactly. Skipped for the
+   hard `postal_code=` filter (`AddressQuery::postal_code_strict`).
+6. **OR tiers**: any word, with then without the number
    (`fuzzy_street`).
 
 The strict query is a phrase + AND-of-OR-forms (`analyze` + abbreviation
-expansion, `av` → `avenue`) with an adjacent-pair bonus; postal code,
-region, house number and area are `Must` filters. Scores are
-`BM25 × notability × (1 + 0.005 × ln(1 + street address count))`.
+expansion, `av` → `avenue`) with an adjacent-pair bonus and an
+exact-name bonus (a constant 10 when a leading run of the street words
+equals a `street_exact` value: "Markt" → *Markt* over *Grote Markt*);
+postal code, region, house number, area and `bbox` are `Must` filters.
+Scores are `(BM25 + bonuses) × notability × (1 + 0.005 × ln(1 + street
+address count))`.
 Each tier over-fetches `limit × 20` (≤ 2000) rows, applies focus decay
 (`exp(-d/25 km)` for `focus_point`, `exp(-d/1 km)` around a locality
 centre), collapses by `building_group_id` (`dedup.rs`: max score, lowest box

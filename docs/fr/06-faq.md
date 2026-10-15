@@ -13,10 +13,11 @@ Tu as construit l'index avec une version antérieure du binaire `crabfinder-inde
     --best-dir ./best-full-latest \
     --output ./index-belgium \
     --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv
+    --places data/osm-places-be-v1.csv \
+    --overwrite
 ```
 
-L'opération écrase l'index existant. Compter ~1,5-3 min sur un dump complet. Ou lance `scripts/refresh_best.sh`, qui télécharge aussi un dump à jour (voir [`02-installation.md`](02-installation.md#mettre-à-jour-les-données)).
+`--overwrite` supprime l'ancien index de `--output` avant la construction (sans lui, l'indexeur refuse un dossier qui en contient déjà un). Compter ~1,5-3 min sur un dump complet. Ou lance `scripts/refresh_best.sh`, qui télécharge aussi un dump à jour (voir [`02-installation.md`](02-installation.md#mettre-à-jour-les-données)).
 
 ### « index at … is missing .crab-meta.json »
 
@@ -49,6 +50,10 @@ Changer de port via `--port 8081` ou `CRABFINDER_PORT=8081`.
 Le service écoute en IPv4 seulement. Sur certains systèmes, `localhost` résout en IPv6 (`::1`) d'abord. Utilise toujours `127.0.0.1` dans tes curls.
 
 ## Erreurs côté indexation
+
+### « … already holds an index; pass --overwrite to replace it »
+
+Le dossier `--output` contient déjà un index. L'indexeur refuse d'écrire dedans : indexer par-dessus un index existant stockerait chaque adresse en double. Soit tu pointes `--output` vers un nouveau dossier (ce que fait `scripts/refresh_best.sh`, avec des dossiers datés `index-<date>`), soit tu ajoutes `--overwrite` pour supprimer d'abord l'ancien index. N'utilise pas `--overwrite` sur le dossier que lit un service en marche : construis ailleurs puis bascule (voir [plus bas](#puis-je-ré-indexer-pendant-que-le-service-tourne-)).
 
 ### « no ZIP found for region Brussels (Entity::Address) in ./best-full-latest »
 
@@ -107,6 +112,7 @@ C'est rare mais ça arrive. Causes typiques :
 - Requête ambiguë (« Kerkstraat 1 » existe dans des dizaines de communes) → la réponse indique `ambiguous: true` ; préciser CP, `region` ou `focus_point`.
 - Toponyme local non boosté en notabilité (Whitelist ne couvre pas tout). Tu peux ajouter une entrée dans `data/notability-whitelist-v1.yaml` puis ré-indexer.
 - Faute de frappe : la passe fuzzy peut remonter un mauvais candidat.
+- Un nom de rue court qui fait aussi partie de noms plus longs : la rue qui s'appelle exactement comme ta saisie passe en premier. « Markt » donne le Markt de Bruges, pas l'un des nombreux « Grote Markt » ; « Grand-Place » donne Bruxelles. Si tu visais un nom plus long, tape-le en entier ou ajoute le code postal.
 
 Inspecter `query.parsed` (`street_tokens`, `house_number`, `box_number`, `postal_code`) et `query.reading` dans la réponse `/geocode` : si le parser a mal coupé la requête, le reste suit. Augmenter `limit` pour voir si la bonne réponse est dans le top-3 ou top-5.
 
@@ -152,6 +158,16 @@ curl -X POST .../batch/geocode -H "Content-Type: application/json" \
 ```
 
 Les résultats au numéro voisin (`nearest_*`) sont conservés : ce sont de vraies adresses voisines, pas des approximations à la rue.
+
+### Mes codes postaux sont parfois faux
+
+Fréquent dans les vrais fichiers : l'adresse est pile sur une limite de commune, ou quelqu'un a tapé le code postal de la commune principale (1000 au lieu de 1050). Quand rien ne correspond dans le code postal donné, crabfinder cherche la même rue dans les communes autour (dans un rayon de ~20 km) et la renvoie avec `confidence=adjacent_commune` et `fallback_reason=postal_code_mismatch` :
+
+```
+1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
+```
+
+Le code postal réellement trouvé est dans `matched_postal_code` ; compare-le à ton entrée pour repérer les lignes à corriger à la source. Un match exact dans le code postal donné l'emporte toujours sur la commune voisine. Si tu ne veux jamais sortir de ton code postal (`/geocode` uniquement), passe-le en filtre `postal_code=` plutôt que dans la requête : ce filtre est strict et jamais relâché. Détails dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md#adjacent_commune--trouvé-à-côté).
 
 ## Multi-process et partage d'index
 
@@ -254,7 +270,7 @@ Une requête a attendu plus que `--request-timeout-ms` (10 s par défaut), atten
 
 Vérifie :
 - Que tu as bien lu [`02-installation.md`](02-installation.md) si c'est un souci de setup.
-- Que ton index est en `schema_version=9` (`cat ./index-belgium/.crab-meta.json`, ou `/health`).
+- Que ton index est en `schema_version=10` (`cat ./index-belgium/.crab-meta.json`, ou `/health`).
 - Que les binaires sont en release (`./target/release/...`, pas `./target/debug/...`).
 
 Ensuite, capturer :

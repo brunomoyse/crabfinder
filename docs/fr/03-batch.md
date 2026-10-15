@@ -78,8 +78,8 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Recopiés de l'entrée**, pour l'audit (`street` vide sur les lignes en texte libre). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | Ce que crabfinder a réellement trouvé dans BeSt. Montre les écarts (faute corrigée, numéro voisin…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Vides si `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `locality` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
-| `fallback_reason` | Vide si `confidence == exact`. Sinon `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `street_missing` ou `no_match`. |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
+| `fallback_reason` | Vide si `confidence == exact`. Sinon `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` ou `no_match`. |
 | `house_number_delta` | Numéro trouvé moins numéro demandé : `0` quand le numéro demandé existe, par ex. `26` quand on demande le 33 et que le 59 est renvoyé. Vide pour les résultats au niveau de la rue ou d'un lieu. |
 | `street_match_score` | Score BM25 brut. Indicateur de qualité du match textuel. Plus haut = meilleur match. Vide si `not_found`. |
 | `building_group_id` | Identifiant de bâtiment de crabfinder (`{identifiant de rue}|{numéro}`). Stable d'un dump à l'autre tant que l'identifiant de rue BeSt ne change pas. |
@@ -315,6 +315,17 @@ Sur l'exemple en colonnes séparées, la ligne 3 (`Grand-Place`, sans numéro) d
 ### Adresses sans code postal
 
 Ça fonctionne, mais la qualité baisse nettement. crabfinder ne peut pas filtrer par CP, donc les rues homonymes (« Kerkstraat » existe dans des centaines de communes) reviennent dans un ordre non déterminé — ces lignes sont en général marquées `ambiguous=true`. **Fournis toujours le CP quand tu l'as.**
+
+### Mauvais code postal
+
+Un code postal qui ne contient pas l'adresse n'est pas rédhibitoire : quand rien n'y correspond (ou que la rue y est mais pas le numéro, et que le numéro exact existe juste de l'autre côté de la limite), crabfinder cherche la rue dans les 20 km autour du centre de ce code postal et renvoie `adjacent_commune` / `postal_code_mismatch`. `matched_postal_code` montre alors le vrai :
+
+```
+id,street,house_number,postal_code,matched_street,matched_house_number,matched_postal_code,lat,lng,confidence,fallback_reason,house_number_delta
+1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
+```
+
+Voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#adjacent_commune--trouvé-à-côté).
 
 ### Adresses avec seulement un nom de lieu (pas de rue)
 

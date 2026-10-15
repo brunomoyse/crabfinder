@@ -173,10 +173,11 @@ To stop: `kill $(cat crabfinder.pid)`.
 
 ## Environment variables (alternative to flags)
 
-`--index`, `--port`, `--abbreviation-dict` all accept env-var equivalents, handy for systemd/Docker setups:
+`--index`, `--host`, `--port`, `--abbreviation-dict` all accept env-var equivalents, handy for systemd/Docker setups:
 
 ```bash
 export CRABFINDER_INDEX=./index-belgium
+export CRABFINDER_HOST=127.0.0.1      # default; 0.0.0.0 to listen on all interfaces
 export CRABFINDER_PORT=8080
 export CRABFINDER_ABBREVIATION_DICT=./data/street-type-abbreviations-v1.yaml
 
@@ -184,6 +185,28 @@ export CRABFINDER_ABBREVIATION_DICT=./data/street-type-abbreviations-v1.yaml
 ```
 
 Same for `crabfinder-batch` (`CRABFINDER_INDEX`, `CRABFINDER_ABBREVIATION_DICT`).
+
+## Docker (alternative to steps 1, 3, 5 and 6)
+
+The `Dockerfile` builds `crabfinder-service`, `crabfinder-indexer` and `crabfinder-batch` into one image with the two YAML files bundled. Only the BeSt data (step 4) is needed on the host. The index lives in a volume mounted at `/index`, which must be writable (Tantivy takes a lock file even to read).
+
+```bash
+docker build -t crabfinder .
+
+# Build the index into a named volume (~2–3 min)
+docker run --rm -v ./best-full-latest:/best:ro -v crabfinder-index:/index crabfinder \
+    crabfinder-indexer --best-dir /best --output /index \
+    --notability-whitelist /usr/share/crabfinder/notability-whitelist-v1.yaml
+
+# Serve it
+docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index crabfinder
+curl "http://127.0.0.1:8080/health"
+
+# Batch over stdin/stdout
+docker run --rm -i -v crabfinder-index:/index crabfinder crabfinder-batch < input.csv > output.csv
+```
+
+Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured.
 
 ## Uninstall
 

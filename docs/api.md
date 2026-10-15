@@ -1,6 +1,6 @@
 # HTTP API
 
-Base URL: `http://127.0.0.1:8080` (default; configurable via `--port`).
+Base URL: `http://127.0.0.1:8080` (default; configurable via `--host` / `--port`).
 
 All responses are JSON. CORS is permissive (any origin, any method, any
 header). There is no authentication — bind to localhost or front this

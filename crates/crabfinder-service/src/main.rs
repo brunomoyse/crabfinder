@@ -13,7 +13,7 @@
 //! `_note` field flagging this explicitly so callers can't accidentally
 //! depend on the duplicated behaviour.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -61,6 +61,11 @@ struct Args {
     /// Path to the Tantivy index directory.
     #[arg(long, env = "CRABFINDER_INDEX")]
     index: PathBuf,
+
+    /// IP address to bind. Defaults to IPv4 loopback; containers set
+    /// `0.0.0.0` so the published port is reachable from outside.
+    #[arg(long, env = "CRABFINDER_HOST", default_value = "127.0.0.1")]
+    host: IpAddr,
 
     /// TCP port to listen on.
     #[arg(long, env = "CRABFINDER_PORT", default_value_t = 8080)]
@@ -201,7 +206,7 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 
-    let addr: SocketAddr = SocketAddr::from(([127, 0, 0, 1], args.port));
+    let addr: SocketAddr = SocketAddr::new(args.host, args.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("listening at http://{addr}");
     axum::serve(listener, app)

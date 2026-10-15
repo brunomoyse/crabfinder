@@ -9,7 +9,6 @@ use crabfinder_parser::ParsedQuery;
 use crate::AppState;
 use crate::dedup::{MatchType, RAW_HIT_CAP};
 use crate::focus::parse_focus_point;
-use crate::query_builder::analyze;
 use crate::resolver::{AddressQuery, SearchOptions, Tier, search};
 
 use super::error::{ApiQuery, ServiceError};
@@ -78,13 +77,20 @@ pub struct GeocodeEcho {
     pub expand: bool,
     /// What the parser made of the query — useful for debugging.
     pub parsed: ParsedEcho,
+    /// Which reading produced the features: 0 = `parsed`, `n` =
+    /// `parsed.alternatives[n - 1]`.
+    pub reading: usize,
 }
 
 #[derive(Serialize)]
 pub struct ParsedEcho {
     pub street_tokens: Vec<String>,
     pub house_number: Option<String>,
+    pub box_number: Option<String>,
     pub postal_code: Option<String>,
+    /// Other readings the parser considered (Phase 2), best first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub alternatives: Vec<ParsedEcho>,
 }
 
 impl From<&ParsedQuery> for ParsedEcho {
@@ -92,7 +98,9 @@ impl From<&ParsedQuery> for ParsedEcho {
         Self {
             street_tokens: p.street_tokens.clone(),
             house_number: p.house_number.clone(),
+            box_number: p.box_number.clone(),
             postal_code: p.postal_code.clone(),
+            alternatives: p.alternatives.iter().map(ParsedEcho::from).collect(),
         }
     }
 }
@@ -129,23 +137,28 @@ pub async fn geocode(
         None => None,
     };
 
-    let parsed = crabfinder_parser::parse(q);
-    let query = AddressQuery {
-        street_tokens: parsed
-            .street_tokens
+    let mut parsed = crabfinder_parser::parse(q);
+    // An explicit `postal_code` param overrides the one parsed from q. A
+    // 4-digit token the parser took as the postal code is then more
+    // likely the house number: lead with a reading that kept it as one.
+    let postal_override = params.postal_code.as_deref().map(|p| p.trim().to_string());
+    if postal_override.is_some()
+        && parsed.postal_code.is_some()
+        && let Some(i) = parsed
+            .alternatives
             .iter()
-            .flat_map(|t| analyze(&s.index, t))
-            .collect(),
-        house_number: parsed.house_number.clone(),
-        // An explicit `postal_code` param overrides the one parsed from q.
-        postal_code: params
-            .postal_code
-            .as_deref()
-            .map(|p| p.trim().to_string())
-            .or_else(|| parsed.postal_code.clone()),
-        region_filter,
-        focus_point,
-    };
+            .position(|a| a.postal_code.is_none())
+    {
+        parsed.promote(i);
+    }
+    let mut query = AddressQuery::from_parsed(&s.index, &parsed);
+    query.for_each_reading(|r| {
+        if postal_override.is_some() {
+            r.postal_code.clone_from(&postal_override);
+        }
+        r.region_filter.clone_from(&region_filter);
+        r.focus_point = focus_point;
+    });
     let opts = SearchOptions {
         limit,
         expand,
@@ -185,6 +198,7 @@ pub async fn geocode(
             limit,
             expand,
             parsed: ParsedEcho::from(&parsed),
+            reading: set.reading,
         },
         count: features.len(),
         match_type,

@@ -1,0 +1,130 @@
+---
+source: crates/crabfinder-parser/tests/props.rs
+expression: out
+---
+[
+    ParsedQuery {
+        raw_query: "Chaussée de Waterloo 1357 Uccle",
+        street_tokens: [
+            "Chaussée",
+            "de",
+            "Waterloo",
+            "Uccle",
+        ],
+        house_number: None,
+        box_number: None,
+        postal_code: Some(
+            "1357",
+        ),
+        alternatives: [
+            ParsedQuery {
+                raw_query: "Chaussée de Waterloo 1357 Uccle",
+                street_tokens: [
+                    "Chaussée",
+                    "de",
+                    "Waterloo",
+                    "Uccle",
+                ],
+                house_number: Some(
+                    "1357",
+                ),
+                box_number: None,
+                postal_code: None,
+                alternatives: [],
+            },
+        ],
+    },
+    ParsedQuery {
+        raw_query: "Rue du 11 Novembre",
+        street_tokens: [
+            "Rue",
+            "du",
+            "Novembre",
+        ],
+        house_number: Some(
+            "11",
+        ),
+        box_number: None,
+        postal_code: None,
+        alternatives: [
+            ParsedQuery {
+                raw_query: "Rue du 11 Novembre",
+                street_tokens: [
+                    "Rue",
+                    "du",
+                    "11",
+                    "Novembre",
+                ],
+                house_number: None,
+                box_number: None,
+                postal_code: None,
+                alternatives: [],
+            },
+        ],
+    },
+    ParsedQuery {
+        raw_query: "Avenue Louise 32 Ixelles",
+        street_tokens: [
+            "Avenue",
+            "Louise",
+            "Ixelles",
+        ],
+        house_number: Some(
+            "32",
+        ),
+        box_number: None,
+        postal_code: None,
+        alternatives: [
+            ParsedQuery {
+                raw_query: "Avenue Louise 32 Ixelles",
+                street_tokens: [
+                    "Avenue",
+                    "Louise",
+                    "32",
+                    "Ixelles",
+                ],
+                house_number: None,
+                box_number: None,
+                postal_code: None,
+                alternatives: [],
+            },
+        ],
+    },
+    ParsedQuery {
+        raw_query: "Rue de la Loi 16 bte 3, B-1040 Etterbeek",
+        street_tokens: [
+            "Rue",
+            "de",
+            "la",
+            "Loi",
+            "Etterbeek",
+        ],
+        house_number: Some(
+            "16",
+        ),
+        box_number: Some(
+            "3",
+        ),
+        postal_code: Some(
+            "1040",
+        ),
+        alternatives: [],
+    },
+    ParsedQuery {
+        raw_query: "Meir 12/3 2000 Antwerpen",
+        street_tokens: [
+            "Meir",
+            "Antwerpen",
+        ],
+        house_number: Some(
+            "12",
+        ),
+        box_number: Some(
+            "3",
+        ),
+        postal_code: Some(
+            "2000",
+        ),
+        alternatives: [],
+    },
+]

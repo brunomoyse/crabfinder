@@ -1383,9 +1383,9 @@ queries:
     category: cross_language
     subcategory: antwerpen-grote-markt
     query: "Grote Markt 1, 2000 Antwerpen"
-    expected_best_id: "https://data.vlaanderen.be/id/adres/5343861/2023-11-01T19:29:21+01:00"
-    expected_building_group_id: "https://data.vlaanderen.be/id/straatnaam/|1064|14"
-    notes: "Grote Markt — Anvers (strict)"
+    expected_best_id: "https://data.vlaanderen.be/id/adres/3738064/2023-11-01T15:50:24+01:00"
+    expected_building_group_id: "https://data.vlaanderen.be/id/straatnaam/|1064|1"
+    notes: "Grote Markt — Anvers (strict). v2: label fixed from n°14 (pinned when the old parser read `1,` as a street word) to n°1, the number in the query."
   - id: adv-cross_language-002
     category: cross_language
     subcategory: anvers-grote-markt-fr-muni
@@ -1425,9 +1425,9 @@ queries:
     category: cross_language
     subcategory: tournai-grand-place
     query: "Grand'Place 1, 7500 Tournai"
-    expected_best_id: "geodata.wallonie.be/id/Address/1865802/2"
-    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7723083|61"
-    notes: "Grand'Place — Tournai (strict)"
+    expected_best_id: "geodata.wallonie.be/id/Address/975501/1"
+    expected_building_group_id: "geodata.wallonie.be/id/Streetname|7723083|1"
+    notes: "Grand'Place — Tournai (strict). v2: label fixed from n°61 (pinned when the old parser read `1,` as a street word) to n°1, the number in the query."
   - id: adv-cross_language-008
     category: cross_language
     subcategory: doornik-grand-place

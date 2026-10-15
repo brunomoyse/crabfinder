@@ -22,7 +22,6 @@ use serde::Serialize;
 use tracing::{info, warn};
 
 use crabfinder_parser::parse;
-use crabfinder_service::query_builder::analyze;
 use crabfinder_service::resolver::{AddressQuery, Confidence, SearchOptions, resolve_with};
 use crabfinder_service::{AppState, LoadOptions};
 
@@ -120,21 +119,13 @@ pub fn run(
     let mut decisions: Vec<EvalDecision> = Vec::with_capacity(total);
     for q in &queries {
         let parsed = parse(&q.query_string);
-        let aq = AddressQuery {
-            street_tokens: if parsed.street_tokens.is_empty() {
-                // Falls through to NotFound naturally — but it's worth a
-                // warn since a synthetic eval set should never have a row
-                // with zero street tokens.
-                warn!(id = %q.id, raw = %q.query_string, "batch-mode: parser produced no street tokens");
-                Vec::new()
-            } else {
-                analyze(&state.index, &parsed.street_tokens.join(" "))
-            },
-            house_number: parsed.house_number,
-            postal_code: parsed.postal_code,
-            region_filter: None,
-            focus_point: None,
-        };
+        if parsed.street_tokens.is_empty() {
+            // Falls through to NotFound naturally — but it's worth a warn
+            // since a synthetic eval set should never have a row with zero
+            // street tokens.
+            warn!(id = %q.id, raw = %q.query_string, "batch-mode: parser produced no street tokens");
+        }
+        let aq = AddressQuery::from_parsed(&state.index, &parsed);
         let r = resolve_with(&aq, &search_opts, &ctx);
         decisions.push(EvalDecision {
             confidence: r.confidence,

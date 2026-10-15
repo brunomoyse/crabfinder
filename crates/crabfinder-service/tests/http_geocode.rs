@@ -270,3 +270,63 @@ async fn features_carry_confidence() {
     assert_eq!(fs[0]["confidence"], "fuzzy_street");
     assert_eq!(fuzzy["match_type"], "fuzzy");
 }
+
+#[tokio::test]
+async fn parsed_echo_shows_box_alternatives_and_reading() {
+    let app = App::new(&fixtures::multi_region());
+
+    let body = app
+        .ok(&geocode_uri("Chaussée de Waterloo 1357 Uccle", ""))
+        .await;
+    assert_eq!(body["query"]["parsed"]["postal_code"], "1357");
+    let alts = body["query"]["parsed"]["alternatives"].as_array().unwrap();
+    assert_eq!(alts.len(), 1);
+    assert_eq!(alts[0]["house_number"], "1357");
+    assert!(alts[0].get("alternatives").is_none());
+    assert_eq!(body["query"]["reading"], 1);
+    let f = &features(&body)[0];
+    assert_eq!(prop(f, "house_number"), "1357");
+    assert_eq!(f["confidence"], "exact");
+
+    let body = app
+        .ok(&geocode_uri("Rue du 11 Novembre 5, B-1050 Ixelles", ""))
+        .await;
+    let parsed = &body["query"]["parsed"];
+    assert_eq!(parsed["house_number"], "5");
+    assert_eq!(parsed["postal_code"], "1050");
+    assert_eq!(parsed["box_number"], serde_json::Value::Null);
+    assert!(parsed.get("alternatives").is_none());
+    assert_eq!(body["query"]["reading"], 0);
+    assert_eq!(features(&body)[0]["confidence"], "exact");
+
+    let body = app.ok(&geocode_uri("Rue du 11 Novembre 5 bte 2", "")).await;
+    assert_eq!(body["query"]["parsed"]["box_number"], "2");
+}
+
+#[tokio::test]
+async fn postal_param_overrides_every_reading() {
+    let app = App::new(&fixtures::multi_region());
+    // With an explicit postal code, the reading that keeps 1357 as the
+    // house number leads (the postal reading is demoted, not dropped).
+    let body = app
+        .ok(&geocode_uri(
+            "Chaussée de Waterloo 1357 Uccle",
+            "&postal_code=1180",
+        ))
+        .await;
+    assert_eq!(body["query"]["reading"], 0);
+    assert_eq!(body["query"]["parsed"]["house_number"], "1357");
+    assert_eq!(
+        body["query"]["parsed"]["alternatives"][0]["postal_code"],
+        "1357"
+    );
+    assert_eq!(features(&body)[0]["confidence"], "exact");
+    // A wrong explicit postal code applies to all readings → no exact.
+    let body = app
+        .ok(&geocode_uri(
+            "Chaussée de Waterloo 1357 Uccle",
+            "&postal_code=1000",
+        ))
+        .await;
+    assert!(features(&body).is_empty());
+}

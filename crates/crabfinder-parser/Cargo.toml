@@ -9,3 +9,7 @@ description = "Rule-based Belgian address parser (nom). Phase 4 — placeholder 
 [lib]
 
 [dependencies]
+
+[dev-dependencies]
+proptest.workspace = true
+insta.workspace = true

@@ -37,10 +37,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info};
 
 use crate::AppState;
-use crate::query_builder::analyze;
 use crate::resolver::{AddressQuery, SearchOptions, resolve_with};
 
-use super::dedup::{ClosureResolver, dedup_then_resolve};
+use super::dedup::{ClosureResolver, dedup_then_resolve, row_query};
 use super::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
 
 /// Hard cap on JSON-mode payloads. Larger callers must switch to multipart
@@ -209,13 +208,7 @@ fn run_resolve_to_channel(
         ..SearchOptions::default()
     };
     let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &opts, &ctx));
-    let make_query = |row: &InputRow| AddressQuery {
-        street_tokens: analyze(&state.index, &row.street),
-        house_number: row.house_number.clone(),
-        postal_code: row.postal_code.clone(),
-        region_filter: None,
-        focus_point: None,
-    };
+    let make_query = |row: &InputRow| row_query(&state.index, row);
 
     let out_rows = dedup_then_resolve(rows, &resolver, make_query);
 

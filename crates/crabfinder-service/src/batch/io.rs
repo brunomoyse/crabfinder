@@ -31,6 +31,10 @@ pub struct InputRow {
     pub house_number: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub postal_code: Option<String>,
+    /// Optional box / unit column (Phase 2). Prefers the matching unit as
+    /// the building's representative (`best_id`); never filters.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub box_number: Option<String>,
 }
 
 /// One row of output. Field order is the wire contract — `csv::Writer`

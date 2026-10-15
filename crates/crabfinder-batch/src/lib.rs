@@ -22,9 +22,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tracing::{info, warn};
 
-use crabfinder_service::batch::dedup::{ClosureResolver, dedup_then_resolve};
+use crabfinder_service::batch::dedup::{ClosureResolver, dedup_then_resolve, row_query};
 use crabfinder_service::batch::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
-use crabfinder_service::query_builder::analyze;
 use crabfinder_service::resolver::{AddressQuery, SearchOptions, resolve_with};
 use crabfinder_service::{AppState, LoadOptions};
 
@@ -136,13 +135,7 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
         ..SearchOptions::default()
     };
     let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &search_opts, &ctx));
-    let make_query = |row: &InputRow| AddressQuery {
-        street_tokens: analyze(&state.index, &row.street),
-        house_number: row.house_number.clone(),
-        postal_code: row.postal_code.clone(),
-        region_filter: None,
-        focus_point: None,
-    };
+    let make_query = |row: &InputRow| row_query(&state.index, row);
     let t0 = std::time::Instant::now();
     let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query));
     info!(

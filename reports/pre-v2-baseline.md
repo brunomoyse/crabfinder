@@ -10,7 +10,7 @@
 | Metric | Value |
 |---|---|
 | n | 3837 |
-| recall@1 | 0.836 |
+| recall@1 | 0.835 |
 | recall@5 | 0.888 |
 | recall@10 | 0.907 |
 | building_group_recall@1 | 0.841 |
@@ -21,13 +21,13 @@
 
 | | n | p50 | p95 | p99 | mean | max |
 |---|---|---|---|---|---|---|
-| ms | 3840 | 1.6 | 14.7 | 51.5 | 4.5 | 79.5 |
+| ms | 3840 | 1.6 | 15.1 | 51.3 | 4.5 | 79.4 |
 
 _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
 
 ## §3.2 contract — cross_language_recall@1
 
-- Random samples (n=116): **0.991**
+- Random samples (n=116): **0.983**
 - Boosted samples (n=200): **0.995**
 
 ## By region
@@ -65,7 +65,7 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 
 | Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
 |---|---|---|---|---|---|---|
-| cross_language | 10 | 0.900 | 1.000 | 0.900 | 0.933 | 1.000 |
+| cross_language | 10 | 0.800 | 1.000 | 0.800 | 0.900 | 1.000 |
 | de_zone | 9 | 0.778 | 0.778 | 0.778 | 0.778 | 0.889 |
 | facilites | 6 | 0.833 | 0.833 | 0.833 | 0.833 | 0.833 |
 | hamlet | 30 | 0.400 | 0.433 | 0.400 | 0.417 | 0.900 |

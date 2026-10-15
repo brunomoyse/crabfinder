@@ -187,9 +187,7 @@ pub fn build_strict_query(
     }
 
     if let Some(hn) = &parsed.house_number {
-        let term = Term::from_field_text(schema.house_number, hn);
-        let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        clauses.push((Occur::Must, tq));
+        clauses.push((Occur::Must, house_number_clause(schema, hn)));
     }
     let postal = filters
         .postal_code
@@ -210,6 +208,28 @@ pub fn build_strict_query(
         return None;
     }
     Some(Box::new(BooleanQuery::new(clauses)))
+}
+
+/// House-number filter that ignores the letter suffix's case. The v7
+/// index stores `house_number` as BeSt spells it (`32a` and `32A` both
+/// occur), so the clause ORs the distinct case forms of the query value.
+pub(crate) fn house_number_clause(schema: &CrabSchema, hn: &str) -> Box<dyn TantivyQuery> {
+    let mut forms = vec![hn.to_string(), hn.to_uppercase(), hn.to_lowercase()];
+    forms.sort();
+    forms.dedup();
+    let mut terms: Vec<(Occur, Box<dyn TantivyQuery>)> = forms
+        .iter()
+        .map(|f| {
+            let term = Term::from_field_text(schema.house_number, f);
+            let tq: Box<dyn TantivyQuery> =
+                Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+            (Occur::Should, tq)
+        })
+        .collect();
+    if terms.len() == 1 {
+        return terms.pop().expect("one form").1;
+    }
+    Box::new(BooleanQuery::new(terms))
 }
 
 #[cfg(test)]
@@ -257,6 +277,7 @@ mod strict_tests {
             street_tokens: Vec::new(),
             house_number: None,
             postal_code: None,
+            ..Default::default()
         };
         let q = build_strict_query(
             searchable_field(&schema),
@@ -279,6 +300,7 @@ mod strict_tests {
             street_tokens: Vec::new(),
             house_number: None,
             postal_code: None,
+            ..Default::default()
         };
         let filters = FilterParams {
             region: None,
@@ -300,6 +322,7 @@ mod strict_tests {
             street_tokens: vec!["louise".into()],
             house_number: None,
             postal_code: None,
+            ..Default::default()
         };
         let q = build_strict_query(
             searchable_field(&schema),
@@ -324,6 +347,7 @@ mod strict_tests {
             street_tokens: vec!["louise".into()],
             house_number: None,
             postal_code: Some("1000".into()),
+            ..Default::default()
         };
         let filters = FilterParams {
             region: None,
@@ -371,9 +395,7 @@ pub fn build_fuzzy_query(
     }
 
     if let Some(hn) = &parsed.house_number {
-        let term = Term::from_field_text(schema.house_number, hn);
-        let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-        clauses.push((Occur::Must, tq));
+        clauses.push((Occur::Must, house_number_clause(schema, hn)));
     }
     let postal = filters
         .postal_code
@@ -408,6 +430,7 @@ mod fuzzy_tests {
             street_tokens: Vec::new(),
             house_number: None,
             postal_code: None,
+            ..Default::default()
         };
         let q = build_fuzzy_query(
             searchable_field(&schema),
@@ -432,6 +455,7 @@ mod fuzzy_tests {
             street_tokens: vec!["louise".into(), "louise".into()],
             house_number: None,
             postal_code: None,
+            ..Default::default()
         };
         let q = build_fuzzy_query(
             searchable_field(&schema),
@@ -454,6 +478,7 @@ mod fuzzy_tests {
             street_tokens: Vec::new(),
             house_number: Some("32".into()),
             postal_code: None,
+            ..Default::default()
         };
         let q = build_fuzzy_query(
             searchable_field(&schema),

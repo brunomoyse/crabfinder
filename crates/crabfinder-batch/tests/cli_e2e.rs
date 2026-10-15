@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 
 use crabfinder_batch::{Args, Summary, run, run_with_io};
 use crabfinder_indexer::meta::{SCHEMA_VERSION, SIDECAR_FILENAME};
-use crabfinder_test_support::{TestIndex, col, fixtures, parse_csv};
+use crabfinder_test_support::{AddressBuilder, TestIndex, col, fixtures, parse_csv};
 
 const HEADER: &str = "id,street,house_number,postal_code\n";
 
@@ -164,6 +164,48 @@ fn stale_index_is_rejected() {
     std::fs::write(ti.path().join(SIDECAR_FILENAME), stale).unwrap();
     let err = run_with_io(&Args::for_index(ti.path()), HEADER.as_bytes(), Vec::new()).unwrap_err();
     assert!(err.to_string().contains("schema_version"), "{err}");
+}
+
+#[test]
+fn box_column_and_slash_numbers_pick_the_unit() {
+    let mut addrs = fixtures::batch_small();
+    for (oid, b) in [("u1", "1"), ("u2", "2")] {
+        addrs.push(
+            AddressBuilder::new(oid, fixtures::LOUISE_OID, "10")
+                .street(Some("Avenue Louise"), Some("Louizalaan"))
+                .postal("1050")
+                .box_no(b)
+                .build(),
+        );
+    }
+    let ti = TestIndex::build_with_mid_street(&addrs);
+    let (_, body) = run_csv(
+        &Args::for_index(ti.path()),
+        "id,street,house_number,postal_code,box_number
+1,Avenue Louise,10,1050,2
+2,Avenue Louise,10/1,1050,
+3,Avenue Louise,10,1050,
+4,Avenue Louise,10A,1050,
+",
+    );
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(rows.len(), 4);
+    let best = |i: usize| col(&h, &rows[i], "best_id").to_string();
+    assert!(best(0).contains("/u2/"), "{}", best(0));
+    assert!(best(1).contains("/u1/"), "{}", best(1));
+    assert!(
+        best(2).contains("/100/"),
+        "no box → base record: {}",
+        best(2)
+    );
+    for r in &rows[..3] {
+        assert_eq!(col(&h, r, "confidence"), "exact");
+        assert_eq!(col(&h, r, "matched_house_number"), "10");
+    }
+    // 10A doesn't exist → street level.
+    assert_eq!(col(&h, &rows[3], "confidence"), "median_street");
+    // The input is echoed as given.
+    assert_eq!(col(&h, &rows[1], "house_number"), "10/1");
 }
 
 // --- subprocess smoke tests -------------------------------------------------

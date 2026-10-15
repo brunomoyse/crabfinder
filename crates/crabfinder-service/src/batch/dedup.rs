@@ -13,6 +13,7 @@ use std::collections::HashMap;
 
 use rayon::prelude::*;
 
+use crate::query_builder::analyze;
 use crate::resolver::{AddressQuery, Confidence, ResolvedAddress};
 
 use super::io::{InputRow, OutputRow};
@@ -44,14 +45,40 @@ impl<F: Fn(&AddressQuery) -> ResolvedAddress + Sync> Resolver for ClosureResolve
 /// "Avenue Louise" and "avenue louise" resolve once (the resolver itself
 /// lowercases internally via the tokenizer, so this is purely a dédup
 /// optimisation, not a correctness boundary).
-type CacheKey = (String, Option<String>, Option<String>);
+type CacheKey = (String, Option<String>, Option<String>, Option<String>);
 
 fn cache_key(row: &InputRow) -> CacheKey {
     (
         row.street.to_lowercase(),
         row.house_number.clone(),
         row.postal_code.clone(),
+        row.box_number.clone(),
     )
+}
+
+/// The `AddressQuery` for one CSV row. The house-number column goes
+/// through the free-text parser so `12/3`, `12 bte 3` or `12a` are split
+/// into number + box and normalised like `/geocode` input; anything the
+/// parser can't read as a bare number is passed through as-is.
+pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
+    let (house_number, parsed_box) = match row.house_number.as_deref() {
+        Some(raw) => {
+            let p = crabfinder_parser::parse(raw);
+            if p.street_tokens.is_empty() && p.postal_code.is_none() && p.house_number.is_some() {
+                (p.house_number, p.box_number)
+            } else {
+                (Some(raw.trim().to_string()), None)
+            }
+        }
+        None => (None, None),
+    };
+    AddressQuery {
+        street_tokens: analyze(index, &row.street),
+        house_number,
+        box_number: row.box_number.clone().or(parsed_box),
+        postal_code: row.postal_code.clone(),
+        ..Default::default()
+    }
 }
 
 /// Given a closure mapping `InputRow` to its analyzed `AddressQuery`,
@@ -221,6 +248,7 @@ mod tests {
             street: street.to_string(),
             house_number: hn.map(str::to_string),
             postal_code: pc.map(str::to_string),
+            box_number: None,
         }
     }
 
@@ -236,8 +264,7 @@ mod tests {
                 .collect(),
             house_number: row.house_number.clone(),
             postal_code: row.postal_code.clone(),
-            region_filter: None,
-            focus_point: None,
+            ..Default::default()
         }
     }
 
@@ -379,5 +406,54 @@ mod tests {
         assert_eq!(out.lng, None);
         assert_eq!(out.street_match_score, None);
         assert_eq!(out.best_id, None);
+    }
+
+    #[test]
+    fn box_number_is_part_of_the_cache_key() {
+        let r = CountingResolver::new(|_| ResolvedAddress::not_found());
+        let mut a = make_input("1", "Meir", Some("12"), Some("2000"));
+        let mut b = a.clone();
+        b.id = "2".into();
+        a.box_number = Some("1".into());
+        b.box_number = Some("2".into());
+        let c = InputRow {
+            id: "3".into(),
+            ..a.clone()
+        };
+        let out = dedup_then_resolve(vec![a, b, c], &r, id_make_query);
+        assert_eq!(out.len(), 3);
+        assert_eq!(r.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn row_query_parses_the_house_number_column() {
+        let ti = crabfinder_test_support::TestIndex::build(&[]);
+        let row = |hn: Option<&str>, bx: Option<&str>| InputRow {
+            box_number: bx.map(str::to_string),
+            ..make_input("1", "Avenue Louise", hn, Some("1050"))
+        };
+        let q = row_query(&ti.index, &row(Some("12/3"), None));
+        assert_eq!(q.street_tokens, ["avenue", "louise"]);
+        assert_eq!(q.house_number.as_deref(), Some("12"));
+        assert_eq!(q.box_number.as_deref(), Some("3"));
+        assert_eq!(q.postal_code.as_deref(), Some("1050"));
+
+        let q = row_query(&ti.index, &row(Some("12a bte 4"), None));
+        assert_eq!(q.house_number.as_deref(), Some("12A"));
+        assert_eq!(q.box_number.as_deref(), Some("4"));
+
+        // The explicit box column wins over one parsed from the number.
+        let q = row_query(&ti.index, &row(Some("12/3"), Some("7")));
+        assert_eq!(q.box_number.as_deref(), Some("7"));
+
+        // Something the parser can't read as a number passes through.
+        let q = row_query(&ti.index, &row(Some(" 12345 "), None));
+        assert_eq!(q.house_number.as_deref(), Some("12345"));
+        let q = row_query(&ti.index, &row(Some("1050"), None));
+        assert_eq!(q.house_number.as_deref(), Some("1050"));
+
+        let q = row_query(&ti.index, &row(None, Some("2")));
+        assert_eq!(q.house_number, None);
+        assert_eq!(q.box_number.as_deref(), Some("2"));
     }
 }

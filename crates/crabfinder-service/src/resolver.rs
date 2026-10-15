@@ -40,8 +40,11 @@ pub struct AddressQuery {
     /// normalization to a raw user string.
     pub street_tokens: Vec<String>,
     /// Numeric house number with optional alphabetic suffix (`"32"`, `"32B"`).
-    /// Suffixes are kept as-is — the indexer stores them on the same field.
+    /// Matched case-insensitively (`query_builder::house_number_clause`).
     pub house_number: Option<String>,
+    /// Box / unit hint (`bte 3`). Not a filter: a unit whose box matches
+    /// becomes its building's representative (`prefer_box`).
+    pub box_number: Option<String>,
     /// 4-digit Belgian postal code as a string.
     pub postal_code: Option<String>,
     /// Indexed ISO region form (`BE-BRU` / `BE-VLG` / `BE-WAL`). Optional
@@ -51,6 +54,41 @@ pub struct AddressQuery {
     /// re-scored after retrieval by exponential distance decay
     /// (`focus::apply_focus_decay`).
     pub focus_point: Option<(f64, f64)>,
+    /// Other readings of the same free text (parser alternatives, Phase 2),
+    /// tried in order when this one has no strict-tier hit. Alternatives
+    /// never carry alternatives of their own.
+    pub alternatives: Vec<AddressQuery>,
+}
+
+impl AddressQuery {
+    /// Build from a parsed free-text query (street tokens analyzed with the
+    /// `crab` analyzer), alternatives included.
+    pub fn from_parsed(index: &Index, parsed: &ParsedQuery) -> Self {
+        let one = |p: &ParsedQuery| AddressQuery {
+            street_tokens: p
+                .street_tokens
+                .iter()
+                .flat_map(|t| analyze(index, t))
+                .collect(),
+            house_number: p.house_number.clone(),
+            box_number: p.box_number.clone(),
+            postal_code: p.postal_code.clone(),
+            ..Default::default()
+        };
+        AddressQuery {
+            alternatives: parsed.alternatives.iter().map(one).collect(),
+            ..one(parsed)
+        }
+    }
+
+    /// Apply `f` to this reading and every alternative (shared filters such
+    /// as region, focus point or an explicit postal code).
+    pub fn for_each_reading(&mut self, f: impl Fn(&mut AddressQuery)) {
+        f(self);
+        for alt in &mut self.alternatives {
+            f(alt);
+        }
+    }
 }
 
 /// Confidence taxonomy emitted by the resolver, per design §3.3.
@@ -254,6 +292,11 @@ impl Tier {
         }
     }
 
+    /// Strict tiers are tried for every reading before any OR fallback.
+    fn is_strict(self) -> bool {
+        matches!(self, Tier::Exact | Tier::Street)
+    }
+
     /// Whether this tier honours the requested house number.
     fn uses_house_number(self) -> bool {
         matches!(self, Tier::Exact | Tier::OrWithNumber)
@@ -312,6 +355,9 @@ pub struct CandidateSet {
     /// The over-fetch hit `RAW_HIT_CAP`: some buildings may be missing
     /// from the tail.
     pub capped: bool,
+    /// Which reading matched: 0 = the query itself, `n` = its
+    /// `alternatives[n - 1]`.
+    pub reading: usize,
 }
 
 impl CandidateSet {
@@ -321,6 +367,7 @@ impl CandidateSet {
             raw_hits: 0,
             tier: Tier::None,
             capped: false,
+            reading: 0,
         }
     }
 }
@@ -328,11 +375,31 @@ impl CandidateSet {
 /// Ranked retrieval over the tiers in `Tier::ORDER`. Returns the
 /// candidates of the first tier with hits, after focus decay (when
 /// `query.focus_point` is set) and building dedup (unless `opts.expand`).
+///
+/// The strict tiers run for the query and then for each of its
+/// `alternatives`; only when no reading matches strictly do the OR tiers
+/// run, on the query itself.
 pub fn search(
     query: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
 ) -> tantivy::Result<CandidateSet> {
+    let readings = std::iter::once(query).chain(query.alternatives.iter());
+    for (reading, q) in readings.enumerate() {
+        if let Some(set) = search_tiers(q, opts, ctx, true)? {
+            return Ok(CandidateSet { reading, ..set });
+        }
+    }
+    Ok(search_tiers(query, opts, ctx, false)?.unwrap_or_else(CandidateSet::empty))
+}
+
+/// Run the strict (`strict == true`) or OR tiers of one reading.
+fn search_tiers(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    strict: bool,
+) -> tantivy::Result<Option<CandidateSet>> {
     let slots: Vec<Vec<String>> = query
         .street_tokens
         .iter()
@@ -352,12 +419,13 @@ pub fn search(
             None
         },
         postal_code: None,
+        ..Default::default()
     };
     let field = searchable_field(ctx.schema);
     let searcher = ctx.reader.searcher();
     let raw_limit = raw_limit(opts.limit, opts.expand);
 
-    for tier in Tier::ORDER {
+    for tier in Tier::ORDER.into_iter().filter(|t| t.is_strict() == strict) {
         let enabled = match tier {
             Tier::Exact | Tier::OrWithNumber => has_hn,
             Tier::Street | Tier::OrStreet => opts.mid_street_fallback,
@@ -382,9 +450,9 @@ pub fn search(
         if top.is_empty() {
             continue;
         }
-        return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx);
+        return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx).map(Some);
     }
-    Ok(CandidateSet::empty())
+    Ok(None)
 }
 
 /// Materialise a tier's raw hits into ranked, labelled candidates.
@@ -409,6 +477,9 @@ fn collect_candidates(
             i,
         ));
         docs.push(doc);
+    }
+    if let Some(b) = query.box_number.as_deref() {
+        prefer_box(&mut raw_hits, b);
     }
     if let Some(focus) = query.focus_point {
         apply_focus_decay(&mut raw_hits, focus, ctx.schema, &docs);
@@ -458,7 +529,41 @@ fn collect_candidates(
         raw_hits: raw_hits.len(),
         tier,
         capped: !opts.expand && raw_hits.len() >= RAW_HIT_CAP,
+        reading: 0,
     })
+}
+
+/// Box numbers compare case-insensitively and ignore leading zeros
+/// (`"03"` = `"3"`).
+fn normalize_box(b: &str) -> String {
+    let b = b.trim().to_lowercase();
+    let stripped = b.trim_start_matches('0');
+    if stripped.is_empty() && !b.is_empty() {
+        "0".into()
+    } else {
+        stripped.to_string()
+    }
+}
+
+/// Nudge hits whose box matches `wanted` just above their equally-scored
+/// siblings, so the requested unit represents its building. The nudge is
+/// relative (×1.0001) so it only breaks ties.
+fn prefer_box(hits: &mut [RawHit], wanted: &str) {
+    let wanted = normalize_box(wanted);
+    let mut bumped = false;
+    for h in hits.iter_mut() {
+        if h.box_number.as_deref().map(normalize_box).as_deref() == Some(wanted.as_str()) {
+            h.score = h.score * 1.0001 + f32::EPSILON;
+            bumped = true;
+        }
+    }
+    if bumped {
+        hits.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
 }
 
 /// Resolve a single address with default options. Always returns a
@@ -553,8 +658,7 @@ mod tests {
             street_tokens: analyze_street_input(&ti.index, street),
             house_number: hn.map(Into::into),
             postal_code: pc.map(Into::into),
-            region_filter: None,
-            focus_point: None,
+            ..Default::default()
         }
     }
 
@@ -953,5 +1057,170 @@ mod tests {
         ] {
             assert_eq!(f.as_str(), s);
         }
+    }
+
+    // --- Phase 2: parser readings, box preference, house-number case ----
+
+    fn parsed_query(ti: &TestIndex, q: &str) -> AddressQuery {
+        AddressQuery::from_parsed(&ti.index, &crabfinder_parser::parse(q))
+    }
+
+    fn hn_of(c: &Candidate) -> String {
+        c.hit.payload["house_number"].as_str().unwrap().to_string()
+    }
+
+    fn best_id_of(c: &Candidate) -> String {
+        let a: Address = serde_json::from_value(c.hit.payload.clone()).unwrap();
+        a.id.0.to_string()
+    }
+
+    #[test]
+    fn from_parsed_maps_every_field_and_alternative() {
+        let ti = louise_index();
+        let q = parsed_query(&ti, "Rue du Grand-Hospice 12 bte 3, B-1000");
+        assert_eq!(q.street_tokens, ["rue", "du", "grand", "hospice"]);
+        assert_eq!(q.house_number.as_deref(), Some("12"));
+        assert_eq!(q.box_number.as_deref(), Some("3"));
+        assert_eq!(q.postal_code.as_deref(), Some("1000"));
+        assert!(q.alternatives.is_empty());
+
+        let mut q = parsed_query(&ti, "Chaussée de Waterloo 1357 Uccle");
+        assert_eq!(q.alternatives.len(), 1);
+        assert_eq!(q.alternatives[0].house_number.as_deref(), Some("1357"));
+        q.for_each_reading(|r| r.region_filter = Some("BE-BRU".into()));
+        assert_eq!(q.region_filter.as_deref(), Some("BE-BRU"));
+        assert_eq!(q.alternatives[0].region_filter.as_deref(), Some("BE-BRU"));
+    }
+
+    #[test]
+    fn four_digit_house_number_found_through_the_alternative() {
+        let ti = TestIndex::build(&fixtures::multi_region());
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(
+            &parsed_query(&ti, "Chaussée de Waterloo 1357 Uccle"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+        assert_eq!(set.reading, 1, "the primary reading treats 1357 as postal");
+        assert_eq!(hn_of(&set.candidates[0]), "1357");
+
+        // Two 4-digit tokens: no alternative needed.
+        let set = search(
+            &parsed_query(&ti, "Chaussée de Waterloo 1357 1180 Uccle"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!((set.tier, set.reading), (Tier::Exact, 0));
+    }
+
+    #[test]
+    fn number_inside_street_name_goes_back_to_the_street() {
+        let ti = TestIndex::build(&fixtures::multi_region());
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let set = search(&parsed_query(&ti, "Rue du 11 Novembre 5"), &opts(5), &c).unwrap();
+        assert_eq!((set.tier, set.reading), (Tier::Exact, 0));
+        assert_eq!(hn_of(&set.candidates[0]), "5");
+    }
+
+    #[test]
+    fn alternatives_only_add_strict_tiers() {
+        // Primary reading: hn 11 (doesn't exist) → street-level hit.
+        let ti = TestIndex::build(&fixtures::multi_region());
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let mut q = parsed_query(&ti, "Rue du 11 Novembre Ixelles");
+        assert_eq!(q.alternatives.len(), 1);
+        let set = search(&q, &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Street);
+        // Remove the street-level option: the alternative can't help (no
+        // number) and the primary falls to the OR tier with its number.
+        q.for_each_reading(|r| r.postal_code = Some("1050".into()));
+        let off = SearchOptions {
+            mid_street_fallback: false,
+            ..opts(5)
+        };
+        let set = search(&q, &off, &c).unwrap();
+        assert_eq!(set.reading, 0);
+        assert_eq!(set.tier, Tier::None);
+    }
+
+    fn boxed_building() -> TestIndex {
+        let mut addrs = fixtures::louise_street();
+        for (oid, b) in [("b1", "1"), ("b2", "2"), ("b3", "3")] {
+            addrs.push(
+                AddressBuilder::new(oid, "900", "12")
+                    .street(Some("Rue des Boîtes"), Some("Dozenstraat"))
+                    .box_no(b)
+                    .postal("1000")
+                    .build(),
+            );
+        }
+        addrs.push(
+            AddressBuilder::new("lc", "901", "32a")
+                .street(Some("Rue Minuscule"), None)
+                .postal("1000")
+                .build(),
+        );
+        TestIndex::build(&addrs)
+    }
+
+    #[test]
+    fn box_number_picks_the_unit_without_filtering() {
+        let ti = boxed_building();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let top = |q: &str, o: SearchOptions| {
+            let set = search(&parsed_query(&ti, q), &o, &c).unwrap();
+            (set.candidates.len(), best_id_of(&set.candidates[0]))
+        };
+        // No box → lowest box represents the building.
+        assert!(top("Rue des Boîtes 12", opts(5)).1.contains("/b1/"));
+        // Requested box wins; the building is still one candidate.
+        let (n, id) = top("Rue des Boîtes 12 bte 2", opts(5));
+        assert_eq!(n, 1);
+        assert!(id.contains("/b2/"), "{id}");
+        assert!(top("Rue des Boîtes 12/3", opts(5)).1.contains("/b3/"));
+        // Leading zeros are ignored.
+        assert!(top("Rue des Boîtes 12 bte 002", opts(5)).1.contains("/b2/"));
+        // Unknown box: still found, default representative.
+        assert!(top("Rue des Boîtes 12 bus 9", opts(5)).1.contains("/b1/"));
+        // Expanded rows put the requested unit first.
+        let expanded = SearchOptions {
+            expand: true,
+            ..opts(5)
+        };
+        let (n, id) = top("Rue des Boîtes 12 bte 2", expanded);
+        assert_eq!(n, 3);
+        assert!(id.contains("/b2/"));
+    }
+
+    #[test]
+    fn house_number_suffix_is_case_insensitive() {
+        let ti = boxed_building();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        for q in [
+            "Rue Minuscule 32A",
+            "Rue Minuscule 32a",
+            "Rue Minuscule 32 a",
+        ] {
+            let set = search(&parsed_query(&ti, q), &opts(5), &c).unwrap();
+            assert_eq!(set.tier, Tier::Exact, "{q}");
+            assert_eq!(hn_of(&set.candidates[0]), "32a");
+        }
+        // Raw (batch) queries with either case match too.
+        let mut q = query(&ti, "Rue Minuscule", Some("32A"), None);
+        assert_eq!(resolve(&q, &c).confidence, Confidence::Exact);
+        q.house_number = Some("32a".into());
+        assert_eq!(resolve(&q, &c).confidence, Confidence::Exact);
+    }
+
+    #[test]
+    fn normalize_box_rules() {
+        assert_eq!(normalize_box("003"), "3");
+        assert_eq!(normalize_box(" 000 "), "0");
+        assert_eq!(normalize_box("A"), "a");
+        assert_eq!(normalize_box("0A"), "a");
+        assert_eq!(normalize_box(""), "");
     }
 }

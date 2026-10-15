@@ -40,6 +40,10 @@ struct DetailRow {
     raw_hits: usize,
     latency_ms: f64,
     error: Option<String>,
+    /// Rank at the query's match level (`metrics::level_ranks`), 1-based;
+    /// 0 = not in the returned features.
+    #[serde(default)]
+    level_rank: usize,
 }
 
 pub fn write_reports(
@@ -82,6 +86,7 @@ pub fn write_reports(
                 raw_hits: r.raw_hits,
                 latency_ms: r.latency_ms,
                 error: r.error.clone(),
+                level_rank: crate::metrics::level_ranks(r).0,
             }
         })
         .collect();

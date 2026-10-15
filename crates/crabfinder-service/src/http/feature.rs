@@ -3,6 +3,7 @@
 use serde::Serialize;
 use tantivy::TantivyDocument;
 
+use crabfinder_core::{Address, Language};
 use crabfinder_indexer::index::CrabSchema;
 
 use crate::dedup::MatchType;
@@ -81,6 +82,32 @@ impl From<Candidate> for Feature {
             ..Feature::from(c.hit)
         }
     }
+}
+
+impl Feature {
+    /// Add `properties.label`: the address on one line in `lang`
+    /// (`Address::display_name`; `None` = the address's own language).
+    pub fn labelled(mut self, lang: Option<Language>) -> Self {
+        if let Ok(a) = serde_json::from_value::<Address>(self.properties.clone())
+            && let Some(props) = self.properties.as_object_mut()
+        {
+            props.insert("label".into(), a.display_name(lang).into());
+        }
+        self
+    }
+}
+
+/// Parse the `lang` query parameter (`fr`, `nl` or `de`, any case).
+pub fn parse_lang(raw: Option<&str>) -> Result<Option<Language>, ServiceError> {
+    raw.map(|r| {
+        r.trim()
+            .to_ascii_lowercase()
+            .parse::<Language>()
+            .map_err(|_| {
+                ServiceError::BadQuery(format!("unknown lang '{r}' (expected fr, nl or de)"))
+            })
+    })
+    .transpose()
 }
 
 /// Hydrate a Tantivy doc straight into a GeoJSON `Feature`.

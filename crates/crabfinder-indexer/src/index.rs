@@ -66,6 +66,7 @@ pub const FIELD_SEARCHABLE: &str = "searchable";
 pub const FIELD_NOTABILITY_SCORE: &str = "notability_score";
 pub const FIELD_LAT: &str = "lat";
 pub const FIELD_LON: &str = "lon";
+pub const FIELD_POSITION_SOURCE: &str = "position_source";
 pub const FIELD_HOUSE_NUMBER: &str = "house_number";
 pub const FIELD_BOX_NUMBER: &str = "box_number";
 pub const FIELD_POSTAL_CODE: &str = "postal_code";
@@ -88,6 +89,9 @@ pub struct CrabSchema {
     pub notability_score: Field,
     pub lat: Field,
     pub lon: Field,
+    /// FAST u64 `PositionSource::code` (schema v9): lets the reverse
+    /// R-tree skip street- and locality-level imputed points.
+    pub position_source: Field,
     pub house_number: Field,
     pub box_number: Field,
     pub postal_code: Field,
@@ -136,6 +140,8 @@ impl CrabSchema {
         // FAST-only (not stored) — read at query time via tweak_score.
         let f64_fast_only = NumericOptions::default().set_indexed().set_fast();
         let notability_score = sb.add_f64_field(FIELD_NOTABILITY_SCORE, f64_fast_only);
+        let position_source =
+            sb.add_u64_field(FIELD_POSITION_SOURCE, NumericOptions::default().set_fast());
         let house_number = sb.add_text_field(FIELD_HOUSE_NUMBER, raw_stored.clone());
         let box_number = sb.add_text_field(FIELD_BOX_NUMBER, raw_stored.clone());
         let postal_code = sb.add_text_field(FIELD_POSTAL_CODE, raw_stored.clone());
@@ -155,6 +161,7 @@ impl CrabSchema {
             notability_score,
             lat,
             lon,
+            position_source,
             house_number,
             box_number,
             postal_code,
@@ -225,6 +232,7 @@ impl CrabIndexWriter {
         doc.add_f64(s.lat, lat);
         doc.add_f64(s.lon, lon);
         doc.add_f64(s.notability_score, notability);
+        doc.add_u64(s.position_source, addr.position_source.code());
         // Schema v8: uppercase so `32a` and `32A` are one term; the payload
         // keeps BeSt's spelling.
         doc.add_text(s.house_number, addr.house_number.to_uppercase());

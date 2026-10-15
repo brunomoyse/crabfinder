@@ -9,6 +9,7 @@ pub mod error;
 pub mod house_number;
 pub mod ids;
 pub mod multilingual;
+pub mod position;
 pub mod region;
 pub mod status;
 pub mod street_type;
@@ -21,6 +22,7 @@ pub use ids::{
     StreetId,
 };
 pub use multilingual::{Language, MultilingualName};
+pub use position::PositionSource;
 pub use region::Region;
 pub use status::Status;
 pub use street_type::StreetType;

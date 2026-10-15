@@ -191,7 +191,12 @@ async fn empty_q_is_400() {
     let app = app();
     let (status, body) = app.get("/geocode?q=%20%20").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(body["error"], "empty q");
+    assert_eq!(
+        body["error"],
+        "empty query: give q, or street / city / postcode"
+    );
+    let (status, _) = app.get("/geocode").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -359,4 +364,193 @@ async fn nearest_number_features() {
     assert_eq!(fs[0]["house_number_delta"], -4);
     assert_eq!(fs[0]["fallback_reason"], "house_number_out_of_range");
     assert_eq!(fs[1]["house_number_delta"], 6);
+}
+
+// --- Phase 6: locality queries ----------------------------------------------
+
+fn spontin_app() -> App {
+    use crabfinder_core::Region;
+    use crabfinder_test_support::AddressBuilder;
+    let wal = |oid: &str, street_oid: &str, street: &str, lat: f64, lon: f64| {
+        AddressBuilder::new(oid, street_oid, "1")
+            .region(Region::Wallonia)
+            .municipality("91141", Some("Yvoir"), None, None)
+            .postal("5530")
+            .part_of_municipality("9114105", Some("Spontin"), None)
+            .street(Some(street), None)
+            .at(lat, lon)
+            .build()
+    };
+    App::with_places(
+        &[
+            wal("a1", "8001", "Rue Haute", 50.3227, 5.0070),
+            wal("a2", "8002", "Rue Basse", 50.3227, 5.0350),
+        ],
+        "osm_id,place,name,name_fr,name_nl,name_de,lat,lon\n\
+         1,village,Spontin,,,,50.3226,5.0069\n",
+    )
+}
+
+#[tokio::test]
+async fn locality_query_returns_the_place_and_its_centre_buildings() {
+    let app = spontin_app();
+    let body = app.ok(&geocode_uri("Spontin", "")).await;
+    let loc = &body["locality"];
+    assert_eq!(loc["kind"], "part_of_municipality");
+    assert_eq!(loc["name"]["fr"], "Spontin");
+    assert_eq!(loc["postal_codes"][0], "5530");
+    // Centred on the OSM node, not the address centroid.
+    assert_eq!(loc["coordinates"][1], 50.3226);
+    let fs = features(&body);
+    assert_eq!(street_fr(&fs[0]), "rue haute");
+    assert_eq!(fs[0]["confidence"], "locality");
+    assert_eq!(fs[0]["fallback_reason"], "street_missing");
+
+    // An address query carries no locality member.
+    let body = app.ok(&geocode_uri("Rue Basse 1 Spontin", "")).await;
+    assert!(body.get("locality").is_none());
+    assert_eq!(street_fr(&features(&body)[0]), "rue basse");
+}
+
+// --- Phase 6: lang / label, structured input, ambiguity ---------------------
+
+#[tokio::test]
+async fn label_follows_lang() {
+    let app = app();
+    let body = app.ok(&geocode_uri("Rue de la Loi 16", "")).await;
+    let f = &features(&body)[0];
+    assert_eq!(prop(f, "label"), "Rue de la Loi 16, 1000 Bruxelles");
+    let body = app.ok(&geocode_uri("Rue de la Loi 16", "&lang=nl")).await;
+    assert_eq!(
+        prop(&features(&body)[0], "label"),
+        "Wetstraat 16, 1000 Brussel"
+    );
+    let body = app.ok(&geocode_uri("Rue de la Loi 16", "&lang=NL")).await;
+    assert_eq!(
+        prop(&features(&body)[0], "label"),
+        "Wetstraat 16, 1000 Brussel"
+    );
+    // Boxes are named in the label's language.
+    let body = app.ok(&geocode_uri("Avenue Louise 34", "&lang=nl")).await;
+    assert!(
+        prop(&features(&body)[0], "label")
+            .as_str()
+            .unwrap()
+            .contains(" bus 1, "),
+        "{body}"
+    );
+    let (status, body) = app.get(&geocode_uri("Rue de la Loi 16", "&lang=en")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "unknown lang 'en' (expected fr, nl or de)");
+}
+
+#[tokio::test]
+async fn structured_query_matches_free_text() {
+    let app = app();
+    let free = app
+        .ok(&geocode_uri("Rue de la Loi 16 1000 Bruxelles", ""))
+        .await;
+    let structured = app
+        .ok("/geocode?street=Rue%20de%20la%20Loi&housenumber=16&postcode=1000&city=Bruxelles")
+        .await;
+    assert_eq!(
+        features(&free)[0]["building_group_id"],
+        features(&structured)[0]["building_group_id"]
+    );
+    assert!(structured["query"].get("q").is_none());
+    assert_eq!(structured["query"]["parsed"]["house_number"], "16");
+    assert_eq!(features(&structured)[0]["confidence"], "exact");
+
+    // House number case and box: `32a` box 1 is unit 120.
+    let body = app
+        .ok("/geocode?street=Avenue%20Louise&housenumber=32a&box=1&expand=true")
+        .await;
+    assert_eq!(prop(&features(&body)[0], "house_number"), "32A");
+
+    // The postcode is a hard filter.
+    let body = app
+        .ok("/geocode?street=Rue%20de%20la%20Loi&postcode=1040")
+        .await;
+    assert!(
+        features(&body)
+            .iter()
+            .all(|f| prop(f, "postal_code") == "1040"),
+        "{body}"
+    );
+    // City alone works like a locality-only query.
+    let body = app.ok("/geocode?city=Bruxelles").await;
+    assert!(!features(&body).is_empty());
+}
+
+#[tokio::test]
+async fn structured_query_errors() {
+    let app = app();
+    for (uri, msg) in [
+        (
+            "/geocode?q=Loi&street=Loi",
+            "q cannot be combined with street, housenumber, box, postcode or city",
+        ),
+        (
+            "/geocode?housenumber=16",
+            "a structured query needs street, city or postcode",
+        ),
+        (
+            "/geocode?street=Loi&postcode=10000",
+            "postcode must be 4 digits, got '10000'",
+        ),
+        (
+            "/geocode?street=Loi&postcode=1o00",
+            "postcode must be 4 digits, got '1o00'",
+        ),
+    ] {
+        let (status, body) = app.get(uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert_eq!(body["error"], msg, "{uri}");
+    }
+    // Blank structured fields count as absent.
+    let (status, _) = app.get("/geocode?q=Loi&street=%20").await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ambiguity_flags_near_ties_on_different_streets() {
+    use crabfinder_test_support::AddressBuilder;
+    // Two "Kerkstraat" in different municipalities: the query names neither.
+    let kerk = |oid: &str, street: &str, muni: &str, pc: &str| {
+        AddressBuilder::new(oid, street, "1")
+            .region(crabfinder_core::Region::Flanders)
+            .street(None, Some("Kerkstraat"))
+            .municipality(muni, None, Some(muni), None)
+            .postal(pc)
+            .build()
+    };
+    let app = App::new(&[
+        kerk("k1", "51", "Aalst", "9300"),
+        kerk("k2", "52", "Gent", "9000"),
+    ]);
+    let body = app.ok(&geocode_uri("Kerkstraat 1", "&limit=1")).await;
+    assert_eq!(body["ambiguous"], true, "{body}");
+    assert_eq!(body["score_gap"], 0.0);
+    assert_eq!(features(&body).len(), 1);
+    // Naming the municipality settles it.
+    let body = app.ok(&geocode_uri("Kerkstraat 1 Gent", "")).await;
+    assert_eq!(body["ambiguous"], false);
+    // A single result has no runner-up.
+    let body = app.ok(&geocode_uri("Kerkstraat 1 9000", "")).await;
+    assert_eq!(body["ambiguous"], false);
+    assert!(body.get("score_gap").is_none());
+}
+
+/// Golden copy of one full response: any change to the wire shape shows up
+/// as a snapshot diff (`cargo insta review`).
+#[tokio::test]
+async fn golden_geocode_response() {
+    let app = app();
+    let body = app
+        .ok(&geocode_uri(
+            "Rue de la Loi 16, 1000 Bruxelles",
+            "&limit=2&lang=fr",
+        ))
+        .await;
+    insta::assert_json_snapshot!(body);
 }

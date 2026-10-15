@@ -13,6 +13,8 @@ use std::collections::HashMap;
 
 use rayon::prelude::*;
 
+use crabfinder_core::{Address, Language};
+
 use crate::query_builder::analyze;
 use crate::resolver::{AddressQuery, Confidence, ResolvedAddress};
 
@@ -45,7 +47,13 @@ impl<F: Fn(&AddressQuery) -> ResolvedAddress + Sync> Resolver for ClosureResolve
 /// "Avenue Louise" and "avenue louise" resolve once (the resolver itself
 /// lowercases internally via the tokenizer, so this is purely a dédup
 /// optimisation, not a correctness boundary).
-type CacheKey = (String, Option<String>, Option<String>, Option<String>);
+type CacheKey = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 fn cache_key(row: &InputRow) -> CacheKey {
     (
@@ -53,6 +61,7 @@ fn cache_key(row: &InputRow) -> CacheKey {
         row.house_number.clone(),
         row.postal_code.clone(),
         row.box_number.clone(),
+        row.address.as_ref().map(|a| a.to_lowercase()),
     )
 }
 
@@ -60,7 +69,18 @@ fn cache_key(row: &InputRow) -> CacheKey {
 /// through the free-text parser so `12/3`, `12 bte 3` or `12a` are split
 /// into number + box and normalised like `/geocode` input; anything the
 /// parser can't read as a bare number is passed through as-is.
+///
+/// A free-text row (`address` column, v2 Phase 6) is parsed whole, like
+/// `/geocode?q=`, alternatives included; a `postal_code` column overrides
+/// the parsed postal code in every reading.
 pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
+    if let Some(address) = &row.address {
+        let mut q = AddressQuery::from_parsed(index, &crabfinder_parser::parse(address));
+        if let Some(pc) = &row.postal_code {
+            q.for_each_reading(|r| r.postal_code = Some(pc.clone()));
+        }
+        return q;
+    }
     let (house_number, parsed_box) = match row.house_number.as_deref() {
         Some(raw) => {
             let p = crabfinder_parser::parse(raw);
@@ -92,10 +112,14 @@ pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
 /// The two closure params let tests stub the resolver without a real
 /// Tantivy index, and let production avoid coupling the tokenizer step
 /// (which needs `&Index`) into this module.
+///
+/// `lang` picks the language of the `label` column (`None`: each
+/// address's own).
 pub fn dedup_then_resolve<R, MakeQuery>(
     rows: Vec<InputRow>,
     resolver: &R,
     make_query: MakeQuery,
+    lang: Option<Language>,
 ) -> Vec<OutputRow>
 where
     R: Resolver,
@@ -150,23 +174,27 @@ where
                 .get(&key)
                 .expect("dédup cache must contain every row's key")
                 .clone();
-            output_row_from(row, resolved)
+            output_row_from(row, resolved, lang)
         })
         .collect()
 }
 
 /// Map a `(InputRow, ResolvedAddress)` pair into the wire-shape `OutputRow`.
 /// Lives here (not in `io.rs`) because it bridges the resolver types.
-pub fn output_row_from(input: InputRow, resolved: ResolvedAddress) -> OutputRow {
+pub fn output_row_from(
+    input: InputRow,
+    resolved: ResolvedAddress,
+    lang: Option<Language>,
+) -> OutputRow {
     let confidence = resolved.confidence.as_str().to_string();
     let fallback_reason = resolved.fallback_reason.map(|r| r.as_str().to_string());
     let (lat, lng) = match resolved.hit.as_ref() {
         Some(h) => (Some(h.lat), Some(h.lon)),
         None => (None, None),
     };
-    let building_group_id = resolved.hit.as_ref().map(|h| h.building_group_id.clone());
+    let mut building_group_id = resolved.hit.as_ref().map(|h| h.building_group_id.clone());
 
-    let (matched_street, matched_house_number, matched_postal_code, best_id) =
+    let (mut matched_street, mut matched_house_number, matched_postal_code, mut best_id) =
         match resolved.address.as_ref() {
             Some(a) => (
                 Some(
@@ -182,6 +210,30 @@ pub fn output_row_from(input: InputRow, resolved: ResolvedAddress) -> OutputRow 
             ),
             None => (None, None, None, None),
         };
+
+    let mut label = resolved
+        .address
+        .as_ref()
+        .map(|a: &Address| a.display_name(lang));
+    // A locality answer is the place itself (its centre), not the
+    // building nearest to it: no street, number or building ids.
+    if let (Some(loc), Some(a)) = (&resolved.locality, &resolved.address) {
+        let fallback = a.default_language();
+        let name = lang
+            .and_then(|l| loc.name.get(l))
+            .or_else(|| loc.name.get(fallback))
+            .or_else(|| loc.name.primary())
+            .unwrap_or_default();
+        label = Some(format!("{} {name}", a.postal_code));
+        matched_street = None;
+        matched_house_number = None;
+        best_id = None;
+        building_group_id = None;
+    }
+    let position_source = resolved
+        .address
+        .as_ref()
+        .map(|a| a.position_source.as_str().to_string());
 
     // `street_match_score` is 0.0 for NotFound by construction in resolver;
     // emit empty rather than "0" in that case so the CSV stays unambiguous.
@@ -206,6 +258,10 @@ pub fn output_row_from(input: InputRow, resolved: ResolvedAddress) -> OutputRow 
         street_match_score,
         building_group_id,
         best_id,
+        address: input.address,
+        label,
+        position_source,
+        ambiguous: resolved.ambiguous,
     }
 }
 
@@ -248,7 +304,7 @@ mod tests {
             street: street.to_string(),
             house_number: hn.map(str::to_string),
             postal_code: pc.map(str::to_string),
-            box_number: None,
+            ..Default::default()
         }
     }
 
@@ -285,6 +341,8 @@ mod tests {
             house_number_delta: None,
             street_match_score: 0.0,
             fallback_reason: Some(FallbackReason::NoMatch),
+            ambiguous: false,
+            locality: None,
             // Inject the input street into a field so we can verify which
             // unique key each row mapped to — except we can't extend the
             // resolver shape here, so we lean on the order-preservation check
@@ -294,7 +352,7 @@ mod tests {
         // We reuse the closure-via-stub mechanism: side-effect-free Fn,
         // the CountingResolver counts calls.
         let _ = q_to_id; // silence warning if unused
-        let out = dedup_then_resolve(rows, &resolver, id_make_query);
+        let out = dedup_then_resolve(rows, &resolver, id_make_query, None);
         assert_eq!(out.len(), 5, "1-in-1-out broken");
         assert_eq!(out[0].id, "1");
         assert_eq!(out[1].id, "2");
@@ -328,8 +386,10 @@ mod tests {
             house_number_delta: None,
             street_match_score: 0.0,
             fallback_reason: Some(FallbackReason::NoMatch),
+            ambiguous: false,
+            locality: None,
         });
-        let out = dedup_then_resolve(vec![], &resolver, id_make_query);
+        let out = dedup_then_resolve(vec![], &resolver, id_make_query, None);
         assert!(out.is_empty());
         assert_eq!(resolver.call_count(), 0);
     }
@@ -348,8 +408,10 @@ mod tests {
             house_number_delta: None,
             street_match_score: 0.0,
             fallback_reason: Some(FallbackReason::NoMatch),
+            ambiguous: false,
+            locality: None,
         });
-        let out = dedup_then_resolve(rows, &resolver, id_make_query);
+        let out = dedup_then_resolve(rows, &resolver, id_make_query, None);
         assert_eq!(out.len(), 3);
         assert_eq!(resolver.call_count(), 3);
     }
@@ -376,8 +438,10 @@ mod tests {
             house_number_delta: None,
             street_match_score: 12.5,
             fallback_reason: Some(FallbackReason::HouseNumberOutOfRange),
+            ambiguous: false,
+            locality: None,
         };
-        let out = output_row_from(row, resolved);
+        let out = output_row_from(row, resolved, None);
         assert_eq!(out.id, "42");
         assert_eq!(out.confidence, "median_street");
         assert_eq!(
@@ -399,8 +463,10 @@ mod tests {
             house_number_delta: None,
             street_match_score: 0.0,
             fallback_reason: Some(FallbackReason::NoMatch),
+            ambiguous: false,
+            locality: None,
         };
-        let out = output_row_from(row, resolved);
+        let out = output_row_from(row, resolved, None);
         assert_eq!(out.confidence, "not_found");
         assert_eq!(out.lat, None);
         assert_eq!(out.lng, None);
@@ -420,7 +486,7 @@ mod tests {
             id: "3".into(),
             ..a.clone()
         };
-        let out = dedup_then_resolve(vec![a, b, c], &r, id_make_query);
+        let out = dedup_then_resolve(vec![a, b, c], &r, id_make_query, None);
         assert_eq!(out.len(), 3);
         assert_eq!(r.calls.load(Ordering::SeqCst), 2);
     }
@@ -455,5 +521,92 @@ mod tests {
         let q = row_query(&ti.index, &row(None, Some("2")));
         assert_eq!(q.house_number, None);
         assert_eq!(q.box_number.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn locality_row_describes_the_place() {
+        use crate::dedup::MatchType;
+        use crate::hydrate::HydratedHit;
+        use crabfinder_core::MultilingualName;
+        use crabfinder_indexer::localities::{Locality, LocalityKind};
+
+        let addr = crabfinder_test_support::AddressBuilder::new("a", "1", "18")
+            .street(Some("Chaussée de Dinant"), None)
+            .region(crabfinder_core::Region::Wallonia)
+            .postal("5530")
+            .build();
+        let resolved = ResolvedAddress {
+            hit: Some(HydratedHit {
+                lat: 50.3226,
+                lon: 5.0069,
+                score: 1.0,
+                match_type: MatchType::Spatial,
+                unit_count: 1,
+                building_group_id: addr.building_group_id.as_str().into(),
+                payload: serde_json::to_value(&addr).unwrap(),
+                distance_m: None,
+            }),
+            address: Some(addr),
+            confidence: Confidence::Locality,
+            house_number_delta: None,
+            street_match_score: 1.0,
+            fallback_reason: Some(FallbackReason::StreetMissing),
+            ambiguous: false,
+            locality: Some(Locality {
+                kind: LocalityKind::PartOfMunicipality,
+                name: MultilingualName {
+                    fr: Some("Spontin".into()),
+                    nl: None,
+                    de: None,
+                },
+                lat: 50.3226,
+                lon: 5.0069,
+                postal_codes: vec!["5530".into()],
+                address_count: 1,
+                region: None,
+            }),
+        };
+        let row = InputRow {
+            id: "1".into(),
+            address: Some("Spontin".into()),
+            ..Default::default()
+        };
+        let out = output_row_from(row, resolved, Some(Language::Nl));
+        assert_eq!(out.confidence, "locality");
+        assert_eq!(out.label.as_deref(), Some("5530 Spontin"));
+        assert_eq!(out.matched_postal_code.as_deref(), Some("5530"));
+        assert_eq!((out.lat, out.lng), (Some(50.3226), Some(5.0069)));
+        assert!(out.matched_street.is_none() && out.best_id.is_none());
+        assert!(out.building_group_id.is_none() && out.matched_house_number.is_none());
+        assert_eq!(out.address.as_deref(), Some("Spontin"));
+    }
+
+    #[test]
+    fn free_text_row_query() {
+        let ti = crabfinder_test_support::TestIndex::build(&[]);
+        let row = InputRow {
+            id: "1".into(),
+            address: Some("Avenue Louise 1050".into()),
+            postal_code: Some("1060".into()),
+            ..Default::default()
+        };
+        let q = row_query(&ti.index, &row);
+        assert_eq!(q.street_tokens, ["avenue", "louise"]);
+        // The column overrides the parsed postal code in every reading.
+        assert_eq!(q.postal_code.as_deref(), Some("1060"));
+        assert!(!q.alternatives.is_empty());
+        assert!(
+            q.alternatives
+                .iter()
+                .all(|a| a.postal_code.as_deref() == Some("1060"))
+        );
+        let row = InputRow {
+            postal_code: None,
+            ..row
+        };
+        assert_eq!(
+            row_query(&ti.index, &row).postal_code.as_deref(),
+            Some("1050")
+        );
     }
 }

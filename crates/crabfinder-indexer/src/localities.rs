@@ -157,6 +157,23 @@ impl LocalitiesBuilder {
         }
     }
 
+    /// Centroid of the addresses recorded so far in `addr`'s part of
+    /// municipality, else its municipality (position imputation,
+    /// `impute.rs`).
+    pub fn centroid(&self, addr: &Address) -> Option<(f64, f64)> {
+        let pom = addr
+            .part_of_municipality_id
+            .as_ref()
+            .map(|id| (LocalityKind::PartOfMunicipality, id.to_string()));
+        let muni = Some((LocalityKind::Municipality, addr.municipality_id.to_string()));
+        [pom, muni]
+            .into_iter()
+            .flatten()
+            .find_map(|k| self.best.get(&k))
+            .filter(|a| a.n > 0)
+            .map(|a| (a.sum_lat / f64::from(a.n), a.sum_lon / f64::from(a.n)))
+    }
+
     /// Every BeSt locality seen plus every OSM place, sorted by kind then
     /// name for a stable file.
     pub fn build(self, places: &PlaceIndex) -> Vec<Locality> {
@@ -287,6 +304,7 @@ mod tests {
             part_of_municipality_name: pom.map(|p| ml(p.1)),
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
             place_name: None,
+            position_source: Default::default(),
         }
     }
 

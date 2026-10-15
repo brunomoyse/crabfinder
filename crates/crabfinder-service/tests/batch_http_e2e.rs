@@ -203,3 +203,131 @@ async fn large_batch_streams_in_several_chunks() {
     let (_, rows) = parse_csv(&body);
     assert_eq!(rows.len(), 300);
 }
+
+// --- Phase 6: free text, GeoJSON, lang ---------------------------------------
+
+#[tokio::test]
+async fn free_text_rows_are_parsed_like_geocode() {
+    let app = app();
+    let csv = "id,address\n\
+               1,\"Avenue Louise 20, 1050 Bruxelles\"\n\
+               2,Grand-Place 1 1000\n\
+               3,Nowhere Street 1\n";
+    let (status, _, body) = app.post("/batch/geocode", "text/csv", csv).await;
+    assert_eq!(status, StatusCode::OK);
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(rows.len(), 3, "1-in-1-out");
+    assert_eq!(col(&h, &rows[0], "confidence"), "exact");
+    assert_eq!(col(&h, &rows[0], "matched_house_number"), "20");
+    assert_eq!(
+        col(&h, &rows[0], "address"),
+        "Avenue Louise 20, 1050 Bruxelles"
+    );
+    assert_eq!(
+        col(&h, &rows[0], "label"),
+        "Avenue Louise 20, 1050 Bruxelles"
+    );
+    assert_eq!(col(&h, &rows[0], "position_source"), "measured");
+    assert_eq!(col(&h, &rows[0], "ambiguous"), "false");
+    assert_eq!(col(&h, &rows[1], "matched_street"), "Grand-Place");
+    assert_ne!(col(&h, &rows[2], "confidence"), "exact");
+
+    // JSON rows too; a postal_code column overrides the parsed one.
+    let body = serde_json::json!({"addresses": [
+        {"id": "a", "address": "Avenue Louise 30 1000", "postal_code": "1050"},
+    ]});
+    let (_, _, body) = app
+        .post("/batch/geocode", "application/json", body.to_string())
+        .await;
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(col(&h, &rows[0], "confidence"), "exact");
+    assert_eq!(col(&h, &rows[0], "matched_postal_code"), "1050");
+}
+
+#[tokio::test]
+async fn geojson_output_and_query_options() {
+    let app = app();
+    let csv = format!("{HEADER}1,Avenue Louise,10,1050\n2,Nowhere,1,1000\n");
+    let (status, ct, body) = app
+        .post("/batch/geocode?format=geojson&lang=nl", "text/csv", csv)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(ct, "application/geo+json");
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let fs = v["features"].as_array().unwrap();
+    assert_eq!(fs.len(), 2);
+    assert_eq!(fs[0]["geometry"]["type"], "Point");
+    assert_eq!(fs[0]["properties"]["id"], "1");
+    assert_eq!(fs[0]["properties"]["confidence"], "exact");
+    assert!(fs[1]["geometry"].is_null());
+    assert_eq!(fs[1]["properties"]["confidence"], "not_found");
+
+    // Options in a JSON body work the same; the query string wins.
+    let body = serde_json::json!({
+        "addresses": [{"id": "a", "street": "Avenue Louise", "house_number": "999", "postal_code": "1050"}],
+        "options": {"format": "geojson", "mid_street_fallback": true}
+    });
+    let (_, ct, out) = app
+        .post(
+            "/batch/geocode?mid_street_fallback=false",
+            "application/json",
+            body.to_string(),
+        )
+        .await;
+    assert_eq!(ct, "application/geo+json");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["features"][0]["properties"]["confidence"], "not_found");
+
+    // Empty input still yields a valid document.
+    let (_, ct, out) = app
+        .post("/batch/geocode?format=geojson", "text/csv", HEADER)
+        .await;
+    assert_eq!(ct, "application/geo+json");
+    assert_eq!(out, r#"{"type":"FeatureCollection","features":[]}"#);
+}
+
+#[tokio::test]
+async fn unknown_format_lang_or_query_is_400() {
+    let app = app();
+    let csv = format!("{HEADER}1,Avenue Louise,10,1050\n");
+    for (uri, msg) in [
+        (
+            "/batch/geocode?format=xml",
+            "unknown format 'xml' (expected csv or geojson)",
+        ),
+        (
+            "/batch/geocode?lang=en",
+            "unknown lang 'en' (expected fr, nl or de)",
+        ),
+    ] {
+        let (status, _, body) = app.post(uri, "text/csv", csv.clone()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert_eq!(body, msg);
+    }
+    let (status, _, body) = app
+        .post(
+            "/batch/geocode?mid_street_fallback=maybe",
+            "text/csv",
+            csv.clone(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.starts_with("query string:"), "{body}");
+    let body = serde_json::json!({
+        "addresses": [{"id": "a", "street": "Avenue Louise"}],
+        "options": {"format": "pdf"}
+    });
+    let (status, _, _) = app
+        .post("/batch/geocode", "application/json", body.to_string())
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn label_language_follows_lang() {
+    let app = app();
+    let csv = format!("{HEADER}1,Grand-Place,1,1000\n");
+    let (_, _, body) = app.post("/batch/geocode?lang=nl", "text/csv", csv).await;
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(col(&h, &rows[0], "label"), "Grote Markt 1, 1000 Brussel");
+}

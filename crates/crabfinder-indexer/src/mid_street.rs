@@ -82,14 +82,18 @@ impl MidStreetBuilder {
             Coordinates::Wgs84(w) => (w.lat, w.lon),
             Coordinates::Lambert72(_) => return,
         };
-        let street_key = format!(
-            "{}|{}",
-            addr.street_id.0.namespace, addr.street_id.0.object_identifier
-        );
         self.groups
-            .entry((street_key, addr.postal_code.clone()))
+            .entry((street_key(addr), addr.postal_code.clone()))
             .or_default()
             .push((num, lat, lon));
+    }
+
+    /// Every `(house_number, lat, lon)` recorded so far for `addr`'s street
+    /// and postal code (position imputation, `impute.rs`).
+    pub fn points(&self, addr: &Address) -> &[(u32, f64, f64)] {
+        self.groups
+            .get(&(street_key(addr), addr.postal_code.clone()))
+            .map_or(&[], Vec::as_slice)
     }
 
     /// Flush the builder to disk. Consumes `self` because the in-memory map
@@ -115,12 +119,7 @@ impl MidStreetBuilder {
             // `take()` (not get-by-ref) so we move the Vec out and drop it
             // as we go, capping peak memory.
             let mut items = self.groups.remove(key).expect("key from keys() must exist");
-            items.sort_by_key(|(num, _, _)| *num);
-            // Discrete lower median: index (n-1)/2 in 0-based terms, matching
-            // R's `quantile(p=0.5, type=3)` (PhacochR §2.1).
-            //   n=1 → 0   n=2 → 0   n=3 → 1   n=4 → 1   n=5 → 2 …
-            let idx = (items.len() - 1) / 2;
-            let (_num, lat, lon) = items[idx];
+            let (_num, lat, lon) = lower_median(&mut items);
 
             let street_bytes = key.0.as_bytes();
             let postal_bytes = key.1.as_bytes();
@@ -161,6 +160,23 @@ impl MidStreetBuilder {
     pub fn n_groups(&self) -> usize {
         self.groups.len()
     }
+}
+
+/// `"<namespace>|<object_id>"` of the address's street.
+fn street_key(addr: &Address) -> String {
+    format!(
+        "{}|{}",
+        addr.street_id.0.namespace, addr.street_id.0.object_identifier
+    )
+}
+
+/// The lower discrete median by house number: index (n-1)/2 in 0-based
+/// terms after sorting, matching R's `quantile(p=0.5, type=3)` (PhacochR
+/// §2.1). `n=1 → 0, n=2 → 0, n=3 → 1, n=4 → 1, n=5 → 2 …`. Sorts `items`.
+/// Panics on an empty slice.
+pub fn lower_median(items: &mut [(u32, f64, f64)]) -> (u32, f64, f64) {
+    items.sort_by_key(|(num, _, _)| *num);
+    items[(items.len() - 1) / 2]
 }
 
 impl Default for MidStreetBuilder {
@@ -215,6 +231,7 @@ mod tests {
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
             building_group_id,
             place_name: None,
+            position_source: Default::default(),
         }
     }
 

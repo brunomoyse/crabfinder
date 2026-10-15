@@ -22,18 +22,21 @@ use tracing::warn;
 use crabfinder_core::house_number::leading_number;
 use crabfinder_core::{Address, MultilingualName};
 use crabfinder_indexer::index::CrabSchema;
+use crabfinder_indexer::localities::{Locality, LocalityKind};
 use crabfinder_parser::ParsedQuery;
 
 use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::SharedAddressCountIndex;
 use crate::dedup::{MatchType, RAW_HIT_CAP, RawHit, group_by_building, raw_limit};
-use crate::focus::apply_focus_decay;
+use crate::focus::{FOCUS_HALF_LIFE_M, LOCALITY_DECAY_M, apply_decay};
 use crate::hydrate::{HydratedHit, hydrate};
+use crate::localities::{Province, SharedLocalityIndex};
 use crate::mid_street::{MidStreetIndex, street_key_from_bgid};
 use crate::query_builder::{
-    FilterParams, analyze, build_fuzzy_query, build_strict_query, build_typo_query,
-    search_score_only, search_with_notability, searchable_field, slot_is_unknown,
+    Area, FilterParams, analyze, build_area_query, build_fuzzy_query, build_strict_query,
+    build_typo_query, search_score_only, search_with_notability, searchable_field, slot_is_unknown,
 };
+use crate::spatial::haversine_m;
 
 /// Structured address input. Both the HTTP free-text path (after parsing) and
 /// the batch CSV path (already-structured columns) construct `AddressQuery`.
@@ -63,6 +66,9 @@ pub struct AddressQuery {
     /// tried in order when this one has no strict-tier hit. Alternatives
     /// never carry alternatives of their own.
     pub alternatives: Vec<AddressQuery>,
+    /// Hard geographic restriction. Set by the resolver itself on the
+    /// locality-suffix reading (`locality_suffix_reading`, Phase 6).
+    pub area: Option<Area>,
 }
 
 impl AddressQuery {
@@ -123,6 +129,10 @@ pub enum Confidence {
     /// Street found only by widening to a neighbouring commune.
     /// _Reserved for post-v1._
     AdjacentCommune,
+    /// The query only names a locality (village, hamlet, municipality…):
+    /// candidates are the buildings around its centre, and `resolve()`
+    /// places the point at the centre itself (v2 Phase 6).
+    Locality,
     /// No match.
     NotFound,
 }
@@ -136,6 +146,7 @@ impl Confidence {
             Confidence::MedianStreet => "median_street",
             Confidence::FuzzyStreet => "fuzzy_street",
             Confidence::AdjacentCommune => "adjacent_commune",
+            Confidence::Locality => "locality",
             Confidence::NotFound => "not_found",
         }
     }
@@ -155,6 +166,8 @@ pub enum FallbackReason {
     PostalCodeMismatch,
     /// No match at all.
     NoMatch,
+    /// The query names a locality but no street (v2 Phase 6).
+    StreetMissing,
 }
 
 impl FallbackReason {
@@ -165,6 +178,7 @@ impl FallbackReason {
             FallbackReason::StreetSpellingFuzzy => "street_spelling_fuzzy",
             FallbackReason::PostalCodeMismatch => "postal_code_mismatch",
             FallbackReason::NoMatch => "no_match",
+            FallbackReason::StreetMissing => "street_missing",
         }
     }
 }
@@ -197,6 +211,12 @@ pub struct ResolvedAddress {
     pub street_match_score: f32,
     /// `None` iff `confidence == Exact`.
     pub fallback_reason: Option<FallbackReason>,
+    /// The runner-up is a near-tie on another street
+    /// (`CandidateSet::ambiguity`).
+    pub ambiguous: bool,
+    /// For `Confidence::Locality`: the locality, whose centre `hit` carries;
+    /// `address` is then only the building nearest to it.
+    pub locality: Option<Locality>,
 }
 
 impl ResolvedAddress {
@@ -208,6 +228,8 @@ impl ResolvedAddress {
             house_number_delta: None,
             street_match_score: 0.0,
             fallback_reason: Some(FallbackReason::NoMatch),
+            ambiguous: false,
+            locality: None,
         }
     }
 }
@@ -231,6 +253,9 @@ pub struct ResolverContext<'a> {
     /// falls back to the top hit's own coordinates on the missing-number
     /// path.
     pub mid_street: Arc<MidStreetIndex>,
+    /// Named places (v8 `localities-v1.json`) behind the locality step.
+    /// Empty when the index has no localities file: the step never fires.
+    pub localities: SharedLocalityIndex,
 }
 
 /// Per-call knobs for `search`.
@@ -276,6 +301,12 @@ pub enum Tier {
     OrWithNumber,
     /// OR-of-tokens street match, house number ignored.
     OrStreet,
+    /// The query names a locality: strict text match inside the area
+    /// around its centre (v2 Phase 6; runs before every other tier).
+    Locality,
+    /// The query names a locality no text matches near its centre: the
+    /// buildings nearest to it.
+    Area,
     /// Nothing matched.
     None,
 }
@@ -300,15 +331,20 @@ impl Tier {
             Tier::TypoStreet => "typo_street",
             Tier::OrWithNumber => "or_with_number",
             Tier::OrStreet => "or_street",
+            Tier::Locality => "locality",
+            Tier::Area => "area",
             Tier::None => "none",
         }
     }
 
     fn match_type(self) -> MatchType {
         match self {
-            Tier::Exact | Tier::Nearest | Tier::Street | Tier::None => MatchType::Strict,
+            Tier::Exact | Tier::Nearest | Tier::Street | Tier::Locality | Tier::None => {
+                MatchType::Strict
+            }
             Tier::Typo | Tier::TypoStreet => MatchType::Typo,
             Tier::OrWithNumber | Tier::OrStreet => MatchType::Fuzzy,
+            Tier::Area => MatchType::Spatial,
         }
     }
 
@@ -372,6 +408,11 @@ impl Tier {
                 missing_or(FallbackReason::StreetSpellingFuzzy),
                 None,
             ),
+            Tier::Locality | Tier::Area => (
+                Confidence::Locality,
+                Some(FallbackReason::StreetMissing),
+                None,
+            ),
             Tier::None => (Confidence::NotFound, Some(FallbackReason::NoMatch), None),
         }
     }
@@ -401,9 +442,56 @@ pub struct CandidateSet {
     /// Which reading matched: 0 = the query itself, `n` = its
     /// `alternatives[n - 1]`.
     pub reading: usize,
+    /// The locality the query names, centre included, when the locality
+    /// step answered (`Tier::Locality` / `Tier::Area`).
+    pub locality: Option<Locality>,
 }
 
+/// Score ratio from which two candidates on different streets make the
+/// answer ambiguous (`CandidateSet::ambiguity`).
+pub const AMBIGUITY_RATIO: f32 = 0.9;
+
 impl CandidateSet {
+    /// `(ambiguous, score_gap)` between the two best candidates.
+    ///
+    /// `score_gap = 1 − s₂/s₁`: 0 for a tie, 1 when the runner-up scores
+    /// nothing. `ambiguous` when `s₂/s₁ ≥ AMBIGUITY_RATIO` and the two lie
+    /// on different streets (different name or municipality: a street
+    /// split into several BeSt objects is still one street). Only text
+    /// tiers have comparable scores; Nearest, Locality and Area answers,
+    /// and sets of fewer than two candidates, yield `(false, None)`.
+    pub fn ambiguity(&self) -> (bool, Option<f32>) {
+        let text_tier = matches!(
+            self.tier,
+            Tier::Exact
+                | Tier::Typo
+                | Tier::Street
+                | Tier::TypoStreet
+                | Tier::OrWithNumber
+                | Tier::OrStreet
+        );
+        let [a, b, ..] = self.candidates.as_slice() else {
+            return (false, None);
+        };
+        if !text_tier || a.hit.score <= 0.0 {
+            return (false, None);
+        }
+        let ratio = (b.hit.score / a.hit.score).clamp(0.0, 1.0);
+        let street = |c: &Candidate| {
+            let p = &c.hit.payload;
+            let name = |k: &str| {
+                serde_json::from_value::<MultilingualName>(p[k].clone())
+                    .ok()
+                    .and_then(|n| n.primary().map(str::to_lowercase))
+            };
+            (name("street_name"), name("municipality_name"))
+        };
+        let same_street = street_key_from_bgid(&a.hit.building_group_id)
+            == street_key_from_bgid(&b.hit.building_group_id)
+            || street(a) == street(b);
+        (ratio >= AMBIGUITY_RATIO && !same_street, Some(1.0 - ratio))
+    }
+
     fn empty() -> Self {
         Self {
             candidates: Vec::new(),
@@ -411,6 +499,7 @@ impl CandidateSet {
             tier: Tier::None,
             capped: false,
             reading: 0,
+            locality: None,
         }
     }
 }
@@ -427,10 +516,20 @@ pub fn search(
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
 ) -> tantivy::Result<CandidateSet> {
+    if let Some((loc, words, precise)) = named_locality(query, ctx)
+        && let Some(set) = search_locality(query, (&loc, words, precise), opts, ctx)?
+    {
+        return Ok(set);
+    }
     let readings = std::iter::once(query).chain(query.alternatives.iter());
     for (reading, q) in readings.enumerate() {
         if let Some(set) = search_tiers(q, opts, ctx, true)? {
             return Ok(CandidateSet { reading, ..set });
+        }
+    }
+    for r in locality_suffix_readings(query, ctx) {
+        if let Some(set) = search_tiers(&r, opts, ctx, true)? {
+            return Ok(set);
         }
     }
     Ok(search_tiers(query, opts, ctx, false)?.unwrap_or_else(CandidateSet::empty))
@@ -452,6 +551,7 @@ fn search_tiers(
     let filters = FilterParams {
         region: query.region_filter.clone(),
         postal_code: query.postal_code.clone(),
+        area: query.area,
     };
     let parsed = |with_hn: bool| ParsedQuery {
         raw_query: String::new(),
@@ -466,7 +566,13 @@ fn search_tiers(
     };
     let field = searchable_field(ctx.schema);
     let searcher = ctx.reader.searcher();
-    let raw_limit = raw_limit(opts.limit, opts.expand);
+    // An area bounds the hits, and distance re-ranks them: fetch them all
+    // (up to the cap) so the ranking doesn't depend on `limit`.
+    let raw_limit = if query.area.is_some() {
+        RAW_HIT_CAP
+    } else {
+        raw_limit(opts.limit, opts.expand)
+    };
     // Which slots the typo tiers make fuzzy; computed on first use.
     let mut unknown: Option<Vec<bool>> = None;
     // The Nearest tier's street hits, reused by the Street tier.
@@ -485,7 +591,8 @@ fn search_tiers(
             // mid-street off (design-batch-geocoding §236).
             Tier::Exact | Tier::Typo | Tier::Nearest | Tier::OrWithNumber => has_hn,
             Tier::Street | Tier::TypoStreet | Tier::OrStreet => opts.mid_street_fallback,
-            Tier::None => false,
+            // Not in `Tier::ORDER`: `search_locality` runs them.
+            Tier::Locality | Tier::Area | Tier::None => false,
         };
         if !enabled {
             continue;
@@ -500,7 +607,7 @@ fn search_tiers(
             street_top = Some(top);
             if let Some(units) = found {
                 let mut set =
-                    collect_candidates(&searcher, &units, tier, has_hn, query, opts, ctx)?;
+                    collect_candidates(&searcher, &units, tier, has_hn, query, opts, ctx, None)?;
                 label_nearest(&mut set, query);
                 return Ok(Some(set));
             }
@@ -512,7 +619,17 @@ fn search_tiers(
             if top.is_empty() {
                 continue;
             }
-            return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx).map(Some);
+            return collect_candidates(
+                &searcher,
+                &top,
+                tier,
+                has_hn,
+                query,
+                opts,
+                ctx,
+                user_focus(query),
+            )
+            .map(Some);
         }
         let p = parsed(tier.uses_house_number());
         let q = match tier {
@@ -535,12 +652,29 @@ fn search_tiers(
         if top.is_empty() {
             continue;
         }
-        return collect_candidates(&searcher, &top, tier, has_hn, query, opts, ctx).map(Some);
+        return collect_candidates(
+            &searcher,
+            &top,
+            tier,
+            has_hn,
+            query,
+            opts,
+            ctx,
+            user_focus(query),
+        )
+        .map(Some);
     }
     Ok(None)
 }
 
+/// The caller's `focus_point` with the standard decay length.
+fn user_focus(query: &AddressQuery) -> Option<((f64, f64), f64)> {
+    query.focus_point.map(|p| (p, FOCUS_HALF_LIFE_M))
+}
+
 /// Materialise a tier's raw hits into ranked, labelled candidates.
+/// `focus` is `(point, decay length in metres)`.
+#[allow(clippy::too_many_arguments)]
 fn collect_candidates(
     searcher: &tantivy::Searcher,
     top: &[(tantivy::Score, tantivy::DocAddress)],
@@ -549,6 +683,7 @@ fn collect_candidates(
     query: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
+    focus: Option<((f64, f64), f64)>,
 ) -> tantivy::Result<CandidateSet> {
     let mut docs: Vec<TantivyDocument> = Vec::with_capacity(top.len());
     let mut raw_hits: Vec<RawHit> = Vec::with_capacity(top.len());
@@ -564,14 +699,14 @@ fn collect_candidates(
         docs.push(doc);
     }
     // Nearest hits are already in distance order; box and focus would
-    // only scramble it.
-    if tier != Tier::Nearest {
-        if let Some(b) = query.box_number.as_deref() {
-            prefer_box(&mut raw_hits, b);
-        }
-        if let Some(focus) = query.focus_point {
-            apply_focus_decay(&mut raw_hits, focus, ctx.schema, &docs);
-        }
+    // only scramble it (the Nearest caller passes no focus).
+    if tier != Tier::Nearest
+        && let Some(b) = query.box_number.as_deref()
+    {
+        prefer_box(&mut raw_hits, b);
+    }
+    if let Some((point, scale)) = focus {
+        apply_decay(&mut raw_hits, point, scale, ctx.schema, &docs);
     }
 
     let (confidence, fallback_reason, house_number_delta) = tier.labels(has_hn);
@@ -619,7 +754,242 @@ fn collect_candidates(
         tier,
         capped: !opts.expand && raw_hits.len() >= RAW_HIT_CAP,
         reading: 0,
+        locality: None,
     })
+}
+
+// --- Locality step (v2 Phase 6) ------------------------------------------
+
+/// Radius searched around a locality's centre, by kind.
+fn locality_radius_m(kind: LocalityKind) -> f64 {
+    match kind {
+        LocalityKind::Municipality => 5_000.0,
+        LocalityKind::PostalArea => 4_000.0,
+        LocalityKind::PartOfMunicipality => 3_000.0,
+        LocalityKind::Village => 2_000.0,
+        LocalityKind::Hamlet => 1_500.0,
+        LocalityKind::Locality => 1_000.0,
+        LocalityKind::IsolatedDwelling => 800.0,
+    }
+}
+
+/// Two localities this close, or sharing a postal code, are taken to be
+/// the same place or one inside the other.
+const SAME_PLACE_M: f64 = 15_000.0;
+
+/// An OSM node this close to a BeSt locality of the same name is its
+/// centre (the village square rather than the address centroid).
+const OSM_CENTRE_M: f64 = 10_000.0;
+
+fn distance_m(a: &Locality, b: &Locality) -> f64 {
+    haversine_m(a.lat, a.lon, b.lat, b.lon)
+}
+
+/// The locality a house-number-less query names, if any:
+/// - the whole street text is a locality name (`"chassepierre"`,
+///   `"han sur lesse 5580"`), or
+/// - it is a locality followed by the locality or province containing it
+///   (`"spontin yvoir"`, `"celles houyet"`, `"beausaint la roche"` for La
+///   Roche-en-Ardenne, `"ave namur"` for the province): the first, more
+///   precise one.
+///
+/// A postal code in the query must be one of the locality's. Among
+/// localities sharing the name, `LocalityIndex::lookup` order decides
+/// (administrative first); the centre is taken from a same-name OSM node
+/// within `OSM_CENTRE_M` when there is one. Returns the locality, how
+/// many leading street tokens name it, and whether its centre is precise
+/// (`precise_centre`).
+fn named_locality(
+    query: &AddressQuery,
+    ctx: &ResolverContext<'_>,
+) -> Option<(Locality, usize, bool)> {
+    if query.house_number.is_some() || query.street_tokens.is_empty() {
+        return None;
+    }
+    let pc_ok = |l: &&Locality| {
+        query
+            .postal_code
+            .as_ref()
+            .is_none_or(|pc| l.postal_codes.contains(pc))
+    };
+    let named = |tokens: &[String]| -> Vec<&Locality> {
+        ctx.localities.lookup(tokens).iter().filter(pc_ok).collect()
+    };
+    let toks = &query.street_tokens;
+    let whole = named(toks);
+    if let Some(first) = whole.first() {
+        let l = with_centre(first, &whole);
+        let precise = precise_centre(&l, &whole);
+        return Some((l, toks.len(), precise));
+    }
+    for k in (1..toks.len()).rev() {
+        let (inner, outer) = toks.split_at(k);
+        let inner = named(inner);
+        if inner.is_empty() {
+            continue;
+        }
+        let province = Province::named(outer);
+        let mut outer_named: Vec<&Locality> = ctx.localities.lookup(outer).iter().collect();
+        outer_named.extend(ctx.localities.lookup_prefix(outer));
+        let found = inner.iter().find(|i| {
+            province.is_some_and(|p| p.contains_any(&i.postal_codes))
+                || outer_named.iter().any(|o| {
+                    o.postal_codes.iter().any(|pc| i.postal_codes.contains(pc))
+                        || distance_m(i, o) < SAME_PLACE_M
+                })
+        });
+        if let Some(i) = found {
+            let l = with_centre(i, &inner);
+            let precise = precise_centre(&l, &inner);
+            return Some((l, k, precise));
+        }
+    }
+    None
+}
+
+/// Smallest area searched around a locality named after the street
+/// (`locality_suffix_readings`): a hamlet's streets reach beyond its node.
+const SUFFIX_MIN_RADIUS_M: f64 = 3_000.0;
+
+/// Most same-name localities tried for one suffix ("Celles" names three).
+const SUFFIX_MAX_PLACES: usize = 3;
+
+/// Readings for "`<street words> <locality>`" whose strict tiers failed
+/// because the locality isn't in the street's searchable text: an
+/// OSM-only hamlet ("Rue du Moulin Frahan"), or a municipality the street
+/// doesn't belong to ("Rue de la Loi 17, 1040 Etterbeek"). Each keeps the
+/// street words, number and postal code, and searches inside the area of
+/// one locality named by the trailing words (longest suffix first, then
+/// `lookup` order), focused on its centre.
+fn locality_suffix_readings(query: &AddressQuery, ctx: &ResolverContext<'_>) -> Vec<AddressQuery> {
+    let toks = &query.street_tokens;
+    let mut out = Vec::new();
+    for k in 1..toks.len() {
+        let (street, place) = toks.split_at(k);
+        let places = ctx.localities.lookup(place).iter().filter(|l| {
+            query
+                .postal_code
+                .as_ref()
+                .is_none_or(|pc| l.postal_codes.contains(pc))
+        });
+        for l in places.take(SUFFIX_MAX_PLACES) {
+            out.push(AddressQuery {
+                street_tokens: street.to_vec(),
+                focus_point: query.focus_point.or(Some((l.lat, l.lon))),
+                area: Some(Area {
+                    lat: l.lat,
+                    lon: l.lon,
+                    radius_m: locality_radius_m(l.kind).max(SUFFIX_MIN_RADIUS_M),
+                }),
+                alternatives: Vec::new(),
+                ..query.clone()
+            });
+        }
+        if !out.is_empty() {
+            break;
+        }
+    }
+    out
+}
+
+/// `l`, centred on a same-name OSM node nearby when `l` is administrative.
+fn with_centre(l: &Locality, same_name: &[&Locality]) -> Locality {
+    let mut out = l.clone();
+    if !l.kind.is_osm()
+        && let Some(o) = same_name
+            .iter()
+            .filter(|o| o.kind.is_osm())
+            .min_by(|a, b| distance_m(l, a).total_cmp(&distance_m(l, b)))
+            .filter(|o| distance_m(l, o) < OSM_CENTRE_M)
+    {
+        out.lat = o.lat;
+        out.lon = o.lon;
+    }
+    out
+}
+
+/// Whether `l`'s centre is a mapped point (an OSM node, possibly lent by
+/// `with_centre`) rather than an address centroid.
+fn precise_centre(l: &Locality, same_name: &[&Locality]) -> bool {
+    l.kind.is_osm()
+        || same_name
+            .iter()
+            .any(|o| o.kind.is_osm() && o.lat == l.lat && o.lon == l.lon)
+}
+
+/// Answer a locality query.
+///
+/// With a precise centre (an OSM node: the village square), the buildings
+/// nearest to it (`Tier::Area`, rings of growing radius): the name adds
+/// nothing, and matching it as text would pull in namesake streets nearby
+/// ("Route de Dolhain" in Baelen for Dolhain).
+///
+/// With an address centroid (municipalities, parts of municipality OSM
+/// doesn't map), the buildings carrying the locality's name — the first
+/// `words` street tokens; the container words are enforced by the area —
+/// inside the area, nearest first (`Tier::Locality`), else the nearest
+/// buildings.
+///
+/// `None` when nothing lies in the area, so the regular tiers run.
+fn search_locality(
+    query: &AddressQuery,
+    (loc, words, precise): (&Locality, usize, bool),
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<Option<CandidateSet>> {
+    let radius = locality_radius_m(loc.kind);
+    let centre = (loc.lat, loc.lon);
+    let filters = |radius_m| FilterParams {
+        region: query.region_filter.clone(),
+        postal_code: query.postal_code.clone(),
+        area: Some(Area {
+            lat: loc.lat,
+            lon: loc.lon,
+            radius_m,
+        }),
+    };
+    let searcher = ctx.reader.searcher();
+    // Area-bounded and re-ranked by distance: see `search_tiers`.
+    let raw_limit = RAW_HIT_CAP;
+    let words = &query.street_tokens[..words];
+    let slots: Vec<Vec<String>> = words.iter().map(|t| ctx.abbrev.expand(t)).collect();
+    let parsed = ParsedQuery {
+        street_tokens: words.to_vec(),
+        ..Default::default()
+    };
+    let focus = Some((centre, LOCALITY_DECAY_M));
+    let finish = |top: &[(tantivy::Score, tantivy::DocAddress)], tier| {
+        collect_candidates(&searcher, top, tier, false, query, opts, ctx, focus).map(|set| {
+            Some(CandidateSet {
+                locality: Some(loc.clone()),
+                ..set
+            })
+        })
+    };
+
+    let field = searchable_field(ctx.schema);
+    if !precise
+        && let Some(q) = build_strict_query(field, &slots, &parsed, ctx.schema, &filters(radius))
+    {
+        let top = if ctx.notability_enabled {
+            search_with_notability(&searcher, q.as_ref(), raw_limit, ctx.addr_counts.clone())?
+        } else {
+            search_score_only(&searcher, q.as_ref(), raw_limit)?
+        };
+        if !top.is_empty() {
+            return finish(&top, Tier::Locality);
+        }
+    }
+    for r in [radius / 8.0, radius / 2.0, radius] {
+        let Some(q) = build_area_query(ctx.schema, &filters(r)) else {
+            continue;
+        };
+        let top = search_score_only(&searcher, q.as_ref(), raw_limit)?;
+        if !top.is_empty() {
+            return finish(&top, Tier::Area);
+        }
+    }
+    Ok(None)
 }
 
 /// Most units the Nearest tier reads for one street (Belgian streets rarely
@@ -804,7 +1174,8 @@ pub fn resolve(query: &AddressQuery, ctx: &ResolverContext<'_>) -> ResolvedAddre
     resolve_with(query, &SearchOptions::default(), ctx)
 }
 
-/// `resolve` with explicit options (`limit` / `expand` are ignored).
+/// `resolve` with explicit options (`limit` / `expand` are ignored: two
+/// buildings are fetched, the runner-up only to judge ambiguity).
 ///
 /// Street-level outcomes (`MedianStreet`, and `FuzzyStreet` when the house
 /// number wasn't used) get the street's median coordinates from the
@@ -816,7 +1187,7 @@ pub fn resolve_with(
     ctx: &ResolverContext<'_>,
 ) -> ResolvedAddress {
     let opts = SearchOptions {
-        limit: 1,
+        limit: 2,
         expand: false,
         ..*opts
     };
@@ -827,6 +1198,7 @@ pub fn resolve_with(
             return ResolvedAddress::not_found();
         }
     };
+    let (ambiguous, _) = set.ambiguity();
     let Some(c) = set.candidates.into_iter().next() else {
         return ResolvedAddress::not_found();
     };
@@ -835,7 +1207,10 @@ pub fn resolve_with(
         return ResolvedAddress::not_found();
     };
     let mut hit = c.hit;
-    if !set.tier.uses_house_number()
+    if let Some(loc) = &set.locality {
+        hit.lat = loc.lat;
+        hit.lon = loc.lon;
+    } else if !set.tier.uses_house_number()
         && let Some((lat, lon)) = street_key_from_bgid(&hit.building_group_id)
             .and_then(|k| ctx.mid_street.lookup(k, &address.postal_code))
     {
@@ -849,6 +1224,8 @@ pub fn resolve_with(
         confidence: c.confidence,
         house_number_delta: c.house_number_delta,
         fallback_reason: c.fallback_reason,
+        ambiguous,
+        locality: set.locality,
     }
 }
 
@@ -881,6 +1258,7 @@ mod tests {
             addr_counts: Arc::new(AddressCountIndex::build(&ti.reader, &ti.schema).unwrap()),
             notability_enabled: true,
             mid_street,
+            localities: Arc::new(crate::localities::LocalityIndex::empty()),
         }
     }
 
@@ -1739,5 +2117,377 @@ mod tests {
             &ml(Some("Rue X"), None),
             &ml(None, Some("Rue X"))
         ));
+    }
+
+    // --- Phase 6: adjacent-pair phrase bonus -------------------------------
+
+    #[test]
+    fn adjacent_pairs_beat_scattered_words() {
+        // "Grand-Place 1 1000 Bruxelles": the full phrase can't match
+        // across the street/municipality value gap, so without the pair
+        // bonus "Place du Grand Sablon" ties with "Grand-Place".
+        let addrs = vec![
+            AddressBuilder::new("sab", "7001", "1")
+                .street(Some("Place du Grand Sablon"), Some("Grote Zavel"))
+                .build(),
+            AddressBuilder::new("gp", "7002", "1")
+                .street(Some("Grand-Place"), Some("Grote Markt"))
+                .build(),
+        ];
+        let ti = TestIndex::build(&addrs);
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        let s = search(
+            &parsed_query(&ti, "Grand-Place 1 1000 Bruxelles"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(s.tier, Tier::Exact);
+        assert_eq!(s.candidates.len(), 2);
+        assert_eq!(
+            s.candidates[0].hit.payload["street_name"]["fr"],
+            "Grand-Place"
+        );
+        assert!(s.candidates[0].hit.score > s.candidates[1].hit.score);
+    }
+
+    // --- Phase 6: locality step ---------------------------------------------
+
+    fn locality(kind: LocalityKind, fr: &str, lat: f64, lon: f64, pcs: &[&str]) -> Locality {
+        Locality {
+            kind,
+            name: MultilingualName {
+                fr: Some(fr.into()),
+                nl: None,
+                de: None,
+            },
+            lat,
+            lon,
+            postal_codes: pcs.iter().map(|p| p.to_string()).collect(),
+            address_count: 1,
+            region: Some(crabfinder_core::Region::Wallonia),
+        }
+    }
+
+    /// Spontin (part of Yvoir, 5530): Rue Haute near the village node,
+    /// Rue Basse 2 km east. Denée (5537): Rue du Monastère next to the
+    /// Maredsous hamlet node, Rue de Maredsous 3 km away.
+    fn villages() -> (TestIndex, Vec<Locality>) {
+        let wal = |oid: &str, street_oid: &str, street: &str, pc: &str, pom: &str| {
+            AddressBuilder::new(oid, street_oid, "1")
+                .region(crabfinder_core::Region::Wallonia)
+                .municipality("91141", Some("Yvoir"), None, None)
+                .postal(pc)
+                .part_of_municipality(pom, Some(pom), None)
+                .street(Some(street), None)
+        };
+        let addrs = vec![
+            wal("a1", "8001", "Rue Haute", "5530", "Spontin")
+                .at(50.3227, 5.0070)
+                .build(),
+            wal("a2", "8002", "Rue Basse", "5530", "Spontin")
+                .at(50.3227, 5.0350)
+                .build(),
+            wal("a3", "8003", "Rue du Monastère", "5537", "Denée")
+                .municipality("91005", Some("Anhée"), None, None)
+                .at(50.3048, 4.7697)
+                .build(),
+            wal("a4", "8004", "Rue de Maredsous", "5537", "Denée")
+                .municipality("91005", Some("Anhée"), None, None)
+                .at(50.3300, 4.7900)
+                .build(),
+        ];
+        let locs = vec![
+            locality(LocalityKind::Municipality, "Yvoir", 50.33, 5.0, &["5530"]),
+            // BeSt centroid between the two streets; the OSM node is the
+            // village centre.
+            locality(
+                LocalityKind::PartOfMunicipality,
+                "Spontin",
+                50.3227,
+                5.021,
+                &["5530"],
+            ),
+            locality(LocalityKind::Village, "Spontin", 50.3226, 5.0069, &["5530"]),
+            locality(
+                LocalityKind::Hamlet,
+                "Maredsous",
+                50.3046,
+                4.7695,
+                &["5537"],
+            ),
+            // Same name, far away and with no address around.
+            locality(LocalityKind::Hamlet, "Nulle Part", 51.3, 3.0, &["8000"]),
+        ];
+        (TestIndex::build(&addrs), locs)
+    }
+
+    fn ctx_with<'a>(ti: &'a TestIndex, locs: Vec<Locality>) -> ResolverContext<'a> {
+        let mut c = ctx(ti, Arc::new(MidStreetIndex::empty()));
+        c.localities = Arc::new(crate::localities::LocalityIndex::from_localities(
+            &ti.index, locs,
+        ));
+        c
+    }
+
+    fn street_of_candidate(c: &Candidate) -> String {
+        c.hit.payload["street_name"]["fr"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn locality_query_ranks_the_village_centre_first() {
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        let set = search(&parsed_query(&ti, "spontin"), &opts(5), &c).unwrap();
+        // The OSM node is a precise centre: the nearest buildings.
+        assert_eq!(set.tier, Tier::Area);
+        assert_eq!(street_of_candidate(&set.candidates[0]), "Rue Haute");
+        assert_eq!(set.candidates[0].confidence, Confidence::Locality);
+        assert_eq!(
+            set.candidates[0].fallback_reason,
+            Some(FallbackReason::StreetMissing)
+        );
+        assert_eq!(set.candidates[0].hit.match_type, MatchType::Spatial);
+        let loc = set.locality.unwrap();
+        // The OSM node, not the BeSt centroid.
+        assert_eq!(
+            (loc.kind, loc.lat, loc.lon),
+            (LocalityKind::PartOfMunicipality, 50.3226, 5.0069)
+        );
+
+        // `resolve` answers with the centre itself.
+        let r = resolve(&parsed_query(&ti, "Spontin"), &c);
+        assert_eq!(r.confidence, Confidence::Locality);
+        let hit = r.hit.unwrap();
+        assert_eq!((hit.lat, hit.lon), (50.3226, 5.0069));
+        assert_eq!(r.address.unwrap().postal_code, "5530");
+    }
+
+    #[test]
+    fn village_then_container_picks_the_village() {
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        for q in [
+            "spontin yvoir",
+            "spontin namur",
+            "spontin province de namur",
+        ] {
+            let set = search(&parsed_query(&ti, q), &opts(5), &c).unwrap();
+            assert_eq!(set.tier, Tier::Area, "{q}");
+            assert_eq!(street_of_candidate(&set.candidates[0]), "Rue Haute", "{q}");
+        }
+        // The wrong province is no container: regular tiers.
+        let set = search(&parsed_query(&ti, "spontin luxembourg"), &opts(5), &c).unwrap();
+        assert!(set.locality.is_none());
+    }
+
+    #[test]
+    fn container_may_be_a_name_prefix() {
+        let (ti, mut locs) = villages();
+        locs.push(locality(
+            LocalityKind::Municipality,
+            "Yvoir-sur-Meuse",
+            50.33,
+            5.0,
+            &["9999"],
+        ));
+        let c = ctx_with(&ti, locs);
+        // "yvoir" alone matches Yvoir exactly; drop it to test the prefix.
+        let mut q = parsed_query(&ti, "spontin yvoir");
+        let set = search(&q, &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Area);
+        q.street_tokens = analyze_street_input(&ti.index, "spontin yvoir sur");
+        let set = search(&q, &opts(5), &c).unwrap();
+        // "yvoir sur" is a prefix of Yvoir-sur-Meuse, 1.5 km from Spontin.
+        assert_eq!(set.locality.unwrap().lat, 50.3226);
+    }
+
+    #[test]
+    fn centroid_locality_matches_its_name_as_text() {
+        // Yvoir has no OSM node: its centre is an address centroid, so the
+        // buildings carrying its name come first, nearest to it.
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        let set = search(&parsed_query(&ti, "yvoir"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Locality);
+        assert_eq!(set.candidates.len(), 2);
+        assert_eq!(set.candidates[0].hit.match_type, MatchType::Strict);
+        assert_eq!(set.candidates[0].confidence, Confidence::Locality);
+        assert_eq!(set.locality.unwrap().kind, LocalityKind::Municipality);
+    }
+
+    #[test]
+    fn hamlet_without_text_match_returns_the_nearest_buildings() {
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        let set = search(&parsed_query(&ti, "Maredsous"), &opts(5), &c).unwrap();
+        // Rue de Maredsous is 3 km away, outside the hamlet's area.
+        assert_eq!(set.tier, Tier::Area);
+        assert_eq!(street_of_candidate(&set.candidates[0]), "Rue du Monastère");
+        assert_eq!(set.candidates[0].hit.match_type, MatchType::Spatial);
+        assert_eq!(set.candidates[0].confidence, Confidence::Locality);
+        assert_eq!(Tier::Area.as_str(), "area");
+        assert_eq!(Tier::Locality.as_str(), "locality");
+    }
+
+    #[test]
+    fn locality_step_is_skipped_when_it_does_not_apply() {
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        // A house number: an address query.
+        let set = search(&parsed_query(&ti, "Spontin 1"), &opts(5), &c).unwrap();
+        assert!(set.locality.is_none());
+        // A postal code the locality doesn't have.
+        let set = search(&parsed_query(&ti, "Spontin 5537"), &opts(5), &c).unwrap();
+        assert!(set.locality.is_none());
+        // A locality with nothing around it falls through to the tiers.
+        let set = search(&parsed_query(&ti, "Nulle Part"), &opts(5), &c).unwrap();
+        assert!(set.locality.is_none());
+        assert_eq!(set.tier, Tier::None);
+        // Street words before the locality: not a locality query.
+        let set = search(&parsed_query(&ti, "Rue Basse Spontin"), &opts(5), &c).unwrap();
+        assert!(set.locality.is_none());
+        assert_eq!(street_of_candidate(&set.candidates[0]), "Rue Basse");
+        assert_eq!(Confidence::Locality.as_str(), "locality");
+        assert_eq!(FallbackReason::StreetMissing.as_str(), "street_missing");
+    }
+
+    #[test]
+    fn far_osm_namesake_is_not_the_centre() {
+        let admin = locality(LocalityKind::PartOfMunicipality, "X", 50.0, 4.0, &["5000"]);
+        let near = locality(LocalityKind::Village, "X", 50.05, 4.0, &["5000"]);
+        let far = locality(LocalityKind::Village, "X", 50.5, 4.0, &["5000"]);
+        let c = with_centre(&admin, &[&admin, &far, &near]);
+        assert_eq!((c.lat, c.kind), (50.05, LocalityKind::PartOfMunicipality));
+        assert!(precise_centre(&c, &[&admin, &far, &near]));
+        let c = with_centre(&admin, &[&admin, &far]);
+        assert_eq!(c.lat, 50.0);
+        assert!(!precise_centre(&c, &[&admin, &far]));
+        assert!(precise_centre(&near, &[]));
+        // An OSM locality keeps its own point.
+        assert_eq!(with_centre(&near, &[&admin, &near]).lat, 50.05);
+        assert_eq!(locality_radius_m(LocalityKind::IsolatedDwelling), 800.0);
+        assert_eq!(locality_radius_m(LocalityKind::Locality), 1_000.0);
+        assert_eq!(locality_radius_m(LocalityKind::PostalArea), 4_000.0);
+        assert_eq!(locality_radius_m(LocalityKind::Municipality), 5_000.0);
+    }
+
+    #[test]
+    fn street_then_osm_hamlet_searches_around_the_hamlet() {
+        let (ti, locs) = villages();
+        let c = ctx_with(&ti, locs);
+        let set = search(
+            &parsed_query(&ti, "Rue du Monastère 1 Maredsous"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+        assert_eq!(street_of_candidate(&set.candidates[0]), "Rue du Monastère");
+        assert!(set.locality.is_none());
+        // Too far from the hamlet: no suffix match, OR fallback.
+        let set = search(&parsed_query(&ti, "Rue Haute 1 Maredsous"), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::OrWithNumber);
+    }
+
+    #[test]
+    fn street_then_neighbouring_municipality() {
+        // Rue de la Loi lies in Bruxelles; people write the neighbouring
+        // Etterbeek.
+        let loi = AddressBuilder::new("loi", "9001", "17")
+            .street(Some("Rue de la Loi"), Some("Wetstraat"))
+            .postal("1040")
+            .at(50.8434, 4.3800)
+            .build();
+        let ti = TestIndex::build(&[loi]);
+        let c = ctx_with(
+            &ti,
+            vec![
+                locality(
+                    LocalityKind::Municipality,
+                    "Etterbeek",
+                    50.8330,
+                    4.3890,
+                    &["1040"],
+                ),
+                locality(
+                    LocalityKind::Municipality,
+                    "Etterbeek",
+                    51.5,
+                    3.0,
+                    &["1040"],
+                ),
+            ],
+        );
+        let set = search(
+            &parsed_query(&ti, "Rue de la Loi 17, 1040 Etterbeek"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::Exact);
+        assert_eq!(hn_of(&set.candidates[0]), "17");
+        // Postal code the locality doesn't have: no suffix reading.
+        let set = search(
+            &parsed_query(&ti, "Rue de la Loi 17, 1000 Etterbeek"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(set.tier, Tier::None);
+    }
+
+    #[test]
+    fn ambiguity_only_for_text_tiers_across_streets() {
+        let ti = louise_index();
+        let c = ctx(&ti, Arc::new(MidStreetIndex::empty()));
+        // Nearest tier: scores encode distance, not relevance.
+        let set = search(&query(&ti, "Avenue Louise", Some("34"), None), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Nearest);
+        assert_eq!(set.ambiguity(), (false, None));
+        // Street tier, several buildings of one street: a tie, not ambiguous.
+        let set = search(&query(&ti, "Rue Paire", None, None), &opts(5), &c).unwrap();
+        assert_eq!(set.tier, Tier::Street);
+        let (amb, gap) = set.ambiguity();
+        assert!(!amb);
+        assert!(gap.unwrap() < 0.1, "{gap:?}");
+        // One candidate: no runner-up.
+        let set = search(&query(&ti, "Rue Paire", Some("4"), None), &opts(5), &c).unwrap();
+        assert_eq!(set.ambiguity(), (false, None));
+    }
+
+    #[test]
+    fn area_ranking_does_not_depend_on_limit() {
+        // 60 buildings of "Rue Longue", indexed farthest first: with the
+        // `limit`-scaled over-fetch, `limit = 1` would never see the one
+        // nearest to Etterbeek.
+        let addrs: Vec<Address> = (0..60u32)
+            .map(|i| {
+                AddressBuilder::new(&format!("l{i}"), "9100", &(i + 1).to_string())
+                    .street(Some("Rue Longue"), None)
+                    .postal("1040")
+                    .at(50.8330 + 0.0005 * f64::from(60 - i), 4.3890)
+                    .build()
+            })
+            .collect();
+        let ti = TestIndex::build(&addrs);
+        let c = ctx_with(
+            &ti,
+            vec![locality(
+                LocalityKind::Municipality,
+                "Etterbeek",
+                50.8330,
+                4.3890,
+                &["1040"],
+            )],
+        );
+        let q = parsed_query(&ti, "Rue Longue Etterbeek");
+        let one = search(&q, &opts(1), &c).unwrap();
+        let ten = search(&q, &opts(10), &c).unwrap();
+        assert_eq!(hn_of(&one.candidates[0]), "60");
+        assert_eq!(hn_of(&ten.candidates[0]), "60");
     }
 }

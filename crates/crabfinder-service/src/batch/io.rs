@@ -1,14 +1,18 @@
 //! CSV reader + writer for batch geocoding.
 //!
-//! Schema (per `docs/design-batch-geocoding.md` §3.2):
+//! Schema (per `docs/design-batch-geocoding.md` §3.2, extended in v2):
 //! ```text
-//! Input:   id, street, house_number?, postal_code?
+//! Input:   id, street, house_number?, postal_code?, box_number?
+//!     or:  id, address, postal_code?            (free text, v2 Phase 6)
 //! Output:  id, street, house_number, postal_code,
 //!          matched_street, matched_house_number, matched_postal_code,
 //!          lat, lng,
 //!          confidence, fallback_reason, house_number_delta, street_match_score,
-//!          building_group_id, best_id
+//!          building_group_id, best_id,
+//!          address, label, position_source, ambiguous  (appended in v2)
 //! ```
+//!
+//! Output is CSV, or a GeoJSON FeatureCollection (`OutputFormat`).
 //!
 //! Delimiter handling: comma by default, semicolon supported (Excel-BE
 //! defaults). The façade uses `sniff_delimiter()` to peek at the first line.
@@ -23,9 +27,11 @@ use thiserror::Error;
 /// The deserializer is permissive: empty strings in `house_number` /
 /// `postal_code` map to `None`, so an Excel-exported CSV with trailing
 /// commas behaves the way users expect.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct InputRow {
     pub id: String,
+    /// Street name. Empty on free-text rows.
+    #[serde(default)]
     pub street: String,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub house_number: Option<String>,
@@ -35,6 +41,11 @@ pub struct InputRow {
     /// the building's representative (`best_id`); never filters.
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub box_number: Option<String>,
+    /// Whole address as free text (v2 Phase 6): when present, it is parsed
+    /// like `/geocode?q=` and the street / number / box columns are
+    /// ignored; a `postal_code` column still overrides the parsed one.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub address: Option<String>,
 }
 
 /// One row of output. Field order is the wire contract — `csv::Writer`
@@ -60,6 +71,89 @@ pub struct OutputRow {
     pub street_match_score: Option<f32>,
     pub building_group_id: Option<String>,
     pub best_id: Option<String>,
+    // --- appended in v2 Phase 6 (keep after the v1 columns) ---
+    /// The free-text input, echoed.
+    pub address: Option<String>,
+    /// The match on one line (`Address::display_name`).
+    pub label: Option<String>,
+    /// How the matched coordinates were obtained: `measured`, or an
+    /// imputation (`same_number`, `interpolated`, `street`, `locality`).
+    pub position_source: Option<String>,
+    /// Two near-equal answers on different streets (`/geocode`'s
+    /// `ambiguous`).
+    pub ambiguous: bool,
+}
+
+/// Batch output format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputFormat {
+    #[default]
+    Csv,
+    /// A GeoJSON FeatureCollection: one Point feature per row (null
+    /// geometry when not found), the CSV columns as properties.
+    GeoJson,
+}
+
+impl std::str::FromStr for OutputFormat {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "csv" => Ok(Self::Csv),
+            "geojson" | "json" => Ok(Self::GeoJson),
+            other => Err(format!(
+                "unknown format '{other}' (expected csv or geojson)"
+            )),
+        }
+    }
+}
+
+impl OutputFormat {
+    pub fn content_type(self) -> &'static str {
+        match self {
+            Self::Csv => "text/csv; charset=utf-8",
+            Self::GeoJson => "application/geo+json",
+        }
+    }
+}
+
+/// Write `rows` as one GeoJSON FeatureCollection. Properties keep the
+/// CSV column order.
+pub fn write_geojson<W: Write>(rows: &[OutputRow], w: W) -> Result<(), BatchError> {
+    #[derive(Serialize)]
+    struct Collection<'a> {
+        #[serde(rename = "type")]
+        kind: &'static str,
+        features: Vec<Feature<'a>>,
+    }
+    #[derive(Serialize)]
+    struct Feature<'a> {
+        #[serde(rename = "type")]
+        kind: &'static str,
+        geometry: Option<Point>,
+        properties: &'a OutputRow,
+    }
+    #[derive(Serialize)]
+    struct Point {
+        #[serde(rename = "type")]
+        kind: &'static str,
+        coordinates: [f64; 2],
+    }
+    let features = rows
+        .iter()
+        .map(|r| Feature {
+            kind: "Feature",
+            geometry: r.lat.zip(r.lng).map(|(lat, lng)| Point {
+                kind: "Point",
+                coordinates: [lng, lat],
+            }),
+            properties: r,
+        })
+        .collect();
+    let fc = Collection {
+        kind: "FeatureCollection",
+        features,
+    };
+    serde_json::to_writer(w, &fc).map_err(|e| BatchError::Io(e.into()))
 }
 
 #[derive(Debug, Error)]
@@ -74,6 +168,8 @@ pub enum BatchError {
     Write(#[from] csv::Error),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error("csv header has neither a `street` nor an `address` column")]
+    MissingColumn,
 }
 
 /// Empty-string-as-None serde helper for optional CSV columns.
@@ -109,18 +205,26 @@ pub fn sniff_delimiter(sample: &[u8]) -> u8 {
 /// `flexible(true)` lets the csv parser tolerate trailing-comma rows where
 /// optional columns are absent — Excel exports of 2-column files into a
 /// 4-column template would otherwise fail.
+///
+/// A header without a `street` or `address` column yields one
+/// `BatchError::MissingColumn` and nothing else.
 pub fn read_rows<R: Read + 'static>(
     r: R,
     delim: u8,
 ) -> impl Iterator<Item = Result<InputRow, BatchError>> {
-    let reader = csv::ReaderBuilder::new()
+    let mut reader = csv::ReaderBuilder::new()
         .delimiter(delim)
         .has_headers(true)
         .flexible(true)
         .trim(csv::Trim::All)
         .from_reader(r);
-    reader
+    let missing = reader
+        .headers()
+        .is_ok_and(|h| !h.is_empty() && !h.iter().any(|c| c == "street" || c == "address"));
+    let header_error = missing.then_some(Err(BatchError::MissingColumn));
+    let rows = reader
         .into_deserialize::<InputRow>()
+        .take(if missing { 0 } else { usize::MAX })
         .enumerate()
         .map(|(idx, res)| {
             res.map_err(|e| BatchError::Read {
@@ -128,7 +232,8 @@ pub fn read_rows<R: Read + 'static>(
                 line: (idx as u64) + 2,
                 source: e,
             })
-        })
+        });
+    header_error.into_iter().chain(rows)
 }
 
 /// CSV writer wrapper. Holds an open `csv::Writer<W>` and exposes
@@ -268,6 +373,10 @@ mod tests {
                 street_match_score: Some(12.5),
                 building_group_id: Some("ns|s|32".into()),
                 best_id: Some("ns/a/1".into()),
+                address: None,
+                label: Some("Avenue Louise 32, 1050 Ixelles".into()),
+                position_source: Some("measured".into()),
+                ambiguous: false,
             })
             .unwrap();
             w.flush().unwrap();
@@ -279,6 +388,17 @@ mod tests {
         );
         assert!(s.contains(",exact,"));
         assert!(s.contains(",50.83,"));
+        assert!(
+            s.lines()
+                .next()
+                .unwrap()
+                .ends_with(",best_id,address,label,position_source,ambiguous"),
+            "{s}"
+        );
+        assert!(
+            s.contains(",,\"Avenue Louise 32, 1050 Ixelles\",measured,false"),
+            "{s}"
+        );
     }
 
     #[test]
@@ -301,17 +421,85 @@ mod tests {
     //     these tests pin the contract so the docs and code stay in sync).
 
     #[test]
-    fn missing_required_column_in_header_errors_on_first_row() {
-        // `street` is required. If the header omits it, deserialization
-        // fails on the first data row with a structured error pointing at
-        // line 2 (line 1 = header).
+    fn header_needs_street_or_address() {
         let csv = "id,house_number,postal_code\n\
                    1,32,1050\n";
-        let err = collect_rows(csv, b',').unwrap_err();
-        match err {
-            BatchError::Read { line, .. } => assert_eq!(line, 2),
-            other => panic!("expected Read{{line:2}}, got {other:?}"),
-        }
+        let rows: Vec<_> = read_rows(Cursor::new(csv.as_bytes().to_vec()), b',').collect();
+        assert_eq!(rows.len(), 1);
+        assert!(matches!(rows[0], Err(BatchError::MissingColumn)));
+        // `id` is still required per row.
+        let err = collect_rows("street\nAvenue Louise\n", b',').unwrap_err();
+        assert!(matches!(err, BatchError::Read { line: 2, .. }), "{err:?}");
+    }
+
+    #[test]
+    fn reads_free_text_rows() {
+        let csv = "id,address\n\
+                   1,\"Rue de la Loi 16, 1000 Bruxelles\"\n\
+                   2,\n";
+        let rows = collect_rows(csv, b',').unwrap();
+        assert_eq!(
+            rows[0].address.as_deref(),
+            Some("Rue de la Loi 16, 1000 Bruxelles")
+        );
+        assert_eq!(rows[0].street, "");
+        assert_eq!(rows[1].address, None);
+    }
+
+    #[test]
+    fn output_formats() {
+        assert_eq!("CSV".parse::<OutputFormat>(), Ok(OutputFormat::Csv));
+        assert_eq!("geojson".parse::<OutputFormat>(), Ok(OutputFormat::GeoJson));
+        assert_eq!("json".parse::<OutputFormat>(), Ok(OutputFormat::GeoJson));
+        assert_eq!(
+            "xml".parse::<OutputFormat>(),
+            Err("unknown format 'xml' (expected csv or geojson)".into())
+        );
+        assert_eq!(OutputFormat::default(), OutputFormat::Csv);
+        assert!(OutputFormat::Csv.content_type().starts_with("text/csv"));
+        assert_eq!(OutputFormat::GeoJson.content_type(), "application/geo+json");
+    }
+
+    #[test]
+    fn geojson_has_one_feature_per_row() {
+        let found = OutputRow {
+            id: "1".into(),
+            street: "Avenue Louise".into(),
+            house_number: None,
+            postal_code: None,
+            matched_street: None,
+            matched_house_number: None,
+            matched_postal_code: None,
+            lat: Some(50.83),
+            lng: Some(4.36),
+            confidence: "exact".into(),
+            fallback_reason: None,
+            house_number_delta: None,
+            street_match_score: None,
+            building_group_id: None,
+            best_id: None,
+            address: None,
+            label: None,
+            position_source: None,
+            ambiguous: true,
+        };
+        let missing = OutputRow {
+            id: "2".into(),
+            lat: None,
+            lng: None,
+            confidence: "not_found".into(),
+            ..found.clone()
+        };
+        let mut buf = Vec::new();
+        write_geojson(&[found, missing], &mut buf).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        assert_eq!(v["type"], "FeatureCollection");
+        let fs = v["features"].as_array().unwrap();
+        assert_eq!(fs.len(), 2);
+        assert_eq!(fs[0]["geometry"]["coordinates"][0], 4.36);
+        assert_eq!(fs[0]["properties"]["ambiguous"], true);
+        assert!(fs[1]["geometry"].is_null());
+        assert_eq!(fs[1]["properties"]["confidence"], "not_found");
     }
 
     #[test]

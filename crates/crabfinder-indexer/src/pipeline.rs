@@ -173,17 +173,27 @@ where
                 part_of_municipality_name: pom.map(|p| p.names.clone()),
                 // Attached later by the `--places` join (cli::run).
                 place_name: None,
+                position_source: Default::default(),
 
+                // Anything that isn't a WGS84 point inside Belgium stays
+                // Lambert 72: the caller imputes it (schema v9,
+                // `impute.rs`). BeSt writes `0 0` for addresses with no
+                // position yet (~140k in Wallonia).
                 coordinates: {
                     let lc = LambertCoord {
                         easting: raw.easting,
                         northing: raw.northing,
                     };
                     match reprojector.lambert72_to_wgs84(lc) {
-                        Ok(wgs) => Coordinates::Wgs84(wgs),
+                        Ok(wgs) if wgs.is_in_belgium() => Coordinates::Wgs84(wgs),
+                        Ok(_) => {
+                            report.missing_position += 1;
+                            Coordinates::Lambert72(lc)
+                        }
                         Err(e) => {
                             warn!(error=%e, easting=lc.easting, northing=lc.northing,
-                                  "reprojection failed; keeping Lambert 72");
+                                  "reprojection failed; position will be imputed");
+                            report.missing_position += 1;
                             Coordinates::Lambert72(lc)
                         }
                     }
@@ -217,14 +227,21 @@ pub struct StreamReport {
     pub emitted: usize,
     pub skipped_status: usize,
     pub skipped_unresolved: usize,
+    /// Emitted without a usable position (left in Lambert 72 for the
+    /// caller to impute).
+    pub missing_position: usize,
 }
 
 impl std::fmt::Display for StreamReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "parsed={} emitted={} skipped_status={} skipped_unresolved={}",
-            self.parsed, self.emitted, self.skipped_status, self.skipped_unresolved
+            "parsed={} emitted={} skipped_status={} skipped_unresolved={} missing_position={}",
+            self.parsed,
+            self.emitted,
+            self.skipped_status,
+            self.skipped_unresolved,
+            self.missing_position
         )
     }
 }

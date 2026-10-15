@@ -10,11 +10,14 @@ use std::path::Path;
 
 use crabfinder_core::{
     Address, AddressId, BestId, BuildingGroupId, Coordinates, MultilingualName, MunicipalityId,
-    PartOfMunicipalityId, PostalInfoId, Region, Status, StreetId, StreetType, WgsCoord,
+    PartOfMunicipalityId, PositionSource, PostalInfoId, Region, Status, StreetId, StreetType,
+    WgsCoord,
 };
 use crabfinder_indexer::index::{CrabIndexWriter, CrabSchema, register_tokenizers};
+use crabfinder_indexer::localities::LocalitiesBuilder;
 use crabfinder_indexer::meta::write_sidecar;
 use crabfinder_indexer::mid_street::{MID_STREET_FILENAME, MidStreetBuilder};
+use crabfinder_indexer::places::PlaceIndex;
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use tempfile::TempDir;
 
@@ -77,6 +80,7 @@ pub struct AddressBuilder {
     lat: f64,
     lon: f64,
     place: Option<MultilingualName>,
+    position_source: PositionSource,
 }
 
 impl AddressBuilder {
@@ -97,6 +101,7 @@ impl AddressBuilder {
             lat: 50.8466,
             lon: 4.3525,
             place: None,
+            position_source: PositionSource::Measured,
         }
     }
 
@@ -158,6 +163,12 @@ impl AddressBuilder {
         self
     }
 
+    /// Mark the position as imputed (schema v9).
+    pub fn position_source(mut self, p: PositionSource) -> Self {
+        self.position_source = p;
+        self
+    }
+
     pub fn at(mut self, lat: f64, lon: f64) -> Self {
         self.lat = lat;
         self.lon = lon;
@@ -198,6 +209,7 @@ impl AddressBuilder {
             }),
             building_group_id,
             place_name: self.place,
+            position_source: self.position_source,
         }
     }
 }
@@ -387,6 +399,20 @@ impl TestIndex {
     /// the indexer's own `MidStreetBuilder`.
     pub fn build_with_mid_street(addrs: &[Address]) -> Self {
         Self::build_inner(addrs, true)
+    }
+
+    /// `build_with_mid_street` plus the schema-v8 localities file, from
+    /// the addresses and an OSM places CSV in the
+    /// `data/osm-places-be-v1.csv` format (header line included).
+    pub fn build_with_places(addrs: &[Address], places_csv: &str) -> Self {
+        let t = Self::build_inner(addrs, true);
+        let places = PlaceIndex::read_csv(places_csv.as_bytes()).expect("places csv");
+        let mut loc = LocalitiesBuilder::new();
+        for a in addrs {
+            loc.record(a, places.assign(a).map(|x| x.idx));
+        }
+        loc.finish(&places, t.path()).expect("localities file");
+        t
     }
 
     fn build_inner(addrs: &[Address], mid_street: bool) -> Self {

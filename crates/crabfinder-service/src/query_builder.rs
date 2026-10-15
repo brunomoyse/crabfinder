@@ -7,9 +7,12 @@
 
 use std::sync::Arc;
 
+use std::ops::Bound;
 use tantivy::collector::TopDocs;
+
 use tantivy::query::{
-    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query as TantivyQuery, TermQuery,
+    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query as TantivyQuery,
+    RangeQuery, TermQuery,
 };
 use tantivy::schema::IndexRecordOption;
 use tantivy::{DocId, Index, Score, SegmentReader, Term};
@@ -110,6 +113,56 @@ pub struct FilterParams {
     /// Belgian 4-digit postal code. Overrides any postal code the parser
     /// pulled out of the free-text `q`.
     pub postal_code: Option<String>,
+    /// Bounding box around a named locality (v2 Phase 6).
+    pub area: Option<Area>,
+}
+
+/// A circle around a point, filtered as its bounding box on the FAST
+/// `lat` / `lon` fields.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Area {
+    pub lat: f64,
+    pub lon: f64,
+    pub radius_m: f64,
+}
+
+impl Area {
+    /// `(min_lat, max_lat, min_lon, max_lon)`.
+    pub fn bounds(&self) -> (f64, f64, f64, f64) {
+        const M_PER_DEG: f64 = 111_320.0;
+        let dlat = self.radius_m / M_PER_DEG;
+        let dlon = self.radius_m / (M_PER_DEG * self.lat.to_radians().cos().max(0.1));
+        (
+            self.lat - dlat,
+            self.lat + dlat,
+            self.lon - dlon,
+            self.lon + dlon,
+        )
+    }
+}
+
+/// Must clauses keeping `lat` / `lon` inside `area`'s bounding box.
+fn area_clauses(schema: &CrabSchema, area: &Area) -> [Box<dyn TantivyQuery>; 2] {
+    let (lat0, lat1, lon0, lon1) = area.bounds();
+    let range = |field, lo, hi| -> Box<dyn TantivyQuery> {
+        Box::new(RangeQuery::new(
+            Bound::Included(Term::from_field_f64(field, lo)),
+            Bound::Included(Term::from_field_f64(field, hi)),
+        ))
+    };
+    [range(schema.lat, lat0, lat1), range(schema.lon, lon0, lon1)]
+}
+
+/// Every document inside `area` (the locality fallback when no text
+/// matches), with any other filters.
+pub fn build_area_query(
+    schema: &CrabSchema,
+    filters: &FilterParams,
+) -> Option<Box<dyn TantivyQuery>> {
+    filters.area?;
+    let mut clauses = Vec::new();
+    push_filters(&mut clauses, &ParsedQuery::default(), schema, filters);
+    Some(Box::new(BooleanQuery::new(clauses)))
 }
 
 /// Build the strict query: SHOULD(phrase, boost=3.0) + SHOULD(AND-tokens,
@@ -154,6 +207,23 @@ pub fn build_strict_query(
             let boosted: Box<dyn TantivyQuery> = Box::new(BoostQuery::new(Box::new(phrase), 3.0));
             text_branches.push((Occur::Should, boosted));
         }
+        // Adjacent pairs (v2 Phase 6). The full phrase can never match
+        // when the query also names the municipality — street and
+        // municipality are separate values of `searchable`, and Tantivy
+        // leaves a position gap between values — so without these "Grand
+        // Place Bruxelles" ranks "Place du Grand Sablon" level with
+        // "Grand-Place". Each adjacent pair found in order adds a bonus.
+        if slots.len() >= 3 {
+            for pair in slots.windows(2) {
+                let terms = vec![
+                    Term::from_field_text(field, &pair[0][0]),
+                    Term::from_field_text(field, &pair[1][0]),
+                ];
+                let q: Box<dyn TantivyQuery> =
+                    Box::new(BoostQuery::new(Box::new(PhraseQuery::new(terms)), 1.5));
+                text_branches.push((Occur::Should, q));
+            }
+        }
 
         // AND-of-(OR-of-forms). Each slot is a sub-BooleanQuery OR-ing the
         // slot's forms; the outer BooleanQuery AND-s the slots together.
@@ -179,8 +249,10 @@ pub fn build_strict_query(
             })
             .collect();
         let and_q: Box<dyn TantivyQuery> = Box::new(BooleanQuery::new(and_clauses));
-        // No boost on AND-tokens — let phrase out-rank it naturally.
-        text_branches.push((Occur::Should, and_q));
+        // No boost on AND-tokens — let phrase out-rank it naturally. The
+        // AND branch is the Must; phrases only add score on top of it (a
+        // lone matching pair must never satisfy the query).
+        text_branches.push((Occur::Must, and_q));
 
         let textual: Box<dyn TantivyQuery> = Box::new(BooleanQuery::new(text_branches));
         clauses.push((Occur::Must, textual));
@@ -218,6 +290,11 @@ fn push_filters(
         let term = Term::from_field_text(schema.region, region);
         let tq: Box<dyn TantivyQuery> = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
         clauses.push((Occur::Must, tq));
+    }
+    if let Some(area) = &filters.area {
+        for q in area_clauses(schema, area) {
+            clauses.push((Occur::Must, q));
+        }
     }
 }
 
@@ -383,8 +460,8 @@ mod strict_tests {
             ..Default::default()
         };
         let filters = FilterParams {
-            region: None,
             postal_code: Some("1050".into()),
+            ..Default::default()
         };
         let q = build_strict_query(searchable_field(&schema), &[], &parsed, &schema, &filters);
         assert!(q.is_some(), "filter alone must produce a query");
@@ -430,8 +507,8 @@ mod strict_tests {
             ..Default::default()
         };
         let filters = FilterParams {
-            region: None,
             postal_code: Some("1050".into()),
+            ..Default::default()
         };
         let q = build_strict_query(
             searchable_field(&schema),

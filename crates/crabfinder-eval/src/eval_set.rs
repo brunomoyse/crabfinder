@@ -142,6 +142,10 @@ pub enum MatchLevel {
     /// house number ("Wezembeeklaan Kraainem", hamlets), where which
     /// building comes first is not the query's to decide.
     Street,
+    /// Any building within `within_m` of `expected_point`: queries that
+    /// only name a place (hamlets), where the place, not one of its
+    /// streets, is the answer (v2 Phase 6).
+    Locality,
 }
 
 impl MatchLevel {
@@ -150,6 +154,7 @@ impl MatchLevel {
             MatchLevel::Address => "address",
             MatchLevel::Building => "building",
             MatchLevel::Street => "street",
+            MatchLevel::Locality => "locality",
         }
     }
 }
@@ -186,7 +191,17 @@ pub struct AdversarialQuery {
     pub regression_marker: bool,
     #[serde(default)]
     pub match_level: MatchLevel,
+    /// `[lat, lon]` of the place, for `match_level: locality`.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expected_point: Option<[f64; 2]>,
+    /// Radius around `expected_point`, metres (default
+    /// `DEFAULT_WITHIN_M`).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub within_m: Option<f64>,
 }
+
+/// Default radius of a `locality` match.
+pub const DEFAULT_WITHIN_M: f64 = 1_500.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdversarialEvalSet {
@@ -242,6 +257,8 @@ pub struct EvalQuery {
     pub expected_best_id_set: Vec<String>,
     pub expected_to_fail: bool,
     pub match_level: MatchLevel,
+    /// `(lat, lon)` and radius for `MatchLevel::Locality`.
+    pub expected_point: Option<((f64, f64), f64)>,
     pub source: EvalQuerySource,
 }
 
@@ -268,6 +285,7 @@ impl EvalQuery {
             expected_best_id_set: vec![q.expected_best_id.clone()],
             expected_to_fail: false,
             match_level: MatchLevel::Address,
+            expected_point: None,
             source: EvalQuerySource::Synthetic {
                 variant_type: q.variant_type,
                 region: q.sample_region.clone(),
@@ -293,6 +311,9 @@ impl EvalQuery {
             expected_best_id_set,
             expected_to_fail: q.expected_to_fail,
             match_level: q.match_level,
+            expected_point: q
+                .expected_point
+                .map(|[lat, lon]| ((lat, lon), q.within_m.unwrap_or(DEFAULT_WITHIN_M))),
             source: EvalQuerySource::Adversarial {
                 category: q.category,
                 subcategory: q.subcategory.clone(),
@@ -481,6 +502,8 @@ queries: []
                     notes: None,
                     regression_marker: false,
                     match_level: MatchLevel::Street,
+                    expected_point: None,
+                    within_m: None,
                 })
                 .collect(),
         };

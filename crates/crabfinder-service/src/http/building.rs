@@ -64,6 +64,7 @@ pub async fn building_units(
                 h.building_group_id,
                 None,
             )
+            .map(|f| f.labelled(None))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

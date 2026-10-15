@@ -15,7 +15,7 @@ use crabfinder_indexer::xml::{
     stream_addresses,
 };
 use crabfinder_indexer::zip_read::with_inner_xml;
-use crabfinder_test_support::best_bundle::{BestBundle, write_zip};
+use crabfinder_test_support::best_bundle::{AddrSpec, BestBundle, StreetSpec, write_zip};
 use tantivy::collector::Count;
 use tantivy::query::{AllQuery, TermQuery};
 use tantivy::schema::IndexRecordOption;
@@ -405,4 +405,85 @@ fn house_numbers_are_indexed_uppercase() {
     let (index, schema) = open(dir.path());
     assert_eq!(count_term(&index, schema.house_number, "12A"), 1);
     assert_eq!(count_term(&index, schema.house_number, "12a"), 0);
+}
+
+#[test]
+fn cli_run_imputes_missing_positions() {
+    // Schema v9: BeSt `0 0` positions are imputed, never reprojected into
+    // France. House 5 sits between 3 and 7 → interpolated; house 3 has a
+    // positioned twin → same number; a street with no positioned address
+    // → the part of municipality's centroid.
+    let mut w = BestBundle::wallonia_sample();
+    let mut seven = AddrSpec::new("2001", "6001", "91114", "5580", "7");
+    seven.pom_oid = Some("9111401".into());
+    seven.x = 205_400.0;
+    seven.y = 95_000.0;
+    let missing = |oid: &str, street: &str, house: &str| {
+        let mut a = AddrSpec::new(oid, street, "91114", "5580", house);
+        a.pom_oid = Some("9111401".into());
+        a.x = 0.0;
+        a.y = 0.0;
+        a
+    };
+    w.addresses.push(seven);
+    w.addresses.push(missing("2002", "6001", "5"));
+    w.addresses.push(missing("2003", "6001", "3"));
+    w.streets.push(StreetSpec {
+        oid: "6002".into(),
+        fr: Some("Rue Sans Position".into()),
+        nl: None,
+        de: None,
+        status: "current".into(),
+        muni_oid: "91114".into(),
+    });
+    w.addresses.push(missing("2004", "6002", "1"));
+    let best = bundle_dir(&[w]);
+    let out = tempfile::tempdir().unwrap();
+    let report = cli::run(&Args::new(best.path(), out.path())).unwrap();
+    assert_eq!(report.total().missing_position, 3);
+    assert_eq!(
+        (
+            report.impute.same_number,
+            report.impute.interpolated,
+            report.impute.locality,
+            report.impute.dropped
+        ),
+        (1, 1, 1, 0)
+    );
+    assert!(
+        report
+            .summary()
+            .contains("imputed positions: same_number=1")
+    );
+
+    let (index, schema) = open(out.path());
+    let searcher = index.reader().unwrap().searcher();
+    let docs = searcher
+        .search(&AllQuery, &tantivy::collector::DocSetCollector)
+        .unwrap();
+    assert_eq!(docs.len(), 5);
+    let mut sources = Vec::new();
+    for d in docs {
+        let doc: tantivy::TantivyDocument = searcher.doc(d).unwrap();
+        let payload = doc.get_first(schema.payload).unwrap();
+        let addr: crabfinder_core::Address =
+            serde_json::from_str(tantivy::schema::Value::as_str(&payload).unwrap()).unwrap();
+        let Coordinates::Wgs84(p) = addr.coordinates else {
+            panic!("Lambert left in the index");
+        };
+        assert!(p.is_in_belgium(), "{} at {p:?}", addr.house_number);
+        sources.push((addr.house_number.clone(), addr.position_source));
+    }
+    sources.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.as_str().cmp(b.1.as_str())));
+    use crabfinder_core::PositionSource as P;
+    assert_eq!(
+        sources,
+        vec![
+            ("1".into(), P::Locality),
+            ("3".into(), P::Measured),
+            ("3".into(), P::SameNumber),
+            ("5".into(), P::Interpolated),
+            ("7".into(), P::Measured),
+        ]
+    );
 }

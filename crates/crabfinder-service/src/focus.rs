@@ -47,6 +47,21 @@ pub fn apply_focus_decay(
     schema: &CrabSchema,
     docs: &[TantivyDocument],
 ) {
+    apply_decay(hits, focus, FOCUS_HALF_LIFE_M, schema, docs);
+}
+
+/// Decay length around a named locality's centre (v2 Phase 6): a village
+/// query should rank its centre's buildings first.
+pub const LOCALITY_DECAY_M: f64 = 1_000.0;
+
+/// `apply_focus_decay` with an explicit decay length `scale_m`.
+pub fn apply_decay(
+    hits: &mut [RawHit],
+    focus: (f64, f64),
+    scale_m: f64,
+    schema: &CrabSchema,
+    docs: &[TantivyDocument],
+) {
     let (flat, flng) = focus;
     for hit in hits.iter_mut() {
         let doc = &docs[hit.raw_index];
@@ -55,7 +70,7 @@ pub fn apply_focus_decay(
             doc.get_first(schema.lon).and_then(|v| v.as_f64()),
         ) {
             let d = spatial::haversine_m(flat, flng, lat, lon);
-            let decay = (-d / FOCUS_HALF_LIFE_M).exp() as f32;
+            let decay = (-d / scale_m).exp() as f32;
             hit.score *= decay;
         }
     }

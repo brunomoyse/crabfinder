@@ -33,6 +33,14 @@ impl App {
         Self { index, state }
     }
 
+    /// An app whose index also has the localities file built from `addrs`
+    /// and an OSM places CSV (`TestIndex::build_with_places`).
+    pub fn with_places(addrs: &[Address], places_csv: &str) -> Self {
+        let index = TestIndex::build_with_places(addrs, places_csv);
+        let state = AppState::load(&LoadOptions::new(index.path())).expect("load state");
+        Self { index, state }
+    }
+
     pub fn router(&self) -> Router {
         http::router(self.state.clone())
     }

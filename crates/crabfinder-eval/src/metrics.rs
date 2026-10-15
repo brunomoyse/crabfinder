@@ -134,17 +134,7 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
         }
 
         m.aggregated_query_count += 1;
-        let (rank, bid_rank) = match r.query.match_level {
-            MatchLevel::Address => (
-                find_rank(&r.query.expected_bgid_set, &r.features, |t| &t.0),
-                find_rank(&r.query.expected_best_id_set, &r.features, |t| &t.1),
-            ),
-            MatchLevel::Building => (
-                find_rank(&r.query.expected_bgid_set, &r.features, |t| &t.0),
-                0,
-            ),
-            MatchLevel::Street => (street_rank(&r.query.expected_bgid_set, &r.features), 0),
-        };
+        let (rank, bid_rank) = level_ranks(r);
         let strict = r.top_match_type == "strict";
         overall_acc.add(rank, bid_rank, strict);
 
@@ -223,6 +213,46 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
 
 /// 1-indexed rank of the first feature whose extracted key is in `expected`.
 /// 0 means not found.
+/// `(rank, best_id rank)` of `r` at its query's match level, 1-based; 0
+/// when not found. Only the address level ranks best ids.
+pub fn level_ranks(r: &QueryResult) -> (usize, usize) {
+    let q = &r.query;
+    match q.match_level {
+        MatchLevel::Address => (
+            find_rank(&q.expected_bgid_set, &r.features, |t| &t.0),
+            find_rank(&q.expected_best_id_set, &r.features, |t| &t.1),
+        ),
+        MatchLevel::Building => (find_rank(&q.expected_bgid_set, &r.features, |t| &t.0), 0),
+        MatchLevel::Street => (street_rank(&q.expected_bgid_set, &r.features), 0),
+        MatchLevel::Locality => (
+            q.expected_point
+                .map_or(0, |(p, within)| within_rank(p, within, &r.points)),
+            0,
+        ),
+    }
+}
+
+/// 1-based rank of the first point within `within_m` of `p`; 0 when none.
+fn within_rank(p: (f64, f64), within_m: f64, points: &[Option<(f64, f64)>]) -> usize {
+    points
+        .iter()
+        .position(|x| x.is_some_and(|x| haversine_m(p, x) <= within_m))
+        .map_or(0, |i| i + 1)
+}
+
+/// Great-circle distance in metres between two `(lat, lon)` points.
+fn haversine_m(a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (la1, lo1, la2, lo2) = (
+        a.0.to_radians(),
+        a.1.to_radians(),
+        b.0.to_radians(),
+        b.1.to_radians(),
+    );
+    let h = ((la2 - la1) / 2.0).sin().powi(2)
+        + la1.cos() * la2.cos() * ((lo2 - lo1) / 2.0).sin().powi(2);
+    2.0 * 6_371_008.8 * h.sqrt().asin()
+}
+
 /// Street part of a building group id (`{ns}|{oid}|{hn}` → `{ns}|{oid}`).
 fn street_of(bgid: &str) -> &str {
     bgid.rsplit_once('|').map_or(bgid, |(s, _)| s)
@@ -364,6 +394,7 @@ mod tests {
             expected_best_id_set: vec![expected_best.into()],
             expected_to_fail: false,
             match_level: MatchLevel::Address,
+            expected_point: None,
             source: EvalQuerySource::Synthetic {
                 variant_type: VariantType::Canonical,
                 region: region.into(),
@@ -383,6 +414,7 @@ mod tests {
         QueryResult {
             query: q,
             features: vec![(top_bgid.into(), top_best.into(), mt.into())],
+            points: vec![Some((50.0, 4.0))],
             top_match_type: mt.into(),
             raw_hits: 1,
             latency_ms: latency,
@@ -457,6 +489,7 @@ mod tests {
         let r1 = QueryResult {
             query: q1,
             features: vec![("bgid-a".into(), "best-a".into(), "strict".into())], // rank 1
+            points: Vec::new(),
             top_match_type: "strict".into(),
             raw_hits: 1,
             latency_ms: 10.0,
@@ -469,6 +502,7 @@ mod tests {
                 ("other2".into(), "other2".into(), "strict".into()),
                 ("bgid-b".into(), "best-b".into(), "strict".into()), // rank 3
             ],
+            points: Vec::new(),
             top_match_type: "strict".into(),
             raw_hits: 3,
             latency_ms: 10.0,
@@ -500,6 +534,7 @@ mod tests {
             expected_best_id_set: best.into_iter().map(String::from).collect(),
             expected_to_fail: false,
             match_level: level,
+            expected_point: None,
             source: EvalQuerySource::Adversarial {
                 category: crate::eval_set::AdversarialCategory::Facilites,
                 subcategory: "s".into(),
@@ -553,5 +588,25 @@ mod tests {
             0
         );
         assert_eq!(street_of("nopipe"), "nopipe");
+    }
+
+    #[test]
+    fn locality_level_scores_by_distance() {
+        let mut q = adv_q("l", MatchLevel::Locality, "ns|1|5", None);
+        // `result_with_top` puts the feature at (50.0, 4.0).
+        q.expected_point = Some(((50.01, 4.0), 1_500.0)); // ~1.1 km away
+        let near = result_with_top(q.clone(), "ns|9|1", "x", "strict", 1.0);
+        assert_eq!(level_ranks(&near), (1, 0));
+        q.expected_point = Some(((50.02, 4.0), 1_500.0)); // ~2.2 km away
+        let far = result_with_top(q.clone(), "ns|9|1", "x", "strict", 1.0);
+        assert_eq!(level_ranks(&far), (0, 0));
+        q.expected_point = None;
+        let unset = result_with_top(q, "ns|9|1", "x", "strict", 1.0);
+        assert_eq!(level_ranks(&unset).0, 0);
+        assert!((haversine_m((50.0, 4.0), (50.01, 4.0)) - 1_112.0).abs() < 2.0);
+        assert_eq!(
+            within_rank((50.0, 4.0), 10.0, &[None, Some((50.0, 4.0))]),
+            2
+        );
     }
 }

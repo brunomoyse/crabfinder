@@ -1,0 +1,102 @@
+---
+source: crates/crabfinder-service/tests/http_geocode.rs
+expression: body
+---
+{
+  "_note": "Phase 3: results collapsed by building_group_id; score = max(member.score). Use ?expand=true for raw rows.",
+  "ambiguous": false,
+  "count": 1,
+  "deduplicated": true,
+  "features": [
+    {
+      "building_group_id": "https://databrussels.be/id/streetname|100|16",
+      "confidence": "exact",
+      "geometry": {
+        "coordinates": [
+          4.3658,
+          50.8453
+        ],
+        "type": "Point"
+      },
+      "house_number_delta": 0,
+      "match_type": "strict",
+      "properties": {
+        "box_number": null,
+        "building_group_id": "https://databrussels.be/id/streetname|100|16",
+        "coordinates": {
+          "crs": "EPSG:4326",
+          "lat": 50.8453,
+          "lon": 4.3658
+        },
+        "house_number": "16",
+        "id": {
+          "namespace": "https://databrussels.be/id/address",
+          "object_identifier": "400",
+          "version_identifier": "1"
+        },
+        "label": "Rue de la Loi 16, 1000 Bruxelles",
+        "municipality_id": {
+          "namespace": "https://databrussels.be/id/municipality",
+          "object_identifier": "21001",
+          "version_identifier": "1"
+        },
+        "municipality_name": {
+          "de": null,
+          "fr": "Bruxelles",
+          "nl": "Brussel"
+        },
+        "officially_assigned": true,
+        "part_of_municipality_id": null,
+        "part_of_municipality_name": null,
+        "postal_code": "1000",
+        "postal_info_id": {
+          "namespace": "https://databrussels.be/id/postalinfo",
+          "object_identifier": "1000",
+          "version_identifier": "1"
+        },
+        "postal_name": {
+          "de": null,
+          "fr": null,
+          "nl": null
+        },
+        "region": "brussels",
+        "status": "current",
+        "street_id": {
+          "namespace": "https://databrussels.be/id/streetname",
+          "object_identifier": "100",
+          "version_identifier": "1"
+        },
+        "street_name": {
+          "de": null,
+          "fr": "Rue de la Loi",
+          "nl": "Wetstraat"
+        },
+        "street_type": "streetname"
+      },
+      "score": 33.365562,
+      "type": "Feature",
+      "unit_count": 1
+    }
+  ],
+  "match_type": "strict",
+  "query": {
+    "expand": false,
+    "limit": 2,
+    "parsed": {
+      "box_number": null,
+      "house_number": "16",
+      "postal_code": "1000",
+      "street_tokens": [
+        "Rue",
+        "de",
+        "la",
+        "Loi",
+        "Bruxelles"
+      ]
+    },
+    "q": "Rue de la Loi 16, 1000 Bruxelles",
+    "reading": 0
+  },
+  "raw_hits": 1,
+  "type": "FeatureCollection"
+}

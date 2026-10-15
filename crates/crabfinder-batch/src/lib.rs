@@ -1,8 +1,9 @@
 //! crabfinder-batch — standalone CLI batch geocoder.
 //!
 //! Reads a CSV (stdin or `--input`), resolves every row against the same
-//! Tantivy index the HTTP service uses, writes the enriched CSV (stdout or
-//! `--output`). Same resolver, same output schema, same fallbacks as the
+//! Tantivy index the HTTP service uses, writes the enriched CSV or GeoJSON
+//! (`--format`, stdout or `--output`). A CSV with an `address` column is
+//! free text, parsed like `/geocode?q=`. Same resolver, same output schema, same fallbacks as the
 //! HTTP `/batch/geocode` endpoint — this crate is a peer of
 //! `crabfinder-service`, not a wrapper around it.
 //!
@@ -22,8 +23,11 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tracing::{info, warn};
 
+use crabfinder_core::Language;
 use crabfinder_service::batch::dedup::{ClosureResolver, dedup_then_resolve, row_query};
-use crabfinder_service::batch::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
+use crabfinder_service::batch::io::{
+    BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson,
+};
 use crabfinder_service::resolver::{AddressQuery, SearchOptions, resolve_with};
 use crabfinder_service::{AppState, LoadOptions};
 
@@ -65,6 +69,26 @@ pub struct Args {
     /// to 1 for deterministic profiling.
     #[arg(long)]
     pub parallel: Option<usize>,
+
+    /// Output format: `csv` or `geojson`.
+    #[arg(long, default_value = "csv", value_parser = parse_format)]
+    pub format: OutputFormat,
+
+    /// Language of the `label` column: `fr`, `nl` or `de`. Default: each
+    /// address's own language.
+    #[arg(long, value_parser = parse_lang)]
+    pub lang: Option<Language>,
+}
+
+fn parse_format(s: &str) -> Result<OutputFormat, String> {
+    s.parse()
+}
+
+fn parse_lang(s: &str) -> Result<Language, String> {
+    s.trim()
+        .to_ascii_lowercase()
+        .parse()
+        .map_err(|_| format!("unknown lang '{s}' (expected fr, nl or de)"))
 }
 
 impl Args {
@@ -78,6 +102,8 @@ impl Args {
             delimiter: None,
             no_mid_street: false,
             parallel: None,
+            format: OutputFormat::Csv,
+            lang: None,
         }
     }
 }
@@ -122,6 +148,9 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
     info!(n_rows = rows.len(), "batch input loaded");
     if rows.is_empty() {
         warn!("input is empty; no work to do");
+        if args.format == OutputFormat::GeoJson {
+            write_geojson(&[], output).context("writing geojson")?;
+        }
         return Ok(Summary { rows: 0 });
     }
 
@@ -137,18 +166,27 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
     let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &search_opts, &ctx));
     let make_query = |row: &InputRow| row_query(&state.index, row);
     let t0 = std::time::Instant::now();
-    let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query));
+    let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query, args.lang));
     info!(
         out_rows = out.len(),
         elapsed_ms = t0.elapsed().as_millis(),
         "resolution complete"
     );
 
-    let mut w = BatchWriter::new(output);
-    for row in &out {
-        w.write_row(row).context("writing csv row")?;
+    match args.format {
+        OutputFormat::Csv => {
+            let mut w = BatchWriter::new(output);
+            for row in &out {
+                w.write_row(row).context("writing csv row")?;
+            }
+            w.flush().context("flushing csv")?;
+        }
+        OutputFormat::GeoJson => {
+            let mut output = output;
+            write_geojson(&out, &mut output).context("writing geojson")?;
+            output.flush().context("flushing geojson")?;
+        }
     }
-    w.flush().context("flushing csv")?;
     Ok(Summary { rows: out.len() })
 }
 

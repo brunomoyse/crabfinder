@@ -573,6 +573,7 @@ name = "crabfinder-core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -649,6 +650,7 @@ dependencies = [
  "futures",
  "geo",
  "http-body-util",
+ "insta",
  "rayon",
  "rstar 0.13.0",
  "serde",
@@ -1522,6 +1524,7 @@ checksum = "b67d3d2e287e4b86c10b3f3b641033d1f89b74bdb39d05f34952e2b9a6fe21cd"
 dependencies = [
  "console",
  "once_cell",
+ "serde",
  "similar",
  "tempfile",
 ]

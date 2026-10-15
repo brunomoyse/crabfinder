@@ -15,6 +15,9 @@ version: adversarial-belgium-v1
 queries:
 
 # ---------- Hamlet (Wallonia parts of municipality) — 30 entries
+# Bare place names are scored at match_level: locality (v2 Phase 6): any
+# result within 1.5 km of the place's OSM node counts. The bgid sets are the
+# MVP's original street-level answers, kept for --validate-eval-set.
   - id: adv-hamlet-001
     category: hamlet
     match_level: street
@@ -25,7 +28,8 @@ queries:
     notes: "Route de Hives — La Roche-en-Ardenne (fuzzy)"
   - id: adv-hamlet-002
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.1703, 5.55318]  # OSM place node
     subcategory: beausaint-laroche
     query: "beausaint la roche"
     expected_building_group_id_set:
@@ -68,7 +72,8 @@ queries:
     notes: "Vieille-Route-de-Beausaint — La Roche-en-Ardenne (strict)"
   - id: adv-hamlet-003
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.30464, 4.76948]  # OSM place node
     subcategory: maredsous-anhee
     query: "maredsous"
     expected_building_group_id_set:
@@ -88,7 +93,8 @@ queries:
     notes: "Rue de Maredsous — Anhée (strict)"
   - id: adv-hamlet-004
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.12545, 5.18774]  # OSM place node
     subcategory: han-sur-lesse-rochefort
     query: "han sur lesse 5580"
     expected_building_group_id_set:
@@ -110,7 +116,8 @@ queries:
     notes: "Rue de la Lesse — Rochefort (strict)"
   - id: adv-hamlet-005
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.32262, 5.00695]  # OSM place node
     subcategory: spontin-yvoir
     query: "spontin yvoir"
     expected_building_group_id_set:
@@ -123,7 +130,8 @@ queries:
     notes: "Rue du Bailoy — Yvoir (strict)"
   - id: adv-hamlet-006
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.3483, 4.96061]  # OSM place node
     subcategory: crupet-assesse
     query: "crupet"
     expected_building_group_id_set:
@@ -145,7 +153,8 @@ queries:
     notes: "Rue Basse — Assesse (strict)"
   - id: adv-hamlet-007
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.29558, 4.78157]  # OSM place node
     subcategory: sosoye-anhee
     query: "sosoye"
     expected_building_group_id_set:
@@ -167,7 +176,8 @@ queries:
     notes: "Rue Par-delà-l'Eau — Anhée (strict)"
   - id: adv-hamlet-008
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.27822, 4.79336]  # OSM place node
     subcategory: falaen-onhaye
     query: "fala\u00ebn"
     expected_building_group_id_set:
@@ -190,7 +200,8 @@ queries:
     notes: "Rue de la Gare — Onhaye (strict)"
   - id: adv-hamlet-009
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.44164, 4.98467]  # OSM place node
     subcategory: mozet-gesves
     query: "mozet"
     expected_building_group_id_set:
@@ -204,7 +215,8 @@ queries:
     notes: "Rue de Mozet — Gesves (strict)"
   - id: adv-hamlet-010
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.18734, 4.7368]  # OSM place node
     subcategory: soulme-doische
     query: "soulme"
     expected_building_group_id_set:
@@ -212,7 +224,8 @@ queries:
     notes: "Moulin-de-Soulme — Doische (strict)"
   - id: adv-hamlet-011
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [49.86391, 4.92948]  # OSM place node
     subcategory: laforet-vresse
     query: "lafor\u00eat vresse"
     expected_building_group_id_set:
@@ -278,7 +291,8 @@ queries:
     notes: "Rue Sainte-Agathe — Vresse-sur-Semois (strict)"
   - id: adv-hamlet-012
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [49.70769, 5.26218]  # OSM place node
     subcategory: chassepierre-florenville
     query: "chassepierre"
     expected_building_group_id_set:
@@ -293,7 +307,8 @@ queries:
     notes: "Rue de la Cure — Florenville (strict)"
   - id: adv-hamlet-013
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [49.5085, 5.4735]  # OSM place node
     subcategory: torgny-rouvroy
     query: "torgny"
     expected_building_group_id_set:
@@ -308,7 +323,8 @@ queries:
     notes: "Rue Pêchières — Rouvroy (strict)"
   - id: adv-hamlet-014
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.05699, 5.26533]  # OSM place node
     subcategory: mirwart-saint-hubert
     query: "mirwart"
     expected_building_group_id_set:
@@ -316,7 +332,8 @@ queries:
     notes: "Halte de Mirwart — Saint-Hubert (strict)"
   - id: adv-hamlet-015
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.32664, 5.53076]  # OSM place node
     subcategory: weris-durbuy
     query: "w\u00e9ris"
     expected_building_group_id_set:
@@ -331,7 +348,8 @@ queries:
     notes: "Rue des Dolmens — Durbuy (strict)"
   - id: adv-hamlet-016
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.07384, 4.60704]  # OSM place node
     subcategory: olloy-viroinval
     query: "olloy-sur-viroin"
     expected_building_group_id_set:
@@ -348,7 +366,8 @@ queries:
     notes: "Route du Viroin — Viroinval (strict)"
   - id: adv-hamlet-017
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.08027, 4.63425]  # OSM place node
     subcategory: vierves-viroinval
     query: "vierves-sur-viroin"
     expected_building_group_id_set:
@@ -386,7 +405,8 @@ queries:
     notes: "Parc Résidentiel La Jussière — Viroinval (strict)"
   - id: adv-hamlet-018
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.09227, 4.66927]  # OSM place node
     subcategory: treignes-viroinval
     query: "treignes"
     expected_building_group_id_set:
@@ -396,7 +416,8 @@ queries:
     notes: "Rue Malgré-Tout — Viroinval (strict)"
   - id: adv-hamlet-019
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.13565, 4.53815]  # OSM place node
     subcategory: roly-philippeville
     query: "roly philippeville"
     expected_building_group_id_set:
@@ -415,7 +436,8 @@ queries:
     notes: "Place de Roly — Philippeville (strict)"
   - id: adv-hamlet-020
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [49.84022, 5.11021]  # OSM place node
     subcategory: bellevaux-bouillon
     query: "bellevaux bouillon"
     expected_building_group_id_set:
@@ -448,7 +470,8 @@ queries:
     notes: "Route de Brienne — Bouillon (strict)"
   - id: adv-hamlet-021
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [49.83509, 5.00011]  # OSM place node
     subcategory: frahan-bouillon
     query: "frahan"
     expected_building_group_id_set:
@@ -476,7 +499,8 @@ queries:
     notes: "Rue de la Passerelle — Bouillon (strict)"
   - id: adv-hamlet-022
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.16612, 5.7156]  # OSM place node
     subcategory: wibrin-houffalize
     query: "wibrin"
     expected_building_group_id_set:
@@ -495,7 +519,8 @@ queries:
     notes: "Grande Mormont — Houffalize (strict)"
   - id: adv-hamlet-023
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.06421, 4.379]  # OSM place node
     subcategory: lompret-chimay
     query: "lompret"
     expected_building_group_id_set:
@@ -506,7 +531,8 @@ queries:
     notes: "Route de Lompret — Couvin (strict)"
   - id: adv-hamlet-024
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.57392, 3.67682]  # OSM place node
     subcategory: aubechies-beloeil
     query: "aubechies"
     expected_building_group_id_set:
@@ -514,7 +540,8 @@ queries:
     notes: "Place d'Aubechies — Beloeil (strict)"
   - id: adv-hamlet-025
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.28561, 5.48153]  # OSM place node
     subcategory: ny-hotton
     query: "ny hotton"
     expected_building_group_id_set:
@@ -547,7 +574,8 @@ queries:
     notes: "Rue de Ny — Hotton (strict)"
   - id: adv-hamlet-026
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.10879, 5.14261]  # OSM place node
     subcategory: ave-namur
     query: "ave namur"
     expected_building_group_id_set:
@@ -568,7 +596,8 @@ queries:
     notes: "Chemin d'Ave — Wellin (fuzzy)"
   - id: adv-hamlet-027
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.23126, 5.00583]  # OSM place node
     subcategory: celles-houyet
     query: "celles houyet"
     expected_building_group_id_set:
@@ -576,7 +605,8 @@ queries:
     notes: "Soinne — Houyet (strict)"
   - id: adv-hamlet-028
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.22341, 4.95991]  # OSM place node
     subcategory: furfooz-dinant
     query: "furfooz"
     expected_building_group_id_set:
@@ -585,7 +615,8 @@ queries:
     notes: "Rue de Furfooz — Houyet (strict)"
   - id: adv-hamlet-029
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.61971, 5.94126]  # OSM place node
     subcategory: limbourg-dolhain
     query: "dolhain limbourg"
     expected_building_group_id_set:
@@ -640,7 +671,8 @@ queries:
     notes: "Route de Dolhain — Baelen (fuzzy)"
   - id: adv-hamlet-030
     category: hamlet
-    match_level: street
+    match_level: locality
+    expected_point: [50.43653, 5.54334]  # OSM place node
     subcategory: xhignesse-hamoir
     query: "xhignesse"
     expected_building_group_id_set:
@@ -1274,71 +1306,9 @@ queries:
     subcategory: sint-genesius-rode-23101
     query: "Linkebeekstraat Sint-Genesius-Rode"
     expected_building_group_id_set:
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|42"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|44"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|46"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|48"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|50"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|52"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|54"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|111"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|113"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|115"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|117"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|119"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|122"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|124"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|126"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|128"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|130"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|131"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|133"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|136"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|138A"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|140"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|142"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|144"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|146"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|148"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|150"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|153"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|155"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|157"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|159"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|161"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|163"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|165"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|166"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|168A"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|168B"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|170"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|170A"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|171"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|172"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|173"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|174"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|176"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|177"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|178"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|179"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|180"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|181"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|182"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|183"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|184"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|185"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|185A"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|186"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|187"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|187A"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|189"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|190"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|191"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|192"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|193"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|195"
-      - "https://data.vlaanderen.be/id/straatnaam/|30845|198"
-    notes: "Sint-Annalaan — Rhode-Saint-Genèse (fuzzy)"
+      - "https://databrussels.be/id/streetname|5001|1"
+      - "https://data.vlaanderen.be/id/straatnaam/|24751|4"
+    notes: "No Linkebeekstraat in Sint-Genesius-Rode; the two on its border count: Uccle (Rue de Linkebeek) and Beersel. Relabelled in v2 Phase 6: the old label was the MVP's fuzzy answer (Sint-Annalaan)"
   - id: adv-facilites-005
     category: facilites
     match_level: street
@@ -1566,9 +1536,9 @@ queries:
     category: special_chars
     subcategory: rue-neuve-1
     query: "Rue Neuve 1 1000 Bruxelles"
-    expected_best_id: "https://databrussels.be/id/address/149139/1"
-    expected_building_group_id: "https://databrussels.be/id/streetname|3449|1"
-    notes: "Nieuwland — Bruxelles (strict)"
+    expected_best_id: "https://databrussels.be/id/address/169839/1"
+    expected_building_group_id: "https://databrussels.be/id/streetname|4611|1"
+    notes: "Rue Neuve / Nieuwstraat — Bruxelles (strict). Relabelled in v2 Phase 6: the old label pointed at Rue Terre-Neuve (Nieuwland)"
 
 # ---------- Notability (file 13 §4 whitelist) — 30 entries — §3.1 target metric
   - id: adv-notability-001

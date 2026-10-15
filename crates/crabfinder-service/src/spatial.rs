@@ -22,7 +22,8 @@ use geo::{Distance, Haversine, Point};
 use rstar::{AABB, PointDistance, RTree, RTreeObject};
 use tantivy::{DocAddress, IndexReader};
 
-use crabfinder_indexer::index::CrabSchema;
+use crabfinder_core::PositionSource;
+use crabfinder_indexer::index::{CrabSchema, FIELD_POSITION_SOURCE};
 
 /// One indexed point. Cheap (24 bytes); ~840k of these is ~20MB raw.
 #[derive(Debug, Clone, Copy)]
@@ -67,7 +68,8 @@ pub struct SpatialIndex {
 impl SpatialIndex {
     /// Build the spatial index by scanning every live Tantivy doc once,
     /// reading `lat` / `lon` from the fast-field columns. Skips deleted
-    /// (tombstoned) docs.
+    /// (tombstoned) docs and imputed positions coarser than the street
+    /// number (`PositionSource::is_point_accurate`).
     pub fn build_from_tantivy(reader: &IndexReader, schema: &CrabSchema) -> Result<Self> {
         let _ = schema; // we use field names not handles for fast-field lookup
         let searcher = reader.searcher();
@@ -81,10 +83,19 @@ impl SpatialIndex {
             let lon_col = fast_fields
                 .f64("lon")
                 .context("reading lon fast-field column")?;
+            let source_col = fast_fields
+                .u64(FIELD_POSITION_SOURCE)
+                .context("reading position_source fast-field column")?;
             let max_doc = seg_reader.max_doc();
             let alive = seg_reader.alive_bitset();
             for doc_id in 0..max_doc {
                 if alive.is_some_and(|b| !b.is_alive(doc_id)) {
+                    continue;
+                }
+                // Schema v9: a street- or locality-level guess is not where
+                // the address is; `/reverse` must not return it.
+                let source = PositionSource::from_code(source_col.first(doc_id).unwrap_or(0));
+                if !source.is_point_accurate() {
                     continue;
                 }
                 let lat = match lat_col.first(doc_id) {
@@ -353,5 +364,27 @@ mod tests {
         let hits = idx.nearest(50.8467, 4.3525, 5, Some(0.0));
         // Exact same point → Haversine == 0 → included.
         assert_eq!(hits.len(), 1);
+    }
+
+    #[test]
+    fn build_from_tantivy_skips_coarse_imputed_positions() {
+        use crabfinder_test_support::{AddressBuilder, TestIndex};
+        let ti = TestIndex::build(&[
+            AddressBuilder::new("m", "1", "1").at(50.0, 4.0).build(),
+            AddressBuilder::new("i", "1", "3")
+                .at(50.001, 4.0)
+                .position_source(PositionSource::Interpolated)
+                .build(),
+            AddressBuilder::new("s", "1", "5")
+                .at(50.002, 4.0)
+                .position_source(PositionSource::Street)
+                .build(),
+            AddressBuilder::new("l", "1", "7")
+                .at(50.003, 4.0)
+                .position_source(PositionSource::Locality)
+                .build(),
+        ]);
+        let idx = SpatialIndex::build_from_tantivy(&ti.reader, &ti.schema).unwrap();
+        assert_eq!(idx.point_count(), 2);
     }
 }

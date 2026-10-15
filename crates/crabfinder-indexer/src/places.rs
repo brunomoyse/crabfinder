@@ -382,6 +382,7 @@ mod tests {
             part_of_municipality_name: pom.map(|p| ml(Some(p), None)),
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
             place_name: None,
+            position_source: Default::default(),
         }
     }
 

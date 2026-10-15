@@ -123,3 +123,46 @@ async fn spatial_disabled_returns_nothing() {
     let body = app.ok("/reverse?lat=50.8466&lng=4.3525").await;
     assert!(features(&body).is_empty());
 }
+
+#[tokio::test]
+async fn label_follows_lang() {
+    let app = app();
+    let body = app.ok("/reverse?lat=50.8466&lng=4.3525").await;
+    assert_eq!(
+        features(&body)[0]["properties"]["label"],
+        "Grand-Place 1, 1000 Bruxelles"
+    );
+    let body = app.ok("/reverse?lat=50.8466&lng=4.3525&lang=nl").await;
+    assert_eq!(
+        features(&body)[0]["properties"]["label"],
+        "Grote Markt 1, 1000 Brussel"
+    );
+    let (status, body) = app.get("/reverse?lat=50.8466&lng=4.3525&lang=xx").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "unknown lang 'xx' (expected fr, nl or de)");
+}
+
+#[tokio::test]
+async fn coarse_imputed_positions_are_not_reverse_results() {
+    use crabfinder_core::PositionSource;
+    use crabfinder_test_support::AddressBuilder;
+    let app = App::new(&[
+        AddressBuilder::new("guess", "1", "1")
+            .street(Some("Rue Devinée"), None)
+            .at(50.8466, 4.3525)
+            .position_source(PositionSource::Locality)
+            .build(),
+        AddressBuilder::new("real", "2", "1")
+            .street(Some("Rue Mesurée"), None)
+            .at(50.8470, 4.3525)
+            .build(),
+    ]);
+    let body = app.ok("/reverse?lat=50.8466&lng=4.3525").await;
+    assert_eq!(street_fr(&features(&body)[0]), "rue mesurée");
+    // Geocoding still finds the imputed one, and says how it was placed.
+    let body = app.ok("/geocode?q=Rue%20Devin%C3%A9e%201").await;
+    assert_eq!(
+        features(&body)[0]["properties"]["position_source"],
+        "locality"
+    );
+}

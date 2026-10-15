@@ -21,6 +21,10 @@ async fn building_units_returns_all_units_in_stable_order() {
     let first = app.ok(&uri).await;
     let second = app.ok(&uri).await;
     assert_eq!(first["count"], 5);
+    assert_eq!(
+        prop(&features(&first)[0], "label"),
+        "Avenue Louise 32 bte 1, 1050 Bruxelles"
+    );
     assert_eq!(first["building_group_id"], bgid.as_str());
     let ids = |b: &serde_json::Value| -> Vec<String> {
         features(b)

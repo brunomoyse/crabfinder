@@ -40,7 +40,11 @@ use thiserror::Error;
 ///        false strict matches); `localities-v1.json` side-file
 ///        (municipalities, parts of municipality, postal areas, OSM places
 ///        with centres and postal codes).
-pub const SCHEMA_VERSION: u32 = 8;
+///   v9 — v2 Phase 6: BeSt `0 0` positions (~140k Walloon addresses) are
+///        imputed instead of reprojected into France (`impute.rs`); payload
+///        `Address::position_source` + FAST u64 `position_source` field so
+///        `/reverse` skips street- and locality-level guesses.
+pub const SCHEMA_VERSION: u32 = 9;
 
 /// Filename under the index directory.
 pub const SIDECAR_FILENAME: &str = ".crab-meta.json";

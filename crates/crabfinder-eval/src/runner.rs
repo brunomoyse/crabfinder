@@ -25,6 +25,9 @@ pub struct QueryResult {
     /// Returned features in order. Each tuple is
     /// `(building_group_id, best_id_canonical, match_type)`.
     pub features: Vec<(String, String, String)>,
+    /// `(lat, lon)` of each feature, aligned with `features` (`None` when
+    /// the feature has no point geometry).
+    pub points: Vec<Option<(f64, f64)>>,
     pub top_match_type: String,
     pub raw_hits: usize,
     pub latency_ms: f64,
@@ -51,6 +54,14 @@ struct GeocodeFeature {
     #[serde(default)]
     match_type: String,
     properties: serde_json::Value,
+    #[serde(default)]
+    geometry: Option<serde_json::Value>,
+}
+
+/// `(lat, lon)` of a GeoJSON Point geometry.
+fn point_of(geometry: Option<&serde_json::Value>) -> Option<(f64, f64)> {
+    let c = geometry?.get("coordinates")?.as_array()?;
+    Some((c.get(1)?.as_f64()?, c.first()?.as_f64()?))
 }
 
 /// Best-id object as carried inside `feature.properties.id`. We reassemble
@@ -127,6 +138,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
         Err(e) => QueryResult {
             query,
             features: Vec::new(),
+            points: Vec::new(),
             top_match_type: String::new(),
             raw_hits: 0,
             latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
@@ -138,6 +150,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                 return QueryResult {
                     query,
                     features: Vec::new(),
+                    points: Vec::new(),
                     top_match_type: String::new(),
                     raw_hits: 0,
                     latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
@@ -148,12 +161,18 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                 Err(e) => QueryResult {
                     query,
                     features: Vec::new(),
+                    points: Vec::new(),
                     top_match_type: String::new(),
                     raw_hits: 0,
                     latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
                     error: Some(format!("json: {e}")),
                 },
                 Ok(body) => {
+                    let points = body
+                        .features
+                        .iter()
+                        .map(|f| point_of(f.geometry.as_ref()))
+                        .collect();
                     let features: Vec<(String, String, String)> = body
                         .features
                         .into_iter()
@@ -165,6 +184,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                     QueryResult {
                         query,
                         features,
+                        points,
                         top_match_type: body.match_type,
                         raw_hits: body.raw_hits,
                         latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),

@@ -9,7 +9,7 @@ use crate::dedup::{MatchType, RawHit, group_by_building, raw_limit};
 use crate::spatial::SpatialHit;
 
 use super::error::{ApiQuery, ServiceError};
-use super::feature::{Feature, hydrate_feature};
+use super::feature::{Feature, hydrate_feature, parse_lang};
 
 #[derive(Debug, Deserialize)]
 pub struct ReverseParams {
@@ -19,6 +19,9 @@ pub struct ReverseParams {
     pub limit: usize,
     #[serde(default)]
     pub radius_m: Option<f64>,
+    /// Language of `properties.label`: `fr`, `nl` or `de`.
+    #[serde(default)]
+    pub lang: Option<String>,
 }
 
 fn default_reverse_limit() -> usize {
@@ -52,6 +55,7 @@ pub async fn reverse(
     ApiQuery(params): ApiQuery<ReverseParams>,
 ) -> Result<Json<ReverseCollection>, ServiceError> {
     validate(&params)?;
+    let lang = parse_lang(params.lang.as_deref())?;
     let limit = params.limit.clamp(1, 100);
 
     // Oversearch so dedup can find `limit` distinct buildings; a dense city
@@ -107,6 +111,7 @@ pub async fn reverse(
                 g.building_group_id,
                 Some(distances[g.representative_index]),
             )
+            .map(|f| f.labelled(lang))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

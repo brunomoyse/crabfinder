@@ -120,6 +120,11 @@ fn malformed_csv_is_an_error() {
     )
     .unwrap_err();
     assert!(err.to_string().starts_with("csv:"), "{err}");
+    assert!(
+        err.to_string()
+            .contains("neither a `street` nor an `address`"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -259,4 +264,60 @@ fn binary_fails_on_stale_index() {
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("schema_version"));
+}
+
+// --- Phase 6: free text, GeoJSON, lang ---------------------------------------
+
+#[test]
+fn free_text_input_and_label_language() {
+    let ti = index();
+    let mut args = Args::for_index(ti.path());
+    args.lang = Some(crabfinder_core::Language::Nl);
+    let (summary, body) = run_csv(
+        &args,
+        "id,address\n1,\"Grote Markt 1, 1000 Brussel\"\n2,\"Avenue Louise 20 1050\"\n",
+    );
+    assert_eq!(summary.rows, 2);
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(col(&h, &rows[0], "confidence"), "exact");
+    assert_eq!(col(&h, &rows[0], "label"), "Grote Markt 1, 1000 Brussel");
+    assert_eq!(col(&h, &rows[1], "matched_house_number"), "20");
+}
+
+#[test]
+fn geojson_output() {
+    let ti = index();
+    let mut args = Args::for_index(ti.path());
+    args.format = crabfinder_service::batch::io::OutputFormat::GeoJson;
+    let (_, body) = run_csv(&args, &format!("{HEADER}1,Avenue Louise,10,1050\n"));
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["features"][0]["properties"]["confidence"], "exact");
+    assert_eq!(v["features"][0]["geometry"]["type"], "Point");
+    let (_, body) = run_csv(&args, HEADER);
+    assert_eq!(body, r#"{"type":"FeatureCollection","features":[]}"#);
+}
+
+#[test]
+fn format_and_lang_flags_parse() {
+    use clap::Parser;
+    let a = Args::try_parse_from([
+        "crabfinder-batch",
+        "--index",
+        "x",
+        "--format",
+        "GeoJSON",
+        "--lang",
+        "DE",
+    ])
+    .unwrap();
+    assert_eq!(
+        a.format,
+        crabfinder_service::batch::io::OutputFormat::GeoJson
+    );
+    assert_eq!(a.lang, Some(crabfinder_core::Language::De));
+    let e =
+        Args::try_parse_from(["crabfinder-batch", "--index", "x", "--format", "xml"]).unwrap_err();
+    assert!(e.to_string().contains("unknown format 'xml'"), "{e}");
+    let e = Args::try_parse_from(["crabfinder-batch", "--index", "x", "--lang", "en"]).unwrap_err();
+    assert!(e.to_string().contains("unknown lang 'en'"), "{e}");
 }

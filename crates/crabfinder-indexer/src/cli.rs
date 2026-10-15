@@ -10,6 +10,7 @@ use clap::Parser;
 use tracing::{info, warn};
 
 use crate::bundle::detect_regions;
+use crate::impute::{ImputeReport, PositionImputer, needs_position};
 use crate::index::CrabIndexWriter;
 use crate::localities::{LOCALITIES_FILENAME, LocalitiesBuilder};
 use crate::meta::write_sidecar;
@@ -151,6 +152,8 @@ pub struct IndexReport {
     pub mid_street_entries: usize,
     pub localities_entries: usize,
     pub places_loaded: usize,
+    /// Positions imputed for addresses BeSt ships without one (v9).
+    pub impute: ImputeReport,
     pub whitelist_entries: usize,
     pub whitelist_unique_bgids: usize,
     pub output: PathBuf,
@@ -165,6 +168,7 @@ impl IndexReport {
             t.emitted += r.stream.emitted;
             t.skipped_status += r.stream.skipped_status;
             t.skipped_unresolved += r.stream.skipped_unresolved;
+            t.missing_position += r.stream.missing_position;
         }
         t
     }
@@ -190,6 +194,7 @@ impl IndexReport {
             self.whitelist_unique_bgids
         );
         let _ = writeln!(s, "  mid_street entries: {}", self.mid_street_entries);
+        let _ = writeln!(s, "  imputed positions: {}", self.impute);
         let _ = writeln!(
             s,
             "  localities: {} (OSM places loaded: {})",
@@ -263,6 +268,8 @@ pub fn run(args: &Args) -> Result<IndexReport> {
     // across regions and flushed after commit.
     let mut mid_street_builder = MidStreetBuilder::new();
 
+    let mut imputer = PositionImputer::new();
+
     let mut reports = Vec::new();
     let mut samples_printed = 0usize;
 
@@ -279,6 +286,11 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         let mut attached: u64 = 0;
         let stream =
             stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |mut addr| {
+                // Schema v9: positioned after every measured address is in.
+                if needs_position(&addr) {
+                    imputer.defer(addr);
+                    return Ok(true);
+                }
                 let assignment = places.assign(&addr);
                 if let Some(a) = assignment.filter(|a| a.attach) {
                     addr.place_name = Some(places.places()[a.idx].names_for(addr.region));
@@ -325,6 +337,25 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         });
     }
 
+    // Schema v9: addresses BeSt ships without a position, now that every
+    // measured street point and locality centroid is known (`impute.rs`).
+    let deferred = imputer.len();
+    let (imputed, impute) = imputer.impute(&mid_street_builder, &localities);
+    info!(deferred, %impute, "positions imputed");
+    for mut addr in imputed {
+        // Street- and locality-level guesses would skew place assignment
+        // and locality centroids.
+        if addr.position_source.is_point_accurate() {
+            let assignment = places.assign(&addr);
+            if let Some(a) = assignment.filter(|a| a.attach) {
+                addr.place_name = Some(places.places()[a.idx].names_for(addr.region));
+            }
+            localities.record(&addr, assignment.map(|a| a.idx));
+        }
+        let boost = notability_map.boost_for(addr.building_group_id.as_str());
+        writer.add_address_with_notability(&addr, boost)?;
+    }
+
     let t_commit = Instant::now();
     writer.commit().context("committing Tantivy writer")?;
     write_sidecar(&args.output).context("writing .crab-meta.json sidecar")?;
@@ -350,6 +381,7 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         mid_street_entries,
         localities_entries,
         places_loaded,
+        impute,
         whitelist_entries: notability_map.n_entries,
         whitelist_unique_bgids: notability_map.n_unique_bgids,
         output: args.output.clone(),

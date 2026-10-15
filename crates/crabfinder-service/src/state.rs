@@ -189,6 +189,7 @@ impl AppState {
             addr_counts: self.addr_counts.clone(),
             notability_enabled: self.notability_enabled,
             mid_street: self.mid_street.clone(),
+            localities: self.localities.clone(),
         }
     }
 }

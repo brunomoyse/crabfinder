@@ -8,7 +8,12 @@
 //!
 //! Response: `text/csv` streamed back. Header line emitted on the first row,
 //! so an empty input produces an empty body (no header) — matching the
-//! `BatchWriter` behaviour.
+//! `BatchWriter` behaviour. With `format=geojson`, one
+//! `application/geo+json` FeatureCollection instead (v2 Phase 6).
+//!
+//! Options (`BatchOptions`) come in the JSON body / `options` part, or as
+//! query-string parameters (`?format=geojson&lang=nl`), which win. Every
+//! input path accepts free-text rows (`id,address`, see `io::InputRow`).
 //!
 //! Streaming model: the resolution phase (dedup + parallel Tantivy) runs in
 //! a `tokio::task::spawn_blocking` task and pushes CSV-serialised chunks to
@@ -36,11 +41,13 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info};
 
+use crabfinder_core::Language;
+
 use crate::AppState;
 use crate::resolver::{AddressQuery, SearchOptions, resolve_with};
 
 use super::dedup::{ClosureResolver, dedup_then_resolve, row_query};
-use super::io::{BatchWriter, InputRow, read_rows, sniff_delimiter};
+use super::io::{BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson};
 
 /// Hard cap on JSON-mode payloads. Larger callers must switch to multipart
 /// (CSV file upload), per design §4.6.
@@ -53,6 +60,8 @@ const STREAM_CHANNEL_CAPACITY: usize = 64;
 /// the channel. 64 keeps per-chunk overhead amortised without inflating
 /// TTFB.
 const ROWS_PER_CHUNK: usize = 64;
+/// GeoJSON has no line structure to align on: fixed-size chunks.
+const GEOJSON_CHUNK_BYTES: usize = 64 * 1024;
 
 /// Per-request options. JSON callers pass these in-band; multipart callers
 /// pass them as a separate `options` field.
@@ -70,8 +79,12 @@ pub struct BatchOptions {
     /// instead of `median_street` / street-level `fuzzy_street` (the caller
     /// may prefer empty lat/lng over a street approximation).
     pub mid_street_fallback: bool,
-    /// Output format. Only `"csv"` in Lot E; reserved for future GeoJSON.
+    /// Output format: `"csv"` (default) or `"geojson"`. Anything else is
+    /// a 400.
     pub format: String,
+    /// Language of the `label` column: `fr`, `nl` or `de` (default: each
+    /// address's own). Anything else is a 400.
+    pub lang: Option<String>,
 }
 
 impl Default for BatchOptions {
@@ -79,7 +92,58 @@ impl Default for BatchOptions {
         Self {
             mid_street_fallback: true,
             format: "csv".to_string(),
+            lang: None,
         }
+    }
+}
+
+/// Query-string overrides of `BatchOptions`.
+#[derive(Debug, Default, Deserialize)]
+struct BatchQuery {
+    mid_street_fallback: Option<bool>,
+    format: Option<String>,
+    lang: Option<String>,
+}
+
+/// `BatchOptions` once checked.
+#[derive(Debug, Clone, Copy)]
+struct RunOptions {
+    mid_street_fallback: bool,
+    format: OutputFormat,
+    lang: Option<Language>,
+}
+
+impl BatchOptions {
+    fn with_query(mut self, q: BatchQuery) -> Self {
+        if let Some(m) = q.mid_street_fallback {
+            self.mid_street_fallback = m;
+        }
+        if let Some(f) = q.format {
+            self.format = f;
+        }
+        if q.lang.is_some() {
+            self.lang = q.lang;
+        }
+        self
+    }
+
+    fn validate(&self) -> Result<RunOptions, HttpError> {
+        let format = self.format.parse::<OutputFormat>().map_err(bad_request)?;
+        let lang = self
+            .lang
+            .as_deref()
+            .map(|l| {
+                l.trim()
+                    .to_ascii_lowercase()
+                    .parse::<Language>()
+                    .map_err(|_| bad_request(format!("unknown lang '{l}' (expected fr, nl or de)")))
+            })
+            .transpose()?;
+        Ok(RunOptions {
+            mid_street_fallback: self.mid_street_fallback,
+            format,
+            lang,
+        })
     }
 }
 
@@ -113,6 +177,10 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string();
+    let query: BatchQuery = match axum::extract::Query::try_from_uri(request.uri()) {
+        Ok(axum::extract::Query(q)) => q,
+        Err(e) => return bad_request(format!("query string: {e}")).into_response(),
+    };
 
     let (rows, options) = if ct.starts_with("application/json") {
         match parse_json(request.into_body()).await {
@@ -140,13 +208,28 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
         }
     };
 
+    let options = match options.with_query(query).validate() {
+        Ok(o) => o,
+        Err(e) => return e.into_response(),
+    };
+
     if rows.is_empty() {
-        return (StatusCode::OK, [(CONTENT_TYPE, "text/csv")], "").into_response();
+        let body = match options.format {
+            OutputFormat::Csv => String::new(),
+            OutputFormat::GeoJson => r#"{"type":"FeatureCollection","features":[]}"#.to_string(),
+        };
+        return (
+            StatusCode::OK,
+            [(CONTENT_TYPE, options.format.content_type())],
+            body,
+        )
+            .into_response();
     }
 
     info!(
         n_rows = rows.len(),
         mid_street_fallback = options.mid_street_fallback,
+        format = ?options.format,
         "batch_geocode: resolving"
     );
 
@@ -162,7 +245,7 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(CONTENT_TYPE, "text/csv; charset=utf-8")
+        .header(CONTENT_TYPE, options.format.content_type())
         .body(body)
         .unwrap_or_else(|e| {
             error!(error=%e, "batch_geocode: failed to assemble response");
@@ -199,7 +282,7 @@ where
 fn run_resolve_to_channel(
     state: AppState,
     rows: Vec<InputRow>,
-    options: BatchOptions,
+    options: RunOptions,
     tx: mpsc::Sender<Result<Bytes, std::io::Error>>,
 ) {
     let ctx = state.resolver_context();
@@ -210,7 +293,21 @@ fn run_resolve_to_channel(
     let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &opts, &ctx));
     let make_query = |row: &InputRow| row_query(&state.index, row);
 
-    let out_rows = dedup_then_resolve(rows, &resolver, make_query);
+    let out_rows = dedup_then_resolve(rows, &resolver, make_query, options.lang);
+
+    if options.format == OutputFormat::GeoJson {
+        let mut buf: Vec<u8> = Vec::new();
+        if let Err(e) = write_geojson(&out_rows, &mut buf) {
+            send_error(&tx, format!("geojson write: {e}"));
+            return;
+        }
+        for chunk in buf.chunks(GEOJSON_CHUNK_BYTES) {
+            if tx.blocking_send(Ok(Bytes::copy_from_slice(chunk))).is_err() {
+                return;
+            }
+        }
+        return;
+    }
 
     // Chunk into CSV bytes. We use BatchWriter into a Vec<u8> per chunk so
     // the header is emitted on the *first* chunk; subsequent chunks have
@@ -383,6 +480,42 @@ mod tests {
         let o: BatchOptions =
             serde_json::from_str(r#"{"mid_street_fallback":false,"format":"csv"}"#).unwrap();
         assert!(!o.mid_street_fallback);
+    }
+
+    #[test]
+    fn query_overrides_and_validation() {
+        let o = BatchOptions::default().with_query(BatchQuery {
+            mid_street_fallback: Some(false),
+            format: Some("GeoJSON".into()),
+            lang: Some("NL".into()),
+        });
+        let r = o.validate().unwrap();
+        assert!(!r.mid_street_fallback);
+        assert_eq!(r.format, OutputFormat::GeoJson);
+        assert_eq!(r.lang, Some(Language::Nl));
+        // Absent query values keep the body's.
+        let o = BatchOptions {
+            lang: Some("de".into()),
+            ..BatchOptions::default()
+        }
+        .with_query(BatchQuery::default());
+        assert_eq!(o.validate().unwrap().lang, Some(Language::De));
+
+        let bad = |o: BatchOptions| o.validate().unwrap_err().msg;
+        assert_eq!(
+            bad(BatchOptions {
+                format: "xml".into(),
+                ..BatchOptions::default()
+            }),
+            "unknown format 'xml' (expected csv or geojson)"
+        );
+        assert_eq!(
+            bad(BatchOptions {
+                lang: Some("en".into()),
+                ..BatchOptions::default()
+            }),
+            "unknown lang 'en' (expected fr, nl or de)"
+        );
     }
 
     #[test]

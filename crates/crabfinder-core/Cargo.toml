@@ -11,3 +11,6 @@ description = "Core domain types for crabfinder — BeSt-shaped Belgian addresse
 [dependencies]
 serde      = { workspace = true }
 thiserror  = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

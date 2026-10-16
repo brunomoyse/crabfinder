@@ -19,10 +19,7 @@ use crabfinder_core::{Address, Language, MultilingualName};
 
 use crate::abbreviation::AbbreviationMap;
 use crate::query_builder::{analyze, typo_distance};
-use crate::resolver::{
-    AddressQuery, Confidence, ResolvedAddress, ResolverContext, SearchOptions, normalize_box,
-    resolve_with,
-};
+use crate::resolver::{AddressQuery, Confidence, ResolvedAddress, normalize_box};
 
 /// The verdict on one input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -178,18 +175,6 @@ impl Validation {
             .collect::<Vec<_>>()
             .join("; ")
     }
-}
-
-/// `resolve_with`, then `assess` the answer into `ResolvedAddress::validation`.
-pub fn resolve_and_assess(
-    query: &AddressQuery,
-    opts: &SearchOptions,
-    ctx: &ResolverContext<'_>,
-    lang: Option<Language>,
-) -> ResolvedAddress {
-    let mut r = resolve_with(query, opts, ctx);
-    r.validation = Some(assess(query, &r, ctx.index, &ctx.abbrev, lang));
-    r
 }
 
 /// Compare `query` (as given, alternatives included) with the address
@@ -534,6 +519,7 @@ mod tests {
     use crate::landmarks::LandmarkIndex;
     use crate::localities::LocalityIndex;
     use crate::mid_street::MidStreetIndex;
+    use crate::resolver::{ResolverContext, SearchOptions, resolve_with};
     use crabfinder_core::Region;
     use crabfinder_test_support::{AddressBuilder, TestIndex};
 
@@ -616,8 +602,9 @@ mod tests {
     }
 
     fn run(ti: &TestIndex, q: &AddressQuery, lang: Option<Language>) -> Validation {
-        let r = resolve_and_assess(q, &SearchOptions::default(), &ctx(ti), lang);
-        r.validation.unwrap()
+        let ctx = ctx(ti);
+        let r = resolve_with(q, &SearchOptions::default(), &ctx);
+        assess(q, &r, ctx.index, &ctx.abbrev, lang)
     }
 
     fn kinds(v: &Validation) -> Vec<(&'static str, &'static str, Option<&str>, Option<&str>)> {

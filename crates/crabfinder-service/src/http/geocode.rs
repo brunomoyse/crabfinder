@@ -12,7 +12,7 @@ use crate::AppState;
 use crate::dedup::{MatchType, RAW_HIT_CAP};
 use crate::focus::parse_focus_point;
 use crate::query_builder::BBox;
-use crate::resolver::{AddressQuery, SearchOptions, Tier, search};
+use crate::resolver::{ALTERNATIVES_FETCH, AddressQuery, SearchOptions, Tier, search};
 
 use super::blocking;
 use super::error::{ApiQuery, ServiceError};
@@ -62,7 +62,15 @@ pub struct GeocodeParams {
     /// Hard rectangle `min_lon,min_lat,max_lon,max_lat` (v2 Phase 10).
     #[serde(default)]
     pub bbox: Option<String>,
+    /// Add `alternatives`: the best answers grouped by municipality, out
+    /// of `ALTERNATIVES_FETCH` buildings (v3 Phase 11.3). Also given,
+    /// from the features fetched, when the answer is `ambiguous`.
+    #[serde(default)]
+    pub alternatives: bool,
 }
+
+/// Municipalities listed in `alternatives`.
+pub const MAX_ALTERNATIVES: usize = 10;
 
 fn default_limit() -> usize {
     10
@@ -107,7 +115,24 @@ pub struct FeatureCollection {
     /// `landmark`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locality: Option<LocalityEcho>,
+    /// With `alternatives=true`, or when `ambiguous`: the answers grouped
+    /// by municipality, best group first (v3 Phase 11.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternatives: Option<Vec<AlternativeEcho>>,
     pub features: Vec<Feature>,
+}
+
+#[derive(Serialize)]
+pub struct AlternativeEcho {
+    /// NIS code of the municipality.
+    pub nis: String,
+    pub municipality_name: MultilingualName,
+    /// Postal codes among the group's answers.
+    pub postal_codes: Vec<String>,
+    /// How many of the fetched answers are in it.
+    pub count: usize,
+    /// Its best answer.
+    pub feature: Feature,
 }
 
 #[derive(Serialize)]
@@ -329,7 +354,11 @@ pub async fn geocode(
     });
     // At least two candidates, so the ambiguity check has a runner-up.
     let opts = SearchOptions {
-        limit: limit.max(2),
+        limit: if params.alternatives {
+            limit.max(ALTERNATIVES_FETCH)
+        } else {
+            limit.max(2)
+        },
         expand,
         mid_street_fallback: true,
     };
@@ -351,6 +380,18 @@ pub async fn geocode(
     }
     let raw_hit_count = set.raw_hits;
     let (ambiguous, score_gap) = set.ambiguity();
+    let alternatives = (params.alternatives || ambiguous).then(|| {
+        set.municipality_groups(MAX_ALTERNATIVES)
+            .into_iter()
+            .map(|g| AlternativeEcho {
+                feature: Feature::from(set.candidates[g.best].clone()).labelled(lang),
+                nis: g.nis,
+                municipality_name: g.name,
+                postal_codes: g.postal_codes,
+                count: g.count,
+            })
+            .collect()
+    });
     let locality = set.locality.map(LocalityEcho::from);
     let features: Vec<Feature> = set
         .candidates
@@ -391,6 +432,7 @@ pub async fn geocode(
             "Phase 3: results collapsed by building_group_id; score = max(member.score). Use ?expand=true for raw rows."
         },
         locality,
+        alternatives,
         features,
     }))
 }

@@ -155,6 +155,14 @@ building, best id, match type, latency, error and `level_rank` (the
 `--dry-run` runs the first 50 queries and projects the full-run wall
 time, useful for sanity-checking a fresh eval set before the full run.
 
+`--alternatives` (v3 Phase 11.3) asks `/geocode` for `alternatives=true`
+and adds a section "Alternatives by municipality": per synthetic
+variant, the share of queries whose expected building is the best answer
+of one of the first 1 / 3 municipality groups. It is the number to watch
+for street-and-number queries without a municipality (`minimal`: 0.792
+at 1, 0.886 at 3 on BeSt 2026-10-15). The features, and so the other
+metrics, don't change with the flag.
+
 ## Benchmarking other geocoders
 
 ```bash

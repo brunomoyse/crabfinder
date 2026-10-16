@@ -122,7 +122,7 @@ fn detail_path_for(output_json: &Path) -> PathBuf {
 
 // --- Markdown rendering -----------------------------------------------------
 
-fn render_report_md(m: &Metrics, service_url: &str, n: usize) -> String {
+pub(crate) fn render_report_md(m: &Metrics, service_url: &str, n: usize) -> String {
     let mut s = String::new();
     s.push_str("# crabfinder eval — single report\n\n");
     s.push_str(&format!("- Service: `{service_url}`\n"));
@@ -165,6 +165,23 @@ user-perceived end-to-end latency, not search-engine latency._\n",
 
     s.push_str("\n## Adversarial — by category\n\n");
     region_variant_table(&mut s, &m.by_adversarial_category, "Category");
+
+    if !m.alternatives.is_empty() {
+        s.push_str(
+            "\n## Alternatives by municipality (`--alternatives`)\n\n\
+             The expected building is the best answer of one of the first k municipality groups.\n\n\
+             | Variant | n | recall@1 | recall@3 |\n|---|---|---|---|\n",
+        );
+        let mut keys: Vec<&String> = m.alternatives.keys().collect();
+        keys.sort_by_key(|k| (k.as_str() == "all", k.as_str()));
+        for k in keys {
+            let b = &m.alternatives[k];
+            s.push_str(&format!(
+                "| {k} | {} | {:.3} | {:.3} |\n",
+                b.n, b.recall_at_1, b.recall_at_3
+            ));
+        }
+    }
 
     if !m.by_realworld_source.is_empty() {
         s.push_str("\n## Real-world — by dataset\n\n");
@@ -588,6 +605,7 @@ mod tests {
             cross_language_recall_at_1_boosted: 0.9,
             cross_language_boosted_n: 8,
             known_failure_tracking: kfs,
+            alternatives: HashMap::new(),
         }
     }
 

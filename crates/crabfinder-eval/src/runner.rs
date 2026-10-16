@@ -34,6 +34,9 @@ pub struct QueryResult {
     /// Non-empty on transport-level failure (network error, 5xx, JSON
     /// parse failure).
     pub error: Option<String>,
+    /// `building_group_id` of each `alternatives[].feature`, in order
+    /// (`--alternatives`, v3 Phase 11.3); empty otherwise.
+    pub alternatives: Vec<String>,
 }
 
 /// What the service returns at /geocode (only the fields we consume).
@@ -45,6 +48,13 @@ struct GeocodeResponse {
     raw_hits: usize,
     #[serde(default)]
     features: Vec<GeocodeFeature>,
+    #[serde(default)]
+    alternatives: Vec<GeocodeAlternative>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeocodeAlternative {
+    feature: GeocodeFeature,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +77,11 @@ fn point_of(geometry: Option<&serde_json::Value>) -> Option<(f64, f64)> {
 /// Read a `/geocode` body into the ranked features and points.
 pub(crate) fn parse_geocode_body(body: &str) -> Result<crate::adapters::Answer, String> {
     let body: GeocodeResponse = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let alternatives_bgids = body
+        .alternatives
+        .iter()
+        .map(|a| a.feature.building_group_id.clone())
+        .collect();
     let points = body
         .features
         .iter()
@@ -85,6 +100,7 @@ pub(crate) fn parse_geocode_body(body: &str) -> Result<crate::adapters::Answer, 
         points,
         top_match_type: body.match_type,
         raw_hits: body.raw_hits,
+        alternatives: alternatives_bgids,
     })
 }
 
@@ -118,6 +134,9 @@ pub struct RunnerConfig {
     pub parallel: usize,
     pub timeout: Duration,
     pub limit: usize,
+    /// Ask for `alternatives=true` (v3 Phase 11.3): fills
+    /// `QueryResult::alternatives` for `Metrics::alternatives`.
+    pub alternatives: bool,
 }
 
 impl Default for RunnerConfig {
@@ -127,6 +146,7 @@ impl Default for RunnerConfig {
             parallel: 8,
             timeout: Duration::from_secs(30),
             limit: 10,
+            alternatives: false,
         }
     }
 }
@@ -147,17 +167,23 @@ pub async fn health_check(client: &Client, base: &str) -> Result<()> {
 }
 
 /// Execute one /geocode query against the service.
-async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery) -> QueryResult {
+async fn execute_one(
+    client: &Client,
+    base: &str,
+    limit: usize,
+    alternatives: bool,
+    query: EvalQuery,
+) -> QueryResult {
     let t0 = Instant::now();
     let url = format!("{base}/geocode");
-    let resp_result = client
-        .get(&url)
-        .query(&[
-            ("q", query.query_string.as_str()),
-            ("limit", &limit.to_string()),
-        ])
-        .send()
-        .await;
+    let mut params = vec![
+        ("q", query.query_string.clone()),
+        ("limit", limit.to_string()),
+    ];
+    if alternatives {
+        params.push(("alternatives", "true".into()));
+    }
+    let resp_result = client.get(&url).query(&params).send().await;
     match resp_result {
         Err(e) => QueryResult {
             query,
@@ -167,6 +193,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
             raw_hits: 0,
             latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
             error: Some(format!("transport: {e}")),
+            alternatives: Vec::new(),
         },
         Ok(resp) => {
             let status = resp.status();
@@ -179,6 +206,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                     raw_hits: 0,
                     latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
                     error: Some(format!("http {status}")),
+                    alternatives: Vec::new(),
                 };
             }
             let parsed = match resp.text().await {
@@ -196,6 +224,7 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                     raw_hits: a.raw_hits,
                     latency_ms,
                     error: None,
+                    alternatives: a.alternatives,
                 },
             }
         }
@@ -218,13 +247,14 @@ pub async fn run_eval(config: &RunnerConfig, queries: Vec<EvalQuery>) -> Result<
 
     let base = config.service_url.clone();
     let limit = config.limit;
+    let alternatives = config.alternatives;
     let client_arc = client.clone();
 
     let mut results: Vec<QueryResult> = stream::iter(queries)
         .map(|q| {
             let client = client_arc.clone();
             let base = base.clone();
-            async move { execute_one(&client, &base, limit, q).await }
+            async move { execute_one(&client, &base, limit, alternatives, q).await }
         })
         .buffer_unordered(config.parallel)
         .collect()

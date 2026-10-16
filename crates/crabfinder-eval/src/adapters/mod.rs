@@ -49,6 +49,8 @@ pub struct Answer {
     pub points: Vec<Option<(f64, f64)>>,
     pub top_match_type: String,
     pub raw_hits: usize,
+    /// crabfinder's `alternatives[].feature.building_group_id`.
+    pub alternatives: Vec<String>,
 }
 
 impl Answer {
@@ -83,6 +85,7 @@ impl Answer {
             raw_hits: a.raw_hits,
             latency_ms,
             error: None,
+            alternatives: a.alternatives,
         }
     }
 }
@@ -97,6 +100,7 @@ pub fn failed(query: EvalQuery, latency_ms: f64, error: String) -> QueryResult {
         raw_hits: 0,
         latency_ms,
         error: Some(error),
+        alternatives: Vec::new(),
     }
 }
 

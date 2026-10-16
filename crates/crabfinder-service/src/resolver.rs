@@ -20,7 +20,7 @@ use tantivy::{Index, IndexReader, TantivyDocument, Term};
 use tracing::warn;
 
 use crabfinder_core::house_number::leading_number;
-use crabfinder_core::{Address, MultilingualName};
+use crabfinder_core::{Address, Language, MultilingualName};
 use crabfinder_indexer::index::CrabSchema;
 use crabfinder_indexer::localities::{Locality, LocalityKind};
 use crabfinder_parser::ParsedQuery;
@@ -243,6 +243,11 @@ pub struct ResolvedAddress {
     pub locality: Option<Locality>,
     /// Which reading matched (`CandidateSet::reading`).
     pub reading: usize,
+    /// `CandidateSet::ambiguity`'s gap to the runner-up (v3 Phase 11.3).
+    pub score_gap: Option<f32>,
+    /// The answers grouped by municipality, when asked for
+    /// (`resolve_with_alternatives`, v3 Phase 11.3).
+    pub alternatives: Option<Vec<MunicipalityGroup>>,
     /// Input vs. official address, when asked for
     /// (`validate::resolve_and_assess`, v3 Phase 11.2).
     pub validation: Option<Validation>,
@@ -260,6 +265,8 @@ impl ResolvedAddress {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         }
     }
@@ -481,6 +488,37 @@ pub struct CandidateSet {
     pub locality: Option<Locality>,
 }
 
+/// The candidates of one municipality (`CandidateSet::municipality_groups`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MunicipalityGroup {
+    /// NIS code (`municipality_id.object_identifier`).
+    pub nis: String,
+    pub name: MultilingualName,
+    /// Postal codes among the group's candidates, sorted.
+    pub postal_codes: Vec<String>,
+    /// How many candidates the group has.
+    pub count: usize,
+    /// Index of its best candidate in `CandidateSet::candidates`.
+    pub best: usize,
+    /// The language its addresses are written in by default
+    /// (`Address::default_language` of the best candidate).
+    pub language: Language,
+}
+
+impl MunicipalityGroup {
+    /// `"Charleroi (6000, 6001)"`: the name in `lang` when BeSt has it,
+    /// else in the group's own language.
+    pub fn label(&self, lang: Option<Language>) -> String {
+        let n = &self.name;
+        let name = lang
+            .and_then(|l| n.get(l))
+            .or_else(|| n.get(self.language))
+            .or_else(|| n.primary())
+            .unwrap_or(&self.nis);
+        format!("{name} ({})", self.postal_codes.join(", "))
+    }
+}
+
 /// Score ratio from which two candidates on different streets make the
 /// answer ambiguous (`CandidateSet::ambiguity`).
 pub const AMBIGUITY_RATIO: f32 = 0.9;
@@ -524,6 +562,47 @@ impl CandidateSet {
             == street_key_from_bgid(&b.hit.building_group_id)
             || street(a) == street(b);
         (ratio >= AMBIGUITY_RATIO && !same_street, Some(1.0 - ratio))
+    }
+
+    /// The candidates grouped by municipality (v3 Phase 11.3), at most
+    /// `max` groups, in the rank of each group's best candidate. Groups
+    /// key on the NIS code (`municipality_id.object_identifier`); a
+    /// candidate whose payload has none is left out.
+    pub fn municipality_groups(&self, max: usize) -> Vec<MunicipalityGroup> {
+        let mut groups: Vec<MunicipalityGroup> = Vec::new();
+        for (i, c) in self.candidates.iter().enumerate() {
+            let p = &c.hit.payload;
+            let Some(nis) = p["municipality_id"]["object_identifier"].as_str() else {
+                continue;
+            };
+            let pc = p["postal_code"].as_str().unwrap_or_default();
+            let at = match groups.iter().position(|g| g.nis == nis) {
+                Some(at) => at,
+                None if groups.len() < max => {
+                    groups.push(MunicipalityGroup {
+                        nis: nis.to_string(),
+                        name: serde_json::from_value(p["municipality_name"].clone())
+                            .unwrap_or_default(),
+                        postal_codes: Vec::new(),
+                        count: 0,
+                        best: i,
+                        language: serde_json::from_value::<Address>(p.clone())
+                            .map_or(Language::Fr, |a| a.default_language()),
+                    });
+                    groups.len() - 1
+                }
+                None => continue,
+            };
+            let g = &mut groups[at];
+            g.count += 1;
+            if !pc.is_empty() && !g.postal_codes.iter().any(|x| x == pc) {
+                g.postal_codes.push(pc.to_string());
+            }
+        }
+        for g in &mut groups {
+            g.postal_codes.sort();
+        }
+        groups
     }
 
     /// No candidates (`Tier::None`).
@@ -1597,8 +1676,36 @@ pub fn resolve_with(
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
 ) -> ResolvedAddress {
+    resolve_inner(query, opts, ctx, 0)
+}
+
+/// Buildings fetched to group alternatives by municipality.
+pub const ALTERNATIVES_FETCH: usize = 50;
+
+/// `resolve_with`, plus up to `max_groups` `alternatives`: the
+/// `ALTERNATIVES_FETCH` best buildings grouped by municipality (v3 Phase
+/// 11.3). The decision itself is the same as `resolve_with`'s.
+pub fn resolve_with_alternatives(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    max_groups: usize,
+) -> ResolvedAddress {
+    resolve_inner(query, opts, ctx, max_groups)
+}
+
+fn resolve_inner(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    max_groups: usize,
+) -> ResolvedAddress {
     let opts = SearchOptions {
-        limit: 2,
+        limit: if max_groups > 0 {
+            ALTERNATIVES_FETCH
+        } else {
+            2
+        },
         expand: false,
         ..*opts
     };
@@ -1609,9 +1716,13 @@ pub fn resolve_with(
             return ResolvedAddress::not_found();
         }
     };
-    let (ambiguous, _) = set.ambiguity();
+    let (ambiguous, score_gap) = set.ambiguity();
+    let alternatives = (max_groups > 0).then(|| set.municipality_groups(max_groups));
     let Some(c) = set.candidates.into_iter().next() else {
-        return ResolvedAddress::not_found();
+        return ResolvedAddress {
+            alternatives,
+            ..ResolvedAddress::not_found()
+        };
     };
     let Ok(address) = serde_json::from_value::<Address>(c.hit.payload.clone()) else {
         warn!(bgid = %c.hit.building_group_id, "resolver: payload failed serde decode");
@@ -1638,6 +1749,8 @@ pub fn resolve_with(
         ambiguous,
         locality: set.locality,
         reading: set.reading,
+        score_gap,
+        alternatives,
         validation: None,
     }
 }
@@ -3141,5 +3254,135 @@ mod tests {
         let mut nopc = parsed_query(&ti, "Schildknaapstraat 19");
         nopc.postal_code = None;
         assert!(search_local_typo(&nopc, &opts(5), &c).unwrap().is_none());
+    }
+}
+
+#[cfg(test)]
+mod alternatives_tests {
+    use super::*;
+    use crate::addr_count::AddressCountIndex;
+    use crabfinder_core::Region;
+    use crabfinder_test_support::{AddressBuilder, TestIndex};
+
+    /// "Rue de la Station" 10 in Charleroi (6000), 12 in Charleroi (6001),
+    /// 10 in La Louvière (7100); "Stationsstraat" 10 in Gent.
+    fn stations() -> Vec<Address> {
+        let station = |oid: &str, street: &str, hn: &str, nis: &str, name: &str, pc: &str| {
+            AddressBuilder::new(oid, street, hn)
+                .region(Region::Wallonia)
+                .street(Some("Rue de la Station"), None)
+                .municipality(nis, Some(name), None, None)
+                .postal(pc)
+        };
+        vec![
+            station("c10", "1", "10", "52011", "Charleroi", "6000").build(),
+            station("c12", "2", "12", "52011", "Charleroi", "6001").build(),
+            station("l10", "3", "10", "58001", "La Louvière", "7100").build(),
+            AddressBuilder::new("g10", "4", "10")
+                .region(Region::Flanders)
+                .street(None, Some("Stationsstraat"))
+                .municipality("44021", Some("Gand"), Some("Gent"), None)
+                .postal("9000")
+                .build(),
+        ]
+    }
+
+    fn ctx(ti: &TestIndex) -> ResolverContext<'_> {
+        ResolverContext {
+            index: &ti.index,
+            reader: &ti.reader,
+            schema: &ti.schema,
+            abbrev: Arc::new(AbbreviationMap::empty()),
+            addr_counts: Arc::new(AddressCountIndex::build(&ti.reader, &ti.schema).unwrap()),
+            notability_enabled: false,
+            mid_street: Arc::new(MidStreetIndex::empty()),
+            localities: Arc::new(crate::localities::LocalityIndex::empty()),
+            landmarks: Arc::new(crate::landmarks::LandmarkIndex::empty()),
+        }
+    }
+
+    fn q(ti: &TestIndex, street: &str) -> AddressQuery {
+        AddressQuery {
+            street_tokens: analyze(&ti.index, street),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn candidates_group_by_municipality_in_rank_order() {
+        let ti = TestIndex::build(&stations());
+        let ctx = ctx(&ti);
+        let opts = SearchOptions {
+            limit: 10,
+            ..SearchOptions::default()
+        };
+        let set = search(&q(&ti, "Rue de la Station"), &opts, &ctx).unwrap();
+        let groups = set.municipality_groups(10);
+        let mut names: Vec<_> = groups.iter().map(|g| g.nis.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["52011", "58001"]);
+        let charleroi = groups.iter().find(|g| g.nis == "52011").unwrap();
+        assert_eq!(charleroi.count, 2);
+        assert_eq!(charleroi.postal_codes, ["6000", "6001"]);
+        assert_eq!(charleroi.label(None), "Charleroi (6000, 6001)");
+        // Each group's best candidate is its first in rank order.
+        for g in &groups {
+            let first = set
+                .candidates
+                .iter()
+                .position(|c| {
+                    c.hit.payload["municipality_id"]["object_identifier"] == g.nis.as_str()
+                })
+                .unwrap();
+            assert_eq!(g.best, first);
+        }
+        assert_eq!(set.municipality_groups(1).len(), 1);
+        assert!(CandidateSet::empty().municipality_groups(5).is_empty());
+    }
+
+    #[test]
+    fn group_labels_use_the_municipality_language() {
+        let ti = TestIndex::build(&stations());
+        let set = search(
+            &q(&ti, "Stationsstraat"),
+            &SearchOptions::default(),
+            &ctx(&ti),
+        )
+        .unwrap();
+        let g = &set.municipality_groups(5)[0];
+        assert_eq!(g.language, Language::Nl);
+        assert_eq!(g.label(None), "Gent (9000)");
+        assert_eq!(g.label(Some(Language::Fr)), "Gand (9000)");
+        assert_eq!(g.label(Some(Language::De)), "Gent (9000)");
+        let nameless = MunicipalityGroup {
+            name: MultilingualName::default(),
+            ..g.clone()
+        };
+        assert_eq!(nameless.label(None), "44021 (9000)");
+    }
+
+    #[test]
+    fn resolve_with_alternatives_keeps_the_decision() {
+        let ti = TestIndex::build(&stations());
+        let ctx = ctx(&ti);
+        let query = AddressQuery {
+            house_number: Some("10".into()),
+            ..q(&ti, "Rue de la Station")
+        };
+        let plain = resolve_with(&query, &SearchOptions::default(), &ctx);
+        let alt = resolve_with_alternatives(&query, &SearchOptions::default(), &ctx, 5);
+        assert!(plain.alternatives.is_none());
+        assert_eq!(
+            plain.address.as_ref().map(|a| a.id.to_string()),
+            alt.address.as_ref().map(|a| a.id.to_string())
+        );
+        assert!(alt.ambiguous && plain.ambiguous);
+        assert!(alt.score_gap.is_some());
+        let groups = alt.alternatives.unwrap();
+        assert_eq!(groups.len(), 2, "the two communes with a n°10");
+        // Nothing found still says alternatives were asked for.
+        let none = resolve_with_alternatives(&q(&ti, "xyzzy"), &SearchOptions::default(), &ctx, 5);
+        assert_eq!(none.confidence, Confidence::NotFound);
+        assert_eq!(none.alternatives, Some(vec![]));
     }
 }

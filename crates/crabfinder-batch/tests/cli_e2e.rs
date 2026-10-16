@@ -380,3 +380,22 @@ fn corrections_flag_adds_status_and_corrections() {
         Args::try_parse_from(["crabfinder-batch", "--index", "x", "--corrections"]).unwrap();
     assert!(parsed.corrections);
 }
+
+#[test]
+fn alternatives_flag_adds_score_gap_and_alternatives() {
+    let ti = index();
+    let args = Args {
+        alternatives: true,
+        ..Args::for_index(ti.path())
+    };
+    let (_, body) = run_csv(&args, &format!("{HEADER}1,Avenue Louise,10,1050\n"));
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(h[h.len() - 2..], ["score_gap", "alternatives"]);
+    assert_eq!(col(&h, &rows[0], "alternatives"), "Bruxelles (1050)");
+    use clap::Parser;
+    assert!(
+        Args::try_parse_from(["crabfinder-batch", "--index", "x", "--alternatives"])
+            .unwrap()
+            .alternatives
+    );
+}

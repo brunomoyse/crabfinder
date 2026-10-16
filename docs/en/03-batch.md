@@ -169,6 +169,7 @@ The binary opens the Tantivy index read-only, iterates the CSV, writes the resul
 | `--lang fr`, `nl` or `de` | each address's own | Language of the `label` column. An address without a name in that language falls back to its own. |
 | `--no-mid-street` | off | Disable the street-level fallbacks (see below). |
 | `--corrections` | off | Append the `status` and `corrections` columns (see [Checking addresses](#checking-addresses-corrections)). |
+| `--alternatives` | off | Append `score_gap` and `alternatives`: the municipalities of the best answers, for rows that don't say which (`Charleroi (6000); La Louvière (7100)`). |
 | `--parallel N` | all cores | Worker threads. `--parallel 1` for deterministic profiling. |
 
 ### Concrete examples
@@ -291,6 +292,7 @@ Options go in the JSON body / the `options` multipart part, **or in the query st
 | `format` | string | `"csv"` | `"csv"` or `"geojson"`. Anything else is a 400. |
 | `lang` | string | each address's own | `"fr"`, `"nl"` or `"de"`: language of the `label` column. Anything else is a 400. |
 | `corrections` | bool | `false` | When `true`, appends the `status` and `corrections` columns (same as `--corrections`). |
+| `alternatives` | bool | `false` | When `true`, appends the `score_gap` and `alternatives` columns (same as `--alternatives`). |
 
 ### Response
 

@@ -169,6 +169,7 @@ Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le r�
 | `--lang fr`, `nl` ou `de` | langue de chaque adresse | Langue de la colonne `label`. Une adresse sans nom dans cette langue garde la sienne. |
 | `--no-mid-street` | désactivé | Désactive les replis au niveau de la rue (voir plus bas). |
 | `--corrections` | désactivé | Ajoute les colonnes `status` et `corrections` (voir [Vérifier des adresses](#vérifier-des-adresses--corrections)). |
+| `--alternatives` | désactivé | Ajoute `score_gap` et `alternatives` : les communes des meilleures réponses, pour les lignes qui ne disent pas laquelle (`Charleroi (6000); La Louvière (7100)`). |
 | `--parallel N` | tous les cœurs | Threads de travail. `--parallel 1` pour un profilage déterministe. |
 
 ### Exemples concrets
@@ -289,6 +290,7 @@ Les options vont dans le body JSON / la partie multipart `options`, **ou dans la
 |---|---|---|---|
 | `mid_street_fallback` | bool | `true` | À `false`, désactive les replis au niveau de la rue (même effet que `--no-mid-street` côté CLI). |
 | `corrections` | bool | `false` | À `true`, ajoute les colonnes `status` et `corrections` (même effet que `--corrections`). |
+| `alternatives` | bool | `false` | À `true`, ajoute les colonnes `score_gap` et `alternatives` (même effet que `--alternatives`). |
 | `format` | string | `"csv"` | `"csv"` ou `"geojson"`. Toute autre valeur donne un 400. |
 | `lang` | string | langue de chaque adresse | `"fr"`, `"nl"` ou `"de"` : langue de la colonne `label`. Toute autre valeur donne un 400. |
 

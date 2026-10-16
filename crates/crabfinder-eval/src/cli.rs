@@ -73,6 +73,12 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
+    /// Ask the service for `alternatives=true` and report
+    /// alternatives recall@3 by variant: the expected building is the best
+    /// answer of one of the first 3 municipalities (v3 Phase 11.3).
+    #[arg(long)]
+    pub alternatives: bool,
+
     /// Check that every expected_best_id / expected_building_group_id in
     /// the eval set still exists in the live index. Fails if missing share
     /// exceeds --max-missing-pct.
@@ -345,6 +351,7 @@ fn build_runner_config(args: &Args) -> crate::runner::RunnerConfig {
     crate::runner::RunnerConfig {
         service_url: args.service.clone(),
         parallel: args.parallel,
+        alternatives: args.alternatives,
         ..Default::default()
     }
 }

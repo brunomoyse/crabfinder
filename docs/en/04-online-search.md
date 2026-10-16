@@ -303,6 +303,22 @@ q = Kerkstraat 1 &focus_point=51.0543,3.7174
 
 When `ambiguous` is `true`, ask the user to pick, or add a postal code, `region` or `focus_point`.
 
+To help the user pick, the response then also carries `alternatives`: the answers grouped by municipality, best first, one entry per municipality with its best address. Ask for them on any query with `alternatives=true` (the service then looks at the 50 best buildings):
+
+```bash
+curl -G "http://127.0.0.1:8080/geocode" --data-urlencode "q=Rue de la Station 10" --data alternatives=true
+```
+
+```
+ambiguous = true
+alternatives[0] = {nis: "58001", municipality_name: {fr: "La Louvière", …}, postal_codes: ["7100"], count: 1,
+                   feature: {… label: "Rue de la Station 10, 7100 La Louvière"}}
+alternatives[1] = {nis: "92048", … label: "Rue de la Station 10, 5070 Fosses-la-Ville"}
+…
+```
+
+`features` don't change. On the evaluation set, for a street and number without municipality, the right address is the first answer 79% of the time and among the first 3 municipalities 89% of the time.
+
 ### Turning off building-level dedup
 
 By default, multiple boxes in the same building are collapsed into one feature with `unit_count > 1`. To get each box separately:

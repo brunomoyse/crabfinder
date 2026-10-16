@@ -11,6 +11,7 @@
 //!          building_group_id, best_id,
 //!          address, label, position_source, ambiguous  (appended in v2)
 //!          status, corrections         (only with `corrections`, v3 Phase 11.2)
+//!          score_gap, alternatives     (only with `alternatives`, v3 Phase 11.3)
 //! ```
 //!
 //! Output is CSV, or a GeoJSON FeatureCollection (`OutputFormat`).
@@ -96,6 +97,14 @@ pub struct OutputRow {
     /// `kind:field:input->official` per correction, `; `-separated.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub corrections: Option<String>,
+    // --- only with the `alternatives` option (v3 Phase 11.3) ---
+    /// `/geocode`'s `score_gap` (empty when not comparable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score_gap: Option<Option<f32>>,
+    /// The best answers' municipalities, best first:
+    /// `Charleroi (6000); La Louvière (7100)`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternatives: Option<String>,
 }
 
 /// Batch output format.
@@ -393,6 +402,8 @@ mod tests {
                 ambiguous: false,
                 status: None,
                 corrections: None,
+                score_gap: None,
+                alternatives: None,
             })
             .unwrap();
             w.flush().unwrap();
@@ -500,6 +511,8 @@ mod tests {
             ambiguous: true,
             status: None,
             corrections: None,
+            score_gap: None,
+            alternatives: None,
         };
         let missing = OutputRow {
             id: "2".into(),

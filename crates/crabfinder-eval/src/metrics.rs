@@ -99,6 +99,57 @@ pub struct Metrics {
     pub cross_language_recall_at_1_boosted: f64,
     pub cross_language_boosted_n: usize,
     pub known_failure_tracking: Vec<KnownFailureEntry>,
+    /// With `--alternatives` (v3 Phase 11.3): by synthetic variant, plus
+    /// `all`, the share of queries whose expected building is the best
+    /// answer of one of the first 1 / 3 municipality groups.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub alternatives: HashMap<String, AlternativesBucket>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct AlternativesBucket {
+    pub n: usize,
+    pub recall_at_1: f64,
+    pub recall_at_3: f64,
+}
+
+/// `Metrics::alternatives`: only when some query came back with
+/// alternatives (the run asked for them).
+fn alternatives_metrics(results: &[QueryResult]) -> HashMap<String, AlternativesBucket> {
+    if results.iter().all(|r| r.alternatives.is_empty()) {
+        return HashMap::new();
+    }
+    let mut acc: HashMap<String, (usize, usize, usize)> = HashMap::new();
+    for r in results.iter().filter(|r| r.error.is_none()) {
+        let EvalQuerySource::Synthetic { variant_type, .. } = &r.query.source else {
+            continue;
+        };
+        let hit = |k: usize| {
+            r.alternatives
+                .iter()
+                .take(k)
+                .any(|b| r.query.expected_bgid_set.contains(b))
+        };
+        let (h1, h3) = (hit(1), hit(3));
+        for key in [variant_type.as_str().to_string(), "all".to_string()] {
+            let e = acc.entry(key).or_default();
+            e.0 += 1;
+            e.1 += usize::from(h1);
+            e.2 += usize::from(h3);
+        }
+    }
+    acc.into_iter()
+        .map(|(k, (n, h1, h3))| {
+            (
+                k,
+                AlternativesBucket {
+                    n,
+                    recall_at_1: h1 as f64 / n as f64,
+                    recall_at_3: h3 as f64 / n as f64,
+                },
+            )
+        })
+        .collect()
 }
 
 /// Compute all MVP metrics over the runner's per-query results.
@@ -229,6 +280,7 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
         }
     }
 
+    m.alternatives = alternatives_metrics(results);
     m.overall = overall_acc.into_bucket();
     m.latency = compute_latency(&mut latency_samples);
     m.by_region = by_region
@@ -518,6 +570,7 @@ mod tests {
             raw_hits: 1,
             latency_ms: latency,
             error: None,
+            alternatives: Vec::new(),
         }
     }
 
@@ -582,6 +635,49 @@ mod tests {
     }
 
     #[test]
+    fn alternatives_recall_by_variant() {
+        let with_alts = |id: &str, alts: &[&str]| QueryResult {
+            alternatives: alts.iter().map(|a| a.to_string()).collect(),
+            ..result_with_top(
+                synth_q(id, "want", "b", "flanders"),
+                "x",
+                "y",
+                "strict",
+                1.0,
+            )
+        };
+        // No query has alternatives: the run didn't ask for them.
+        let plain = result_with_top(
+            synth_q("p", "want", "b", "flanders"),
+            "x",
+            "y",
+            "strict",
+            1.0,
+        );
+        assert!(
+            compute(std::slice::from_ref(&plain))
+                .alternatives
+                .is_empty()
+        );
+        let mut failed = with_alts("e", &["want"]);
+        failed.error = Some("http 500".into());
+        let results = vec![
+            with_alts("a", &["want", "o1"]),
+            with_alts("b", &["o1", "o2", "want"]),
+            with_alts("c", &["o1", "o2", "o3", "want"]),
+            with_alts("d", &[]),
+            failed,
+        ];
+        let m = compute(&results);
+        let all = &m.alternatives["all"];
+        assert_eq!(all.n, 4, "errors are left out, empty answers count");
+        assert_eq!((all.recall_at_1, all.recall_at_3), (0.25, 0.5));
+        assert_eq!(m.alternatives["canonical"], *all);
+        let md = crate::report::render_report_md(&m, "http://x", 5);
+        assert!(md.contains("| canonical | 4 | 0.250 | 0.500 |"), "{md}");
+    }
+
+    #[test]
     fn mrr_uses_reciprocal_rank() {
         let q1 = synth_q("q1", "bgid-a", "best-a", "flanders");
         let q2 = synth_q("q2", "bgid-b", "best-b", "flanders");
@@ -593,6 +689,7 @@ mod tests {
             raw_hits: 1,
             latency_ms: 10.0,
             error: None,
+            alternatives: Vec::new(),
         };
         let r2 = QueryResult {
             query: q2,
@@ -606,6 +703,7 @@ mod tests {
             raw_hits: 3,
             latency_ms: 10.0,
             error: None,
+            alternatives: Vec::new(),
         };
         let m = compute(&[r1, r2]);
         // MRR = (1/1 + 1/3) / 2 = 0.666...

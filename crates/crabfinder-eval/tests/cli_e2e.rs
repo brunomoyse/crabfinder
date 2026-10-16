@@ -215,6 +215,7 @@ fn generate_run_and_diff_end_to_end() {
         s(&report_json),
         "--output-md",
         s(&report_md),
+        "--alternatives",
     ]))
     .expect("eval run");
 
@@ -234,8 +235,13 @@ fn generate_run_and_diff_end_to_end() {
         assert_eq!(b.recall_at_1, 1.0, "{cat}: {b:?}");
     }
     assert_eq!(m.known_failure_tracking.len(), 1);
+    // --alternatives: the expected building is among the first groups.
+    let alts = &m.alternatives["all"];
+    assert_eq!(alts.n, set.queries.len());
+    assert!(alts.recall_at_3 >= m.overall.recall_at_1, "{alts:?}");
 
     let md = fs::read_to_string(&report_md).unwrap();
+    assert!(md.contains("## Alternatives by municipality"));
     assert!(md.contains("# crabfinder eval — single report"));
     assert!(md.contains("notability (building)"));
     assert!(md.contains("hamlet (locality)"));

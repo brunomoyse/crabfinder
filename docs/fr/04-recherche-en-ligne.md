@@ -303,6 +303,22 @@ q = Kerkstraat 1 &focus_point=51.0543,3.7174
 
 Quand `ambiguous` vaut `true`, demande à l'utilisateur de choisir, ou ajoute un code postal, `region` ou `focus_point`.
 
+Pour l'aider à choisir, la réponse contient alors aussi `alternatives` : les réponses regroupées par commune, la meilleure d'abord, une entrée par commune avec sa meilleure adresse. Demande-les sur n'importe quelle requête avec `alternatives=true` (le service regarde alors les 50 meilleurs bâtiments) :
+
+```bash
+curl -G "http://127.0.0.1:8080/geocode" --data-urlencode "q=Rue de la Station 10" --data alternatives=true
+```
+
+```
+ambiguous = true
+alternatives[0] = {nis: "58001", municipality_name: {fr: "La Louvière", …}, postal_codes: ["7100"], count: 1,
+                   feature: {… label: "Rue de la Station 10, 7100 La Louvière"}}
+alternatives[1] = {nis: "92048", … label: "Rue de la Station 10, 5070 Fosses-la-Ville"}
+…
+```
+
+Les `features` ne changent pas. Sur le jeu d'évaluation, pour une rue et un numéro sans commune, la bonne adresse est la première réponse dans 79 % des cas et parmi les 3 premières communes dans 89 % des cas.
+
 ### Désactiver la déduplication par bâtiment
 
 Par défaut, les boîtes d'un même bâtiment sont regroupées en un seul feature avec `unit_count > 1`. Pour obtenir chaque boîte séparément :

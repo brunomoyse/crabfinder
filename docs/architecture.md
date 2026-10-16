@@ -264,7 +264,10 @@ Each tier over-fetches `limit × 20` (≤ 2000) rows, applies focus decay
 centre), collapses by `building_group_id` (`dedup.rs`: max score, lowest box
 as representative — the resolver swaps in the unit with the requested
 box), and hydrates the payload. `CandidateSet::ambiguity` flags near-ties (≥ 0.9) on different
-streets.
+streets. `CandidateSet::municipality_groups` groups the candidates by NIS code
+in rank order (v3 Phase 11.3): `/geocode?alternatives=true` and the batch
+`alternatives` option fetch 50 buildings for it (`resolve_with_alternatives`),
+without changing the decision.
 
 ## HTTP service (`crabfinder_service::http`)
 

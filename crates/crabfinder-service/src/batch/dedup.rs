@@ -16,7 +16,11 @@ use rayon::prelude::*;
 use crabfinder_core::{Address, Language};
 
 use crate::query_builder::analyze;
-use crate::resolver::{AddressQuery, Confidence, ResolvedAddress};
+use crate::resolver::{
+    AddressQuery, Confidence, ResolvedAddress, ResolverContext, SearchOptions, resolve_with,
+    resolve_with_alternatives,
+};
+use crate::validate::assess;
 
 use super::io::{InputRow, OutputRow};
 
@@ -41,6 +45,39 @@ impl<F: Fn(&AddressQuery) -> ResolvedAddress + Sync> Resolver for ClosureResolve
     fn resolve(&self, q: &AddressQuery) -> ResolvedAddress {
         (self.0)(q)
     }
+}
+
+/// What a row asks for beyond the decision (v3 Phases 11.2–11.3).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RowExtras {
+    /// `/validate`'s `status` and `corrections` columns.
+    pub corrections: bool,
+    /// The `score_gap` and `alternatives` columns.
+    pub alternatives: bool,
+    /// Language of `street_language` corrections and of the labels.
+    pub lang: Option<Language>,
+}
+
+/// Municipalities listed in the `alternatives` column.
+pub const ROW_ALTERNATIVES: usize = 5;
+
+/// The batch decision for one query (`resolve_with`), with what `extras`
+/// asks for: alternatives by municipality, `/validate`'s verdict.
+pub fn resolve_row(
+    q: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    extras: RowExtras,
+) -> ResolvedAddress {
+    let mut r = if extras.alternatives {
+        resolve_with_alternatives(q, opts, ctx, ROW_ALTERNATIVES)
+    } else {
+        resolve_with(q, opts, ctx)
+    };
+    if extras.corrections {
+        r.validation = Some(assess(q, &r, ctx.index, &ctx.abbrev, extras.lang));
+    }
+    r
 }
 
 /// Cache key for dédup. We normalise `street` to lowercase so that
@@ -268,6 +305,14 @@ pub fn output_row_from(
             .as_ref()
             .map(|v| v.status.as_str().to_string()),
         corrections: resolved.validation.as_ref().map(|v| v.corrections_column()),
+        score_gap: resolved.alternatives.as_ref().map(|_| resolved.score_gap),
+        alternatives: resolved.alternatives.as_ref().map(|groups| {
+            groups
+                .iter()
+                .map(|g| g.label(lang))
+                .collect::<Vec<_>>()
+                .join("; ")
+        }),
     }
 }
 
@@ -350,6 +395,8 @@ mod tests {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
             // Inject the input street into a field so we can verify which
             // unique key each row mapped to — except we can't extend the
@@ -397,6 +444,8 @@ mod tests {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         });
         let out = dedup_then_resolve(vec![], &resolver, id_make_query, None);
@@ -421,6 +470,8 @@ mod tests {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         });
         let out = dedup_then_resolve(rows, &resolver, id_make_query, None);
@@ -453,6 +504,8 @@ mod tests {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         };
         let out = output_row_from(row, resolved, None);
@@ -480,6 +533,8 @@ mod tests {
             ambiguous: false,
             locality: None,
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         };
         let out = output_row_from(row, resolved, None);
@@ -582,6 +637,8 @@ mod tests {
                 region: None,
             }),
             reading: 0,
+            score_gap: None,
+            alternatives: None,
             validation: None,
         };
         let row = InputRow {

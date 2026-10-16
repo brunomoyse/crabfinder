@@ -24,12 +24,13 @@ use clap::Parser;
 use tracing::{info, warn};
 
 use crabfinder_core::Language;
-use crabfinder_service::batch::dedup::{ClosureResolver, dedup_then_resolve, row_query};
+use crabfinder_service::batch::dedup::{
+    ClosureResolver, RowExtras, dedup_then_resolve, resolve_row, row_query,
+};
 use crabfinder_service::batch::io::{
     BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson,
 };
-use crabfinder_service::resolver::{AddressQuery, SearchOptions, resolve_with};
-use crabfinder_service::validate::resolve_and_assess;
+use crabfinder_service::resolver::{AddressQuery, SearchOptions};
 use crabfinder_service::{AppState, LoadOptions};
 
 #[derive(Debug, Clone, Parser)]
@@ -88,6 +89,11 @@ pub struct Args {
     /// 11.2): what differs between each row and the official address.
     #[arg(long, default_value_t = false)]
     pub corrections: bool,
+
+    /// Add the `score_gap` and `alternatives` columns (v3 Phase 11.3): the
+    /// municipalities of the best answers, for rows that don't say which.
+    #[arg(long, default_value_t = false)]
+    pub alternatives: bool,
 }
 
 fn parse_format(s: &str) -> Result<OutputFormat, String> {
@@ -116,6 +122,7 @@ impl Args {
             format: OutputFormat::Csv,
             lang: None,
             corrections: false,
+            alternatives: false,
         }
     }
 }
@@ -176,13 +183,12 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
         mid_street_fallback: !args.no_mid_street,
         ..SearchOptions::default()
     };
-    let resolver = ClosureResolver(|q: &AddressQuery| {
-        if args.corrections {
-            resolve_and_assess(q, &search_opts, &ctx, args.lang)
-        } else {
-            resolve_with(q, &search_opts, &ctx)
-        }
-    });
+    let extras = RowExtras {
+        corrections: args.corrections,
+        alternatives: args.alternatives,
+        lang: args.lang,
+    };
+    let resolver = ClosureResolver(|q: &AddressQuery| resolve_row(q, &search_opts, &ctx, extras));
     let make_query = |row: &InputRow| row_query(&state.index, row);
     let t0 = std::time::Instant::now();
     let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query, args.lang));

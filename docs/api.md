@@ -104,6 +104,7 @@ not neither (400).
 | `bbox` | string | — | Hard filter `min_lon,min_lat,max_lon,max_lat` (else 400 `invalid bbox '…' (expected min_lon,min_lat,max_lon,max_lat)`) |
 | `focus_point` | string | — | `lat,lng` inside Belgium: soft re-rank, scores × `exp(-d / 25 km)` |
 | `lang` | string | — | `fr`, `nl` or `de` for `properties.label`; default: the address's own language (Brussels/Wallonia fr, Flanders nl, 4700–4791 de) |
+| `alternatives` | bool | false | Add `alternatives`: the best 50 buildings grouped by municipality (v3). Given anyway, from the features fetched, when `ambiguous` |
 
 A structured query needs at least one of `street`, `city`, `postcode`.
 
@@ -227,6 +228,7 @@ Top-level fields:
 | `count` | `features.length` |
 | `ambiguous` | The two best features lie on different streets (or municipalities) with `score₂/score₁ ≥ 0.9`: the query doesn't say which one. `Rue de la Station 1` → Charleroi vs La Louvière, `ambiguous: true` |
 | `score_gap` | `1 − score₂/score₁`; absent with fewer than two features or when scores aren't text relevance (nearest-number, locality answers) |
+| `alternatives` | With `alternatives=true`, or when `ambiguous`: up to 10 municipalities, best first, each `{nis, municipality_name, postal_codes, count, feature}` — `feature` is the municipality's best answer (a labelled BeSt Feature). Lets a UI ask "which one?" with one option per municipality. `features` is unchanged |
 | `match_type` | `strict` if any feature is strict, else `fuzzy` (empty result: `strict`) |
 | `deduplicated` | `false` with `expand=true` |
 | `raw_hits` | Raw BeSt rows the winning step considered, before dedup |
@@ -467,6 +469,7 @@ win): `?format=geojson&lang=nl`.
 | `lang` | — | `fr`/`nl`/`de` for the `label` column (else 400) |
 | `mid_street_fallback` | `true` | `false`: rows whose number can't be matched come back `not_found` instead of a street-level answer |
 | `corrections` | `false` | `true`: append the `/validate` columns `status` and `corrections` (v3) |
+| `alternatives` | `false` | `true`: append `score_gap` and `alternatives` — up to 5 municipalities of the best answers, best first, `Charleroi (6000, 6001); La Louvière (7100)` (v3) |
 
 ### Output
 
@@ -479,6 +482,8 @@ first fifteen are unchanged from v1. With `corrections=true`, two more
 columns follow: `status` (as `/validate`) and `corrections`, each one as
 `kind:field:input->official`, separated by `; `
 (`street_spelling:street:louisse->louise; postal_code_added:postal_code:->1050`).
+With `alternatives=true`, `score_gap` and `alternatives` follow (after
+`corrections` when both are on).
 
 ```
 $ curl -X POST -H 'Content-Type: text/csv' --data-binary @in.csv '127.0.0.1:8080/batch/geocode?lang=nl'

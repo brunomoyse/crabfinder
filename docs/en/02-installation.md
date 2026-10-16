@@ -208,6 +208,10 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--jobs-max-body-mb N` | `1024` | Largest file a batch job accepts, in MiB. |
 | `--jobs-ttl-hours N` | `24` | How long a finished job and its result are kept. |
 | `--jobs-threads N` | `0` | Threads the batch jobs share; `0` = half the cores. |
+| `--batch-max-body-mb N` | `50` | Largest body `POST /batch/geocode` accepts, in MiB. |
+| `--api-keys PATH` | (none) | Require API keys (see [Protection](#protection)). |
+| `--rate-limit-per-ip N` | (none) | At most N requests per minute per client address. |
+| `--metrics-require-key` | off | With `--api-keys`, `/metrics` needs a key too. |
 
 To stop: `Ctrl+C` in the running terminal.
 
@@ -238,9 +242,66 @@ export CRABFINDER_ABBREVIATION_DICT=./data/street-type-abbreviations-v1.yaml
 
 Same for `crabfinder-batch` (`CRABFINDER_INDEX`, `CRABFINDER_ABBREVIATION_DICT`, and `CRABFINDER_POIS` for the optional landmarks helper).
 
+## Protection
+
+Off by default: the service answers anyone who can reach it, which is fine on localhost or behind your own gateway. To expose it more widely, turn on API keys, rate limits, or both.
+
+API keys go in a YAML file:
+
+```yaml
+# keys.yaml (keep it private: chmod 600)
+keys:
+  - name: website
+    key: "6f1c0b9e4d2a8f7e3b5c1a9d"   # at least 16 characters, e.g. `openssl rand -hex 16`
+    rate_per_minute: 600              # optional
+  - name: nightly-import
+    key: "b81e44c02f9a7d3e6c5b1f08"
+    batch: true                       # may use POST /batch/geocode
+    jobs: true                        # may use /batch/jobs
+```
+
+```bash
+./target/release/crabfinder-service --index ./index-belgium --api-keys keys.yaml
+curl -H "Authorization: Bearer 6f1c0b9e4d2a8f7e3b5c1a9d" "http://127.0.0.1:8080/geocode?q=Grote+Markt+1+Brugge"
+```
+
+- Clients send their key as `Authorization: Bearer <key>` or `X-API-Key: <key>`. No key or a wrong one gives `401`.
+- `/health` stays open (for load balancers), and so does `/metrics` unless `--metrics-require-key`.
+- A key can only make the interactive requests (`/geocode`, `/reverse`, `/autocomplete`, …) unless it has `batch: true` or `jobs: true`; otherwise `403`.
+- Over its `rate_per_minute`, a key gets `429` with a `Retry-After` header. `--rate-limit-per-ip N` limits every client address the same way, with or without keys. Behind a reverse proxy all requests seem to come from the proxy: limit per address there instead.
+- Each key only sees its own batch jobs.
+- `/metrics` counts requests per key (`key` label) and refusals (`crabfinder_http_rejected_total`, reasons `unauthorized`, `forbidden`, `rate_limited`).
+
 ## Docker (alternative to steps 1, 3, 5 and 6)
 
-The `Dockerfile` builds `crabfinder-service`, `crabfinder-indexer` and `crabfinder-batch` into one image with the two YAML files bundled. Only the BeSt data (step 4) is needed on the host. The index lives in a volume mounted at `/index`, which must be writable (Tantivy takes a lock file even to read).
+The `Dockerfile` builds `crabfinder-service`, `crabfinder-indexer` and `crabfinder-batch` into one image (about 140 MB) with the two YAML files and `refresh_best.sh` bundled. The image has a health check on `/health`.
+
+### With Docker Compose (recommended)
+
+Nothing to download by hand: the `refresh` service fetches BeSt itself.
+
+```bash
+docker compose up -d
+docker compose logs -f refresh      # first run: download + indexing, a few minutes
+curl "http://127.0.0.1:8080/health"
+```
+
+What happens:
+
+1. `refresh` runs `refresh_best.sh` in the `data` volume: downloads the BeSt dump, builds `index-<date>`, checks it holds at least 6 million addresses, points `index-current` at it, deletes the download, then exits. While the index is less than 7 days old it does nothing, so later `docker compose up` are quick.
+2. `geocoder` starts once `refresh` succeeded: it serves `/data/index-current` on `127.0.0.1:8080` (loopback only), with batch jobs in the `jobs` volume.
+
+To refresh every week (BeSt publishes weekly), from the host's cron:
+
+```bash
+0 6 * * 1  cd /path/to/crabfinder && docker compose run --rm -e REFRESH_IF_OLDER_THAN_DAYS= refresh && docker compose restart geocoder
+```
+
+To publish the service beyond the host, put a reverse proxy with TLS in front, and turn on API keys or rate limits: uncomment the `CRABFINDER_API_KEYS` / `CRABFINDER_RATE_LIMIT_PER_IP` lines in `docker-compose.yml` (see [Protection](#protection)). The optional OpenStreetMap landmarks helper has commented lines there too; it stays off by default.
+
+### By hand
+
+Only the BeSt data (step 4) is needed on the host. The index lives in a volume mounted at `/index`, which must be writable (Tantivy takes a lock file even to read).
 
 ```bash
 docker build -t crabfinder .
@@ -261,17 +322,17 @@ docker run --rm -i -v crabfinder-index:/index crabfinder crabfinder-batch < inpu
 Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured. The optional OpenStreetMap helpers are not bundled. To index hamlet names, mount `data/` and add `--places`:
 
 ```bash
-docker run --rm -v ./best-full-latest:/best:ro -v ./data:/data:ro -v crabfinder-index:/index crabfinder \
+docker run --rm -v ./best-full-latest:/best:ro -v ./data:/osm:ro -v crabfinder-index:/index crabfinder \
     crabfinder-indexer --best-dir /best --output /index \
     --notability-whitelist /usr/share/crabfinder/notability-whitelist-v1.yaml \
-    --places /data/osm-places-be-v1.csv
+    --places /osm/osm-places-be-v1.csv
 ```
 
 Likewise for the optional landmarks helper, which the service loads at startup: mount `data/` on the serving container and pass `--pois`:
 
 ```bash
-docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index -v ./data:/data:ro crabfinder \
-    crabfinder-service --pois /data/osm-pois-be-v1.csv
+docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index -v ./data:/osm:ro crabfinder \
+    crabfinder-service --pois /osm/osm-pois-be-v1.csv
 ```
 
 ## Refreshing the data
@@ -289,7 +350,7 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `WITH_OSM=1` to index the optional OSM places, `BEST_URL=…` to use another download URL, `STAMP=2026-10-15` to name the folders differently from today's date (an existing `index-<stamp>/` is deleted and rebuilt), `VALIDATE_PORT=N` to move the validation service off port 18080, `EVAL_SETS="a.yaml b.json"` to validate other sets, `RESTART_CMD="…"` to restart the service after the swap. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
+The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `WITH_OSM=1` to index the optional OSM places, `BEST_URL=…` to use another download URL, `STAMP=2026-10-15` to name the folders differently from today's date (an existing `index-<stamp>/` is deleted and rebuilt), `VALIDATE_PORT=N` to move the validation service off port 18080, `EVAL_SETS="a.yaml b.json"` to validate other sets, `RESTART_CMD="…"` to restart the service after the swap, `REFRESH_IF_OLDER_THAN_DAYS=7` to do nothing while `index-current` is younger than that, `PRUNE=1` to delete the download once indexed and every index but the new one and the previous one, `BIN_DIR=…` to use already-built binaries instead of building them (then, without `crabfinder-eval` there, step 3 only checks the index holds at least `MIN_DOCS` addresses, 6 million by default). The index being served is never rebuilt in place: a second run on the same day gets a time suffix. Without `PRUNE=1`, old `best-*` / `index-*` folders are kept: remove them yourself once the new index is in service.
 
 ### Scheduling the refresh
 

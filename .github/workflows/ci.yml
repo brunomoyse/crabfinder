@@ -38,3 +38,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: scripts/coverage.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Build only (the image is not pushed); compose file checked too.
+      - run: docker compose config -q
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: crabfinder:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

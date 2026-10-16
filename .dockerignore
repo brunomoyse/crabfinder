@@ -1,8 +1,9 @@
-# Build context = sources + the two curated YAMLs only. Everything else
+# Build context = sources, the refresh script and the two curated YAMLs only. Everything else
 # (build cache, multi-GB BeSt dumps, indexes, reports) stays out.
 *
 !Cargo.toml
 !Cargo.lock
 !crates/
+!scripts/refresh_best.sh
 !data/notability-whitelist-v1.yaml
 !data/street-type-abbreviations-v1.yaml

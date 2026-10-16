@@ -11,11 +11,14 @@
 //! - `GET /batch/jobs/{id}/result`: the output once `done` (409 before).
 //! - `DELETE /batch/jobs/{id}`: cancels a queued or running job (202),
 //!   deletes a finished one and its result (204).
+//!
+//! With API keys (v3 Phase 11.7), a job belongs to the key that submitted
+//! it: other keys get 404 for it.
 
 use std::sync::Arc;
 
 use axum::{
-    Json,
+    Extension, Json,
     body::Body,
     extract::{FromRequest, Multipart, Path, State},
     http::{
@@ -30,6 +33,7 @@ use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::ServiceError;
+use super::auth::Caller;
 use crate::batch::http::{BatchOptions, BatchQuery, HttpError, JsonBody};
 use crate::batch::io::{BatchError, InputRow, read_rows, sniff_delimiter};
 use crate::jobs::{Deleted, JobState, JobStatus, Jobs, Upload};
@@ -72,6 +76,10 @@ impl<'a> JobView<'a> {
     }
 }
 
+fn name(caller: &Option<Extension<Caller>>) -> Option<&str> {
+    caller.as_ref().map(|c| c.0.0.as_str())
+}
+
 fn status_url(id: &str) -> String {
     format!("/batch/jobs/{id}")
 }
@@ -95,6 +103,7 @@ pub async fn disabled() -> ServiceError {
 /// `POST /batch/jobs`.
 pub async fn submit(
     State(jobs): State<Arc<Jobs>>,
+    caller: Option<Extension<Caller>>,
     request: Request<Body>,
 ) -> Result<Response, ServiceError> {
     let ct = request
@@ -122,7 +131,7 @@ pub async fn submit(
         }
     };
     let st = jobs
-        .submit(upload, options, delimiter)
+        .submit(upload, options, delimiter, caller.map(|c| c.0.0))
         .map_err(|e| ServiceError::internal("job submit", e))?;
     Ok((
         StatusCode::ACCEPTED,
@@ -289,18 +298,22 @@ fn rows_csv(rows: &[InputRow]) -> Result<Vec<u8>, ServiceError> {
 /// `GET /batch/jobs/{id}`.
 pub async fn status(
     State(jobs): State<Arc<Jobs>>,
+    caller: Option<Extension<Caller>>,
     Path(id): Path<String>,
 ) -> Result<Response, ServiceError> {
-    let st = jobs.get(&id).ok_or_else(|| unknown(&id))?;
+    let st = jobs.get(&id, name(&caller)).ok_or_else(|| unknown(&id))?;
     Ok(Json(JobView::of(&st)).into_response())
 }
 
 /// `GET /batch/jobs/{id}/result`.
 pub async fn result(
     State(jobs): State<Arc<Jobs>>,
+    caller: Option<Extension<Caller>>,
     Path(id): Path<String>,
 ) -> Result<Response, ServiceError> {
-    let (st, path) = jobs.result(&id).ok_or_else(|| unknown(&id))?;
+    let (st, path) = jobs
+        .result(&id, name(&caller))
+        .ok_or_else(|| unknown(&id))?;
     if st.status != JobStatus::Done {
         return Err(ServiceError::Conflict(format!(
             "job '{id}' is {}, not done",
@@ -334,10 +347,12 @@ pub async fn result(
 /// `DELETE /batch/jobs/{id}`.
 pub async fn delete(
     State(jobs): State<Arc<Jobs>>,
+    caller: Option<Extension<Caller>>,
     Path(id): Path<String>,
 ) -> Result<Response, ServiceError> {
     let key = id.clone();
-    let outcome = tokio::task::spawn_blocking(move || jobs.delete(&key))
+    let owner = caller.map(|c| c.0.0);
+    let outcome = tokio::task::spawn_blocking(move || jobs.delete(&key, owner.as_deref()))
         .await
         .map_err(|e| ServiceError::internal("job delete", e))?;
     match outcome.ok_or_else(|| unknown(&id))? {

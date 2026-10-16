@@ -78,7 +78,10 @@ What it handles:
 - **Labels in any language**: `lang=fr|nl|de` and a ready-to-print
   `label` on every result.
 - **Operations**: request deadlines, a concurrency limit, CORS,
-  Prometheus `/metrics`, and a one-command BeSt refresh.
+  Prometheus `/metrics`, a one-command BeSt refresh, and a Docker Compose
+  setup that downloads BeSt and builds the index by itself.
+- **Protection** (off by default): API keys with per-key rights and rate
+  limits, per-address rate limits, body limits.
 
 ## Quick start
 
@@ -104,6 +107,13 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&limit=1"
 
 # 5. Batch a CSV (`id,street,house_number,postal_code` or `id,address`)
 ./target/release/crabfinder-batch --index ./index-current -i in.csv -o out.csv
+```
+
+Or with Docker, nothing else to install (`docker-compose.yml`: downloads
+BeSt, builds the index, serves it on `127.0.0.1:8080`):
+
+```bash
+docker compose up -d && docker compose logs -f refresh
 ```
 
 To index a bundle you already have:

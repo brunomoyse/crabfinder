@@ -3,9 +3,11 @@
 //! Series:
 //! - `crabfinder_http_requests_total{route,method,status}` and
 //!   `crabfinder_http_request_duration_seconds{route}` (histogram), per
-//!   matched route (`track`);
-//! - `crabfinder_http_rejected_total{route,reason}`: requests answered 503
-//!   by the timeout / concurrency guard (`http::guard`);
+//!   matched route (`track`); with API keys, `requests_total` also has a
+//!   `key` label (the key's name, v3 Phase 11.7);
+//! - `crabfinder_http_rejected_total{route,reason}`: requests turned away:
+//!   `timeout` by the guard (`http::guard`), `unauthorized`, `forbidden`
+//!   and `rate_limited` by `http::auth`;
 //! - `crabfinder_search_total{tier,confidence,match_type}`: one per
 //!   resolver search (`/geocode`, every batch row), labelled by the top
 //!   candidate;
@@ -25,6 +27,7 @@ use metrics::{counter, histogram};
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tracing::warn;
 
+use crate::http::auth::Caller;
 use crate::resolver::CandidateSet;
 
 /// Request latency buckets, seconds: sub-millisecond strict hits up to a
@@ -74,13 +77,23 @@ pub async fn track(req: Request, next: Next) -> Response {
     let t0 = Instant::now();
     let resp = next.run(req).await;
     let status = resp.status().as_u16().to_string();
-    counter!(
-        "crabfinder_http_requests_total",
-        "route" => route.clone(),
-        "method" => method,
-        "status" => status,
-    )
-    .increment(1);
+    match resp.extensions().get::<Caller>() {
+        Some(Caller(key)) => counter!(
+            "crabfinder_http_requests_total",
+            "route" => route.clone(),
+            "method" => method,
+            "status" => status,
+            "key" => key.clone(),
+        )
+        .increment(1),
+        None => counter!(
+            "crabfinder_http_requests_total",
+            "route" => route.clone(),
+            "method" => method,
+            "status" => status,
+        )
+        .increment(1),
+    }
     histogram!("crabfinder_http_request_duration_seconds", "route" => route)
         .record(t0.elapsed().as_secs_f64());
     resp
@@ -94,7 +107,8 @@ pub fn route_of(req: &Request) -> String {
         .map_or_else(|| "unmatched".to_owned(), |p| p.as_str().to_owned())
 }
 
-/// Count a request the guard turned away (`reason`: `timeout`).
+/// Count a request turned away (`reason`: `timeout`, `unauthorized`,
+/// `forbidden`, `rate_limited`).
 pub fn record_rejected(route: String, reason: &'static str) {
     counter!("crabfinder_http_rejected_total", "route" => route, "reason" => reason).increment(1);
 }

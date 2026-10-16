@@ -208,6 +208,10 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--jobs-max-body-mb N` | `1024` | Taille maximale d'un fichier de job batch, en Mio. |
 | `--jobs-ttl-hours N` | `24` | Durée de conservation d'un job terminé et de son résultat. |
 | `--jobs-threads N` | `0` | Threads partagés par les jobs batch ; `0` = la moitié des cœurs. |
+| `--batch-max-body-mb N` | `50` | Taille maximale du corps accepté par `POST /batch/geocode`, en Mio. |
+| `--api-keys PATH` | (aucun) | Exiger des clés d'API (voir [Protection](#protection)). |
+| `--rate-limit-per-ip N` | (aucun) | Au plus N requêtes par minute par adresse cliente. |
+| `--metrics-require-key` | désactivé | Avec `--api-keys`, `/metrics` exige aussi une clé. |
 
 Pour arrêter le service : `Ctrl+C` dans le terminal où il tourne.
 
@@ -238,9 +242,66 @@ export CRABFINDER_ABBREVIATION_DICT=./data/street-type-abbreviations-v1.yaml
 
 Idem pour `crabfinder-batch` (`CRABFINDER_INDEX`, `CRABFINDER_ABBREVIATION_DICT`, et `CRABFINDER_POIS` pour l'aide facultative aux points d'intérêt).
 
+## Protection
+
+Désactivée par défaut : le service répond à quiconque peut l'atteindre, ce qui convient en local ou derrière ta propre passerelle. Pour l'exposer plus largement, active les clés d'API, les limites de débit, ou les deux.
+
+Les clés d'API vont dans un fichier YAML :
+
+```yaml
+# keys.yaml (à garder privé : chmod 600)
+keys:
+  - name: site-web
+    key: "6f1c0b9e4d2a8f7e3b5c1a9d"   # au moins 16 caractères, par ex. `openssl rand -hex 16`
+    rate_per_minute: 600              # facultatif
+  - name: import-nocturne
+    key: "b81e44c02f9a7d3e6c5b1f08"
+    batch: true                       # peut utiliser POST /batch/geocode
+    jobs: true                        # peut utiliser /batch/jobs
+```
+
+```bash
+./target/release/crabfinder-service --index ./index-belgium --api-keys keys.yaml
+curl -H "Authorization: Bearer 6f1c0b9e4d2a8f7e3b5c1a9d" "http://127.0.0.1:8080/geocode?q=Grote+Markt+1+Brugge"
+```
+
+- Les clients envoient leur clé en `Authorization: Bearer <clé>` ou `X-API-Key: <clé>`. Sans clé ou avec une mauvaise : `401`.
+- `/health` reste ouvert (pour les répartiteurs de charge), `/metrics` aussi, sauf avec `--metrics-require-key`.
+- Une clé ne peut faire que les requêtes interactives (`/geocode`, `/reverse`, `/autocomplete`, …), sauf si elle a `batch: true` ou `jobs: true` ; sinon `403`.
+- Au-delà de son `rate_per_minute`, une clé reçoit un `429` avec un en-tête `Retry-After`. `--rate-limit-per-ip N` limite de la même façon chaque adresse cliente, avec ou sans clés. Derrière un reverse proxy, toutes les requêtes semblent venir du proxy : limite plutôt par adresse à ce niveau-là.
+- Chaque clé ne voit que ses propres jobs batch.
+- `/metrics` compte les requêtes par clé (label `key`) et les refus (`crabfinder_http_rejected_total`, raisons `unauthorized`, `forbidden`, `rate_limited`).
+
 ## Docker (alternative aux étapes 1, 3, 5 et 6)
 
-Le `Dockerfile` construit `crabfinder-service`, `crabfinder-indexer` et `crabfinder-batch` dans une seule image, avec les deux fichiers YAML inclus. Seules les données BeSt (étape 4) sont nécessaires sur la machine hôte. L'index vit dans un volume monté sur `/index`, qui doit être accessible en écriture (Tantivy pose un fichier de verrou même en lecture).
+Le `Dockerfile` construit `crabfinder-service`, `crabfinder-indexer` et `crabfinder-batch` dans une seule image (environ 140 Mo), avec les deux fichiers YAML et `refresh_best.sh` inclus. L'image a un contrôle de santé sur `/health`.
+
+### Avec Docker Compose (recommandé)
+
+Rien à télécharger à la main : le service `refresh` va chercher BeSt lui-même.
+
+```bash
+docker compose up -d
+docker compose logs -f refresh      # premier lancement : téléchargement + indexation, quelques minutes
+curl "http://127.0.0.1:8080/health"
+```
+
+Ce qui se passe :
+
+1. `refresh` lance `refresh_best.sh` dans le volume `data` : télécharge le dump BeSt, construit `index-<date>`, vérifie qu'il contient au moins 6 millions d'adresses, fait pointer `index-current` dessus, supprime le téléchargement, puis s'arrête. Tant que l'index a moins de 7 jours, il ne fait rien : les `docker compose up` suivants sont rapides.
+2. `geocoder` démarre une fois `refresh` réussi : il sert `/data/index-current` sur `127.0.0.1:8080` (boucle locale uniquement), avec les jobs batch dans le volume `jobs`.
+
+Pour mettre à jour chaque semaine (BeSt publie chaque semaine), depuis le cron de la machine hôte :
+
+```bash
+0 6 * * 1  cd /chemin/vers/crabfinder && docker compose run --rm -e REFRESH_IF_OLDER_THAN_DAYS= refresh && docker compose restart geocoder
+```
+
+Pour publier le service au-delà de la machine, mets un reverse proxy avec TLS devant, et active les clés d'API ou les limites de débit : décommente les lignes `CRABFINDER_API_KEYS` / `CRABFINDER_RATE_LIMIT_PER_IP` de `docker-compose.yml` (voir [Protection](#protection)). L'aide facultative OpenStreetMap aux points d'intérêt y a aussi des lignes commentées ; elle reste désactivée par défaut.
+
+### À la main
+
+Seules les données BeSt (étape 4) sont nécessaires sur la machine hôte. L'index vit dans un volume monté sur `/index`, qui doit être accessible en écriture (Tantivy pose un fichier de verrou même en lecture).
 
 ```bash
 docker build -t crabfinder .
@@ -261,17 +322,17 @@ docker run --rm -i -v crabfinder-index:/index crabfinder crabfinder-batch < inpu
 Dans l'image, le service écoute sur `0.0.0.0` (`CRABFINDER_HOST`) et le dictionnaire d'abréviations est préconfiguré. Les aides OpenStreetMap facultatives ne sont pas incluses. Pour indexer les noms de hameaux, monter `data/` et ajouter `--places` :
 
 ```bash
-docker run --rm -v ./best-full-latest:/best:ro -v ./data:/data:ro -v crabfinder-index:/index crabfinder \
+docker run --rm -v ./best-full-latest:/best:ro -v ./data:/osm:ro -v crabfinder-index:/index crabfinder \
     crabfinder-indexer --best-dir /best --output /index \
     --notability-whitelist /usr/share/crabfinder/notability-whitelist-v1.yaml \
-    --places /data/osm-places-be-v1.csv
+    --places /osm/osm-places-be-v1.csv
 ```
 
 De même pour l'aide facultative aux points d'intérêt, que le service charge au démarrage : monter `data/` sur le conteneur qui sert et passer `--pois` :
 
 ```bash
-docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index -v ./data:/data:ro crabfinder \
-    crabfinder-service --pois /data/osm-pois-be-v1.csv
+docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index -v ./data:/osm:ro crabfinder \
+    crabfinder-service --pois /osm/osm-pois-be-v1.csv
 ```
 
 ## Mettre à jour les données
@@ -289,7 +350,7 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement, `STAMP=2026-10-15` pour nommer les dossiers autrement que par la date du jour (un `index-<stamp>/` existant est supprimé puis reconstruit), `VALIDATE_PORT=N` pour changer le port 18080 du service de validation, `EVAL_SETS="a.yaml b.json"` pour valider d'autres jeux, `RESTART_CMD="…"` pour redémarrer le service après la bascule. Les anciens dossiers `best-*` / `index-*` ne sont pas supprimés : fais-le toi-même une fois le nouvel index en service.
+Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement, `STAMP=2026-10-15` pour nommer les dossiers autrement que par la date du jour (un `index-<stamp>/` existant est supprimé puis reconstruit), `VALIDATE_PORT=N` pour changer le port 18080 du service de validation, `EVAL_SETS="a.yaml b.json"` pour valider d'autres jeux, `RESTART_CMD="…"` pour redémarrer le service après la bascule, `REFRESH_IF_OLDER_THAN_DAYS=7` pour ne rien faire tant qu'`index-current` est plus récent que cela, `PRUNE=1` pour supprimer le téléchargement une fois indexé et tous les index sauf le nouveau et le précédent, `BIN_DIR=…` pour utiliser des binaires déjà construits au lieu de les compiler (alors, sans `crabfinder-eval` à cet endroit, l'étape 3 vérifie seulement que l'index contient au moins `MIN_DOCS` adresses, 6 millions par défaut). L'index en service n'est jamais reconstruit sur place : un deuxième lancement le même jour reçoit un suffixe horaire. Sans `PRUNE=1`, les anciens dossiers `best-*` / `index-*` sont conservés : supprime-les toi-même une fois le nouvel index en service.
 
 ### Planifier la mise à jour
 

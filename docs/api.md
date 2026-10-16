@@ -12,9 +12,11 @@ BeSt address nearest to it (`confidence: locality` / `landmark`), and the
 `locality` echo says how the query was understood (`source: osm`), with no
 OSM position.
 
-There is no authentication, so bind to localhost or front this with your
-own gateway in production. CORS allows any origin unless `--cors-origin`
-is set (any method, any header).
+By default there is no authentication: bind to localhost or front the
+service with your own gateway. API keys and rate limits can be switched
+on (`--api-keys`, `--rate-limit-per-ip`, see [Protection](#protection)).
+CORS allows any origin unless `--cors-origin` is set (any method; the
+headers the browser asks for, `Authorization` included).
 
 | Route | Purpose |
 |---|---|
@@ -50,6 +52,10 @@ is set (any method, any header).
 | `--jobs-max-body-mb` | `CRABFINDER_JOBS_MAX_BODY_MB` | `1024` | Upload limit of `POST /batch/jobs` (413 above) |
 | `--jobs-ttl-hours` | `CRABFINDER_JOBS_TTL_HOURS` | `24` | A finished job and its result are deleted this long after it finished |
 | `--jobs-threads` | `CRABFINDER_JOBS_THREADS` | `0` | Resolver threads shared by the running jobs; `0` = half the cores |
+| `--batch-max-body-mb` | `CRABFINDER_BATCH_MAX_BODY_MB` | `50` | Body limit of `POST /batch/geocode` (413 above) |
+| `--api-keys` | `CRABFINDER_API_KEYS` | off | YAML keys file: every route but `/health` (and `/metrics`) then needs a key ([Protection](#protection)) |
+| `--rate-limit-per-ip` | `CRABFINDER_RATE_LIMIT_PER_IP` | off | Requests per minute per client address |
+| `--metrics-require-key` | `CRABFINDER_METRICS_REQUIRE_KEY` | off | With `--api-keys`, `/metrics` needs a key too |
 
 Request logs (one span per request, with status and latency) go to
 stderr at `info`; set `RUST_LOG` to change the level.
@@ -66,16 +72,21 @@ Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`,
 | Status | When |
 |---|---|
 | `400` | Missing / malformed parameter (`unknown lang 'en' (expected fr, nl or de)`, `lat out of range [-90, 90]: 99`, `postcode must be 4 digits, got '105'`, …) |
+| `401` | No API key, or an unknown one (with `--api-keys`); `WWW-Authenticate: Bearer` |
+| `403` | The key may not use this route (`batch` / `jobs`) |
 | `404` | Unknown batch job |
 | `409` | A batch job's result asked for before the job is `done` |
 | `413` | A batch job upload over `--jobs-max-body-mb` |
+| `429` | Over a rate limit; `Retry-After` gives the seconds to wait |
 | `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included; `/autocomplete` with `--no-autocomplete`; `/batch/jobs` without `--jobs-dir` |
 | `500` | Internal error (Tantivy failure) |
 
 `/batch/geocode` errors are `text/plain` (`csv: csv header has none of
 the `street`, `address` and `best_id` columns`, `unknown format 'xml'
 (expected csv or geojson)`): `400` for bad input or options, `413` for
-a JSON payload over 10 000 addresses. Its `503` (deadline) is JSON.
+a JSON payload over 10 000 addresses or a body over
+`--batch-max-body-mb`. Its `503` (deadline) and the protection errors
+(`401`, `403`, `429`) are JSON.
 
 ## `GET /health`
 
@@ -699,15 +710,68 @@ service stopped or killed mid-job takes it up again from the last
 checkpoint at the next start. Finished jobs are deleted
 `--jobs-ttl-hours` (24) after they finish.
 
+## Protection
+
+All off by default: without these flags every route is open, as before.
+
+### API keys
+
+`--api-keys keys.yaml`:
+
+```yaml
+keys:
+  - name: frontend
+    key: "6f1c0b9e4d2a8f7e3b5c1a9d"   # at least 16 characters
+    rate_per_minute: 600              # optional; no limit without it
+  - name: etl
+    key: "b81e44c02f9a7d3e6c5b1f08"
+    batch: true                       # may use POST /batch/geocode
+    jobs: true                        # may use /batch/jobs
+```
+
+A key is sent as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+Every route needs one except `/health` and `/metrics` (unless
+`--metrics-require-key`). Without one, or with an unknown one: `401`.
+`/batch/geocode` and `/batch/jobs` also need `batch: true` /
+`jobs: true` on the key, else `403`: by default a key may only make the
+interactive requests. Names and keys must be unique; the service refuses
+to start otherwise. Keys are compared in constant time.
+
+A batch job belongs to the key that submitted it: other keys get `404`
+for it. The key's name is a label of `crabfinder_http_requests_total`.
+
+```
+$ curl -s -H 'Authorization: Bearer 6f1c0b9e4d2a8f7e3b5c1a9d' '127.0.0.1:8080/geocode?q=Rue+de+la+Loi+16+Bruxelles'
+$ curl -s '127.0.0.1:8080/geocode?q=Rue+de+la+Loi+16+Bruxelles'
+{"error":"missing API key (Authorization: Bearer <key> or X-API-Key: <key>)"}
+```
+
+### Rate limits
+
+A key's `rate_per_minute`, and `--rate-limit-per-ip N` for every client
+address (with or without keys), are token buckets: N requests a minute,
+in bursts of up to N. Over it: `429` with `Retry-After` (seconds) and
+`{"error":"rate limit exceeded: 600 requests per minute"}`. `/health` is
+never limited.
+
+Behind a reverse proxy, every request comes from the proxy's address, so
+limit per address at the proxy instead.
+
+### Body limits
+
+`POST /batch/geocode`: `--batch-max-body-mb` (50). `POST /batch/jobs`:
+`--jobs-max-body-mb` (1024). Over them: `413`. The other routes are
+`GET` and read no body.
+
 ## `GET /metrics`
 
 Prometheus text format (`text/plain; version=0.0.4`):
 
 | Series | Labels |
 |---|---|
-| `crabfinder_http_requests_total` | `route` (template, e.g. `/building/{building_group_id}/units`), `method`, `status` |
+| `crabfinder_http_requests_total` | `route` (template, e.g. `/building/{building_group_id}/units`), `method`, `status`; with API keys, `key` (the key's name) |
 | `crabfinder_http_request_duration_seconds` | `route`; histogram, 1 ms … 10 s buckets |
-| `crabfinder_http_rejected_total` | `route`, `reason` (`timeout`) |
+| `crabfinder_http_rejected_total` | `route`, `reason` (`timeout`; with protection on: `unauthorized`, `forbidden`, `rate_limited`) |
 | `crabfinder_search_total` | `tier` (`exact`, `typo`, `nearest`, `street`, `typo_street`, `or_with_number`, `or_street`, `locality`, `area`, `none`), `confidence`, `match_type` of the top result; one per `/geocode` call and per batch row |
 | `crabfinder_search_capped_total` | (none); searches whose over-fetch hit the 2000-row cap |
 

@@ -312,12 +312,12 @@ async fn jobs_queue_and_cancel() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     assert!(!dir.join(&a).join("result.part").exists());
-    let st = j.jobs.get(&b).unwrap();
+    let st = j.jobs.get(&b, None).unwrap();
     assert_eq!(
         (st.status, st.rows_done, st.started_at),
         (JobStatus::Cancelled, 0, None)
     );
-    let st = j.jobs.get(&a).unwrap();
+    let st = j.jobs.get(&a, None).unwrap();
     assert!(st.rows_done < 100, "{}", st.rows_done);
 
     // Cancelled jobs are finished: deleting again removes them.
@@ -441,9 +441,9 @@ async fn a_restarted_service_resumes_interrupted_jobs() {
             .join(".upload-dddddddddddddddddddddddddddddddd")
             .exists()
     );
-    assert!(jobs.get(old).is_none() && !jobs_dir.join(old).exists());
+    assert!(jobs.get(old, None).is_none() && !jobs_dir.join(old).exists());
     assert!(jobs_dir.join("README").exists());
-    assert!(jobs.get("ffffffffffffffffffffffffffffffff").is_none());
+    assert!(jobs.get("ffffffffffffffffffffffffffffffff", None).is_none());
 }
 
 #[tokio::test]
@@ -453,11 +453,11 @@ async fn finished_jobs_expire_after_the_ttl() {
     let v = wait(&j.router, &id, finished).await;
     let finished_at = v["finished_at"].as_u64().unwrap();
     assert_eq!(j.jobs.sweep(finished_at + 3599), 0);
-    assert!(j.jobs.get(&id).is_some());
+    assert!(j.jobs.get(&id, None).is_some());
     assert_eq!(j.jobs.sweep(finished_at + 3600), 1);
-    assert!(j.jobs.get(&id).is_none());
+    assert!(j.jobs.get(&id, None).is_none());
     assert!(!j.jobs.config().dir.join(&id).exists());
-    let st: Option<JobState> = j.jobs.get(&id);
+    let st: Option<JobState> = j.jobs.get(&id, None);
     assert!(st.is_none());
 }
 

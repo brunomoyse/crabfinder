@@ -30,15 +30,15 @@
 //! Caps:
 //! - JSON path refuses payloads with > 10_000 addresses (HTTP 413 — use
 //!   multipart for larger files; per design §4.6).
-//! - Request bodies are bounded at 50 MiB (`MULTIPART_BODY_LIMIT`, applied
-//!   by `body_limit_layer`).
+//! - Request bodies are bounded at 50 MiB (`DEFAULT_BODY_LIMIT`;
+//!   `--batch-max-body-mb`, v3 Phase 11.7): 413 above.
 
 use std::io::Write;
 use std::time::{Duration, Instant};
 
 use axum::{
     body::Body,
-    extract::{DefaultBodyLimit, FromRequest, Multipart, State},
+    extract::{FromRequest, Multipart, State},
     http::{Request, StatusCode, header::CONTENT_TYPE},
     response::{IntoResponse, Response},
 };
@@ -77,6 +77,8 @@ pub struct BatchTuning {
     pub chunk_rows: usize,
     /// Test hook: a pause before each chunk, to exercise the deadline.
     pub chunk_delay: Duration,
+    /// Request body limit.
+    pub max_body_bytes: usize,
 }
 
 impl Default for BatchTuning {
@@ -84,6 +86,7 @@ impl Default for BatchTuning {
         Self {
             chunk_rows: CHUNK_ROWS,
             chunk_delay: Duration::ZERO,
+            max_body_bytes: DEFAULT_BODY_LIMIT,
         }
     }
 }
@@ -192,16 +195,9 @@ pub(crate) struct JsonBody {
     pub(crate) options: BatchOptions,
 }
 
-/// Maximum body size for multipart CSV uploads (50 MiB — handles a 100 k row
-/// CSV at ~500 bytes/row with headroom).
-const MULTIPART_BODY_LIMIT: usize = 50 * 1024 * 1024;
-
-/// Axum-layer wrapper to install the body limit only on the batch route.
-/// Other routes keep the framework default. The router wires this via
-/// `.route_layer(DefaultBodyLimit::max(MULTIPART_BODY_LIMIT))`.
-pub fn body_limit_layer() -> DefaultBodyLimit {
-    DefaultBodyLimit::max(MULTIPART_BODY_LIMIT)
-}
+/// Default body limit (50 MiB: a 100 k row CSV at ~500 bytes/row with
+/// headroom).
+pub const DEFAULT_BODY_LIMIT: usize = 50 * 1024 * 1024;
 
 /// `POST /batch/geocode` handler.
 ///
@@ -211,7 +207,12 @@ pub fn body_limit_layer() -> DefaultBodyLimit {
 pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>) -> Response {
     let deadline = request.extensions().get::<Deadline>().copied();
     let permit = request.extensions().get::<Permit>().cloned();
-    let tuning = request.extensions().get::<BatchTuning>().copied();
+    let tuning = request
+        .extensions()
+        .get::<BatchTuning>()
+        .copied()
+        .unwrap_or_default();
+    let limit = tuning.max_body_bytes;
     let ct = request
         .headers()
         .get(CONTENT_TYPE)
@@ -224,7 +225,7 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
     };
 
     let (rows, options) = if ct.starts_with("application/json") {
-        match parse_json(request.into_body()).await {
+        match parse_json(request.into_body(), limit).await {
             Ok((rows, opts)) => (rows, opts),
             Err(e) => return e.into_response(),
         }
@@ -236,14 +237,14 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
             Ok(m) => m,
             Err(e) => return bad_request(format!("multipart: {e}")).into_response(),
         };
-        match parse_multipart(mp).await {
+        match parse_multipart(mp, limit).await {
             Ok((rows, opts)) => (rows, opts),
             Err(e) => return e.into_response(),
         }
     } else {
         // Default: treat the body as raw CSV. text/csv, application/octet-stream,
         // anything else.
-        match parse_raw_csv(request.into_body()).await {
+        match parse_raw_csv(request.into_body(), limit).await {
             Ok(rows) => (rows, BatchOptions::default()),
             Err(e) => return e.into_response(),
         }
@@ -279,7 +280,7 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
         state,
         rows,
         options,
-        tuning: tuning.unwrap_or_default(),
+        tuning,
         deadline: deadline.map_or_else(|| Instant::now() + Duration::from_secs(600), |d| d.0),
         _permit: permit,
     };
@@ -419,10 +420,8 @@ pub(crate) fn payload_too_large(msg: impl Into<String>) -> HttpError {
     }
 }
 
-async fn parse_json(body: Body) -> Result<(Vec<InputRow>, BatchOptions), HttpError> {
-    let bytes = axum::body::to_bytes(body, MULTIPART_BODY_LIMIT)
-        .await
-        .map_err(|e| bad_request(format!("read body: {e}")))?;
+async fn parse_json(body: Body, limit: usize) -> Result<(Vec<InputRow>, BatchOptions), HttpError> {
+    let bytes = read_body(body, limit).await?;
     let parsed: JsonBody =
         serde_json::from_slice(&bytes).map_err(|e| bad_request(format!("parse json: {e}")))?;
     if parsed.addresses.len() > MAX_JSON_ADDRESSES {
@@ -434,28 +433,35 @@ async fn parse_json(body: Body) -> Result<(Vec<InputRow>, BatchOptions), HttpErr
     Ok((parsed.addresses, parsed.options))
 }
 
-async fn parse_multipart(mut mp: Multipart) -> Result<(Vec<InputRow>, BatchOptions), HttpError> {
+async fn parse_multipart(
+    mut mp: Multipart,
+    limit: usize,
+) -> Result<(Vec<InputRow>, BatchOptions), HttpError> {
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut options = BatchOptions::default();
-    while let Some(field) = mp
-        .next_field()
-        .await
-        .map_err(|e| bad_request(format!("multipart: {e}")))?
-    {
+    // Past the body limit, multer fails with a 413 status.
+    let mp_err = |what: &str, e: axum::extract::multipart::MultipartError| {
+        if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            too_large(limit)
+        } else {
+            bad_request(format!("{what}: {e}"))
+        }
+    };
+    while let Some(field) = mp.next_field().await.map_err(|e| mp_err("multipart", e))? {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "file" => {
                 let bytes = field
                     .bytes()
                     .await
-                    .map_err(|e| bad_request(format!("multipart file: {e}")))?;
+                    .map_err(|e| mp_err("multipart file", e))?;
                 file_bytes = Some(bytes.to_vec());
             }
             "options" => {
                 let s = field
                     .text()
                     .await
-                    .map_err(|e| bad_request(format!("multipart options: {e}")))?;
+                    .map_err(|e| mp_err("multipart options", e))?;
                 options = serde_json::from_str(&s)
                     .map_err(|e| bad_request(format!("parse options json: {e}")))?;
             }
@@ -469,11 +475,30 @@ async fn parse_multipart(mut mp: Multipart) -> Result<(Vec<InputRow>, BatchOptio
     Ok((rows, options))
 }
 
-async fn parse_raw_csv(body: Body) -> Result<Vec<InputRow>, HttpError> {
-    let bytes = axum::body::to_bytes(body, MULTIPART_BODY_LIMIT)
-        .await
-        .map_err(|e| bad_request(format!("read body: {e}")))?;
+async fn parse_raw_csv(body: Body, limit: usize) -> Result<Vec<InputRow>, HttpError> {
+    let bytes = read_body(body, limit).await?;
     csv_bytes_to_rows(&bytes)
+}
+
+/// The whole body, or a 413 past `limit` bytes.
+async fn read_body(body: Body, limit: usize) -> Result<Vec<u8>, HttpError> {
+    let mut stream = body.into_data_stream();
+    let mut out = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| bad_request(format!("read body: {e}")))?;
+        if out.len() + chunk.len() > limit {
+            return Err(too_large(limit));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
+fn too_large(limit: usize) -> HttpError {
+    payload_too_large(format!(
+        "request body over the {} MiB limit; use /batch/jobs for larger files",
+        limit.div_ceil(1024 * 1024)
+    ))
 }
 
 fn csv_bytes_to_rows(bytes: &[u8]) -> Result<Vec<InputRow>, HttpError> {

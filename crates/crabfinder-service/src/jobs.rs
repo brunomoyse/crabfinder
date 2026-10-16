@@ -128,6 +128,18 @@ pub struct JobState {
     pub finished_at: Option<u64>,
     /// Why a `failed` job failed.
     pub error: Option<String>,
+    /// The API key (name) that submitted the job (v3 Phase 11.7): only
+    /// that key sees it. `None` without keys.
+    #[serde(default)]
+    pub owner: Option<String>,
+}
+
+impl JobState {
+    /// `caller` may see this job: no keys in use (`None`, the id is the
+    /// access), or the key that submitted it.
+    pub fn visible_to(&self, caller: Option<&str>) -> bool {
+        caller.is_none() || self.owner.as_deref() == caller
+    }
 }
 
 impl JobState {
@@ -162,7 +174,7 @@ impl Upload {
 pub enum Deleted {
     /// The job was queued or running: it is now `cancelled` (its files
     /// stay until the TTL, or until it is deleted again).
-    Cancelled(JobState),
+    Cancelled(Box<JobState>),
     /// The job had finished: its files are gone.
     Removed,
 }
@@ -296,8 +308,12 @@ impl Jobs {
         self.table.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn job(&self, id: &str) -> Option<Arc<Job>> {
-        self.table().get(id).cloned()
+    /// The job, if `caller` may see it (`JobState::visible_to`).
+    fn job(&self, id: &str, caller: Option<&str>) -> Option<Arc<Job>> {
+        self.table()
+            .get(id)
+            .filter(|j| j.lock().visible_to(caller))
+            .cloned()
     }
 
     /// A fresh upload directory under a new id.
@@ -313,12 +329,13 @@ impl Jobs {
         let _ = fs::remove_dir_all(upload.dir);
     }
 
-    /// Turn a complete upload into a queued job.
+    /// Turn a complete upload into a queued job, owned by `owner`.
     pub fn submit(
         self: &Arc<Self>,
         upload: Upload,
         options: BatchOptions,
         delimiter: u8,
+        owner: Option<String>,
     ) -> io::Result<JobState> {
         let st = JobState {
             id: upload.id.clone(),
@@ -333,6 +350,7 @@ impl Jobs {
             started_at: None,
             finished_at: None,
             error: None,
+            owner,
         };
         let staged = Job {
             dir: upload.dir.clone(),
@@ -348,21 +366,22 @@ impl Jobs {
         Ok(st)
     }
 
-    pub fn get(&self, id: &str) -> Option<JobState> {
-        self.job(id).map(|j| j.lock().clone())
+    /// The job, as `caller` may see it.
+    pub fn get(&self, id: &str, caller: Option<&str>) -> Option<JobState> {
+        self.job(id, caller).map(|j| j.lock().clone())
     }
 
     /// The job and the path of its result (whether or not it is done).
-    pub fn result(&self, id: &str) -> Option<(JobState, PathBuf)> {
-        let job = self.job(id)?;
+    pub fn result(&self, id: &str, caller: Option<&str>) -> Option<(JobState, PathBuf)> {
+        let job = self.job(id, caller)?;
         let st = job.lock().clone();
         let path = job.dir.join(st.result_file());
         Some((st, path))
     }
 
     /// Cancel a queued or running job; remove a finished one.
-    pub fn delete(&self, id: &str) -> Option<Deleted> {
-        let job = self.job(id)?;
+    pub fn delete(&self, id: &str, caller: Option<&str>) -> Option<Deleted> {
+        let job = self.job(id, caller)?;
         let mut st = job.lock();
         if st.status.is_finished() {
             drop(st);
@@ -374,7 +393,7 @@ impl Jobs {
         st.status = JobStatus::Cancelled;
         st.finished_at = Some(now());
         job.persist(&st);
-        Some(Deleted::Cancelled(st.clone()))
+        Some(Deleted::Cancelled(Box::new(st.clone())))
     }
 
     /// Delete the jobs that finished `ttl` or more before `now` (Unix

@@ -2,7 +2,10 @@
 
 use axum::{
     Json,
-    http::StatusCode,
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{RETRY_AFTER, WWW_AUTHENTICATE},
+    },
     response::{IntoResponse, Response},
 };
 use tracing::error;
@@ -26,6 +29,18 @@ pub enum ServiceError {
     /// Request body over its limit: 413.
     #[error("too large: {0}")]
     TooLarge(String),
+    /// No API key, or an unknown one (`--api-keys`): 401.
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+    /// A key not allowed on the route: 403.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+    /// Over a rate limit: 429 with `Retry-After`.
+    #[error("rate limited: {message}")]
+    RateLimited {
+        message: String,
+        retry_after_secs: u64,
+    },
 }
 
 impl ServiceError {
@@ -36,18 +51,31 @@ impl ServiceError {
 
 impl IntoResponse for ServiceError {
     fn into_response(self) -> Response {
+        let mut headers = HeaderMap::new();
         let (code, msg) = match &self {
             ServiceError::BadQuery(s) => (StatusCode::BAD_REQUEST, s.clone()),
             ServiceError::Unavailable(s) => (StatusCode::SERVICE_UNAVAILABLE, s.clone()),
             ServiceError::NotFound(s) => (StatusCode::NOT_FOUND, s.clone()),
             ServiceError::Conflict(s) => (StatusCode::CONFLICT, s.clone()),
             ServiceError::TooLarge(s) => (StatusCode::PAYLOAD_TOO_LARGE, s.clone()),
+            ServiceError::Unauthorized(s) => {
+                headers.insert(WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+                (StatusCode::UNAUTHORIZED, s.clone())
+            }
+            ServiceError::Forbidden(s) => (StatusCode::FORBIDDEN, s.clone()),
+            ServiceError::RateLimited {
+                message,
+                retry_after_secs,
+            } => {
+                headers.insert(RETRY_AFTER, HeaderValue::from(*retry_after_secs));
+                (StatusCode::TOO_MANY_REQUESTS, message.clone())
+            }
             ServiceError::Internal(e) => {
                 error!(error=%e, "internal");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
             }
         };
-        (code, Json(serde_json::json!({ "error": msg }))).into_response()
+        (code, headers, Json(serde_json::json!({ "error": msg }))).into_response()
     }
 }
 

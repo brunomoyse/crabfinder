@@ -4,6 +4,7 @@
 //! handlers through `router()` with `tower::ServiceExt::oneshot`, and the
 //! binary stays a thin `Args` → `AppState::load` → `serve` wrapper.
 
+pub mod auth;
 pub mod autocomplete;
 pub mod building;
 pub mod error;
@@ -28,7 +29,7 @@ use axum::{
 };
 use metrics_exporter_prometheus::PrometheusHandle;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowOrigin, Any, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -64,6 +65,11 @@ pub struct RouterOptions {
     /// Serve `/batch/jobs` from these jobs (`--jobs-dir`, v3 Phase 11.6);
     /// `None`: the routes answer 503.
     pub jobs: Option<Arc<Jobs>>,
+    /// API keys and rate limits (`auth::Auth::new`, v3 Phase 11.7);
+    /// `None`: every route is open.
+    pub auth: Option<Arc<auth::Auth>>,
+    /// Body limit of `POST /batch/geocode` (`--batch-max-body-mb`).
+    pub batch_max_body_bytes: usize,
 }
 
 impl Default for RouterOptions {
@@ -77,6 +83,8 @@ impl Default for RouterOptions {
             cors_origins: Vec::new(),
             metrics: None,
             jobs: None,
+            auth: None,
+            batch_max_body_bytes: batch::http::DEFAULT_BODY_LIMIT,
         }
     }
 }
@@ -114,12 +122,13 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
     let tuning = batch::BatchTuning {
         chunk_rows: opts.batch_chunk_rows,
         chunk_delay: opts.batch_chunk_delay,
+        max_body_bytes: opts.batch_max_body_bytes,
     };
     let batch = Router::new()
         .route(
             "/batch/geocode",
             axum::routing::post(batch::batch_geocode)
-                .route_layer(batch::body_limit_layer())
+                .route_layer(DefaultBodyLimit::max(opts.batch_max_body_bytes))
                 .route_layer(Extension(tuning)),
         )
         .route_layer(middleware::from_fn_with_state(
@@ -165,6 +174,11 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
             get(move || std::future::ready(metrics_body(&handle))),
         );
     }
+    // Outermost first: count (every status, refusals included), then
+    // admit, then the guard's slot and deadline.
+    if let Some(a) = opts.auth.clone() {
+        app = app.route_layer(middleware::from_fn_with_state(a, auth::check));
+    }
     app.route_layer(middleware::from_fn(telemetry::track))
         .layer(
             TraceLayer::new_for_http()
@@ -181,10 +195,11 @@ fn cors_layer(origins: &[HeaderValue]) -> CorsLayer {
     } else {
         AllowOrigin::list(origins.iter().cloned())
     };
+    // Mirrored rather than `*`, which doesn't cover `Authorization`.
     CorsLayer::new()
         .allow_origin(origin)
         .allow_methods(Any)
-        .allow_headers(Any)
+        .allow_headers(AllowHeaders::mirror_request())
 }
 
 /// Prometheus text exposition.

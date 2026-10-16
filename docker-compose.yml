@@ -1,0 +1,61 @@
+# crabfinder with Docker Compose (v3 Phase 11.7).
+#
+#   docker compose up -d          # first run: downloads BeSt and builds the index (a few minutes)
+#   docker compose logs -f
+#   curl http://127.0.0.1:8080/health
+#
+# `refresh` downloads the BeSt Address dump into the `data` volume, builds
+# index-<date> and points index-current at it, then exits; `geocoder`
+# starts once it succeeded. `refresh` skips the work while the index is
+# less than 7 days old, so restarts are quick. To refresh weekly (BeSt
+# publishes weekly), from cron on the host:
+#
+#   docker compose run --rm -e REFRESH_IF_OLDER_THAN_DAYS= refresh && docker compose restart geocoder
+#
+# BeSt Address is the only source. The optional OpenStreetMap helper
+# (landmark names) is off: see the commented lines below.
+
+services:
+  refresh:
+    build: .
+    image: crabfinder
+    command: ["refresh_best.sh"]
+    environment:
+      REFRESH_IF_OLDER_THAN_DAYS: "7"
+      # Free the disk: the download once indexed, and older indexes.
+      PRUNE: "1"
+    volumes:
+      - data:/data
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  geocoder:
+    image: crabfinder
+    depends_on:
+      refresh:
+        condition: service_completed_successfully
+    environment:
+      CRABFINDER_INDEX: /data/index-current
+      CRABFINDER_JOBS_DIR: /jobs
+      # Protection, off by default. With keys, every route but /health
+      # needs one (see docs/api.md, "Protection"):
+      # CRABFINDER_API_KEYS: /run/secrets/crabfinder-keys.yaml
+      # CRABFINDER_RATE_LIMIT_PER_IP: "600"
+      # Optional OSM landmarks (query interpretation only):
+      # CRABFINDER_POIS: /osm/osm-pois-be-v1.csv
+    volumes:
+      # Writable: Tantivy takes a lock file even to read.
+      - data:/data
+      - jobs:/jobs
+      # - ./keys.yaml:/run/secrets/crabfinder-keys.yaml:ro
+      # - ./data/osm-pois-be-v1.csv:/osm/osm-pois-be-v1.csv:ro
+    # Published on the host's loopback only: put a reverse proxy (TLS) in
+    # front, or turn the keys on before publishing it further.
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  data:
+  jobs:

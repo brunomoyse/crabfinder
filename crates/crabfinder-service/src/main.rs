@@ -11,7 +11,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use axum::http::HeaderValue;
-use crabfinder_service::http::{self, RouterOptions};
+use crabfinder_service::http::{self, RouterOptions, auth};
 use crabfinder_service::jobs::{Jobs, JobsConfig};
 use crabfinder_service::{AppState, LoadOptions, telemetry};
 
@@ -102,6 +102,23 @@ struct Args {
     /// Resolver threads of the batch jobs; 0 = half the cores.
     #[arg(long, env = "CRABFINDER_JOBS_THREADS", default_value_t = 0)]
     jobs_threads: usize,
+
+    /// API keys file (YAML, see `http::auth`): every route but `/health`
+    /// (and `/metrics`) then needs a key. Default: no keys.
+    #[arg(long, env = "CRABFINDER_API_KEYS")]
+    api_keys: Option<PathBuf>,
+
+    /// Requests per minute per client address (bursts up to as many).
+    #[arg(long, env = "CRABFINDER_RATE_LIMIT_PER_IP")]
+    rate_limit_per_ip: Option<u32>,
+
+    /// With `--api-keys`, `/metrics` needs a key too.
+    #[arg(long, env = "CRABFINDER_METRICS_REQUIRE_KEY")]
+    metrics_require_key: bool,
+
+    /// Body limit of `POST /batch/geocode`, MiB.
+    #[arg(long, env = "CRABFINDER_BATCH_MAX_BODY_MB", default_value_t = 50)]
+    batch_max_body_mb: usize,
 }
 
 #[tokio::main]
@@ -150,6 +167,15 @@ async fn main() -> Result<()> {
         }
         None => None,
     };
+    let keys = match &args.api_keys {
+        Some(p) => {
+            let keys = auth::load_keys(p)?;
+            info!(keys = keys.len(), "API keys on");
+            keys
+        }
+        None => Vec::new(),
+    };
+    let auth = auth::Auth::new(keys, args.rate_limit_per_ip, args.metrics_require_key);
     let router_opts = RouterOptions {
         request_timeout: Duration::from_millis(args.request_timeout_ms),
         batch_timeout: Duration::from_secs(args.batch_timeout_secs),
@@ -157,13 +183,16 @@ async fn main() -> Result<()> {
         cors_origins,
         metrics,
         jobs,
+        auth,
+        batch_max_body_bytes: args.batch_max_body_mb * 1024 * 1024,
         ..RouterOptions::default()
     };
 
     let addr = SocketAddr::new(args.host, args.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("listening at http://{addr}");
-    axum::serve(listener, http::router_with(state, &router_opts))
-        .await
-        .context("Axum serve loop")
+    // Client addresses for `--rate-limit-per-ip`.
+    let app =
+        http::router_with(state, &router_opts).into_make_service_with_connect_info::<SocketAddr>();
+    axum::serve(listener, app).await.context("Axum serve loop")
 }

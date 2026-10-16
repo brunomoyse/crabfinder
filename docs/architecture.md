@@ -206,7 +206,7 @@ Markt.
 | `telemetry` | Prometheus series for `/metrics` |
 | `validate` | `/validate` and the batch `corrections` columns: input vs. the resolved BeSt address, field by field (v3 Phase 11.2) |
 | `suggest` | `/autocomplete` (v3 Phase 11.5): the in-memory name index built at startup, and the prefix lookup |
-| `http` | Router, guard (deadline, concurrency), CORS and the handlers |
+| `http` | Router, guard (deadline, concurrency), protection (`auth`: API keys, rate limits, v3 Phase 11.7), CORS and the handlers |
 | `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, the chunked runner (`run`), `POST /batch/geocode` |
 | `jobs` | Asynchronous batch jobs (`--jobs-dir`, v3 Phase 11.6): queue, workers, checkpoints, resume, TTL |
 
@@ -313,7 +313,17 @@ without changing the decision.
   histograms, rejected requests, search outcomes by tier / confidence /
   match type (recorded in `resolver::search`), over-fetch-cap hits;
   served at `/metrics`. The `metrics` macros are no-ops in the CLIs.
-- `TraceLayer` request spans; CORS (`--cors-origin`, default any).
+- **Protection** (`http/auth.rs`, v3 Phase 11.7), only mounted when
+  `--api-keys` or `--rate-limit-per-ip` is set: per route, what the
+  caller needs (nothing for `/health`, a key, a key with `batch` or
+  `jobs`), keys compared in constant time, token buckets per key name
+  and per client address (`ConnectInfo`; idle buckets pruned past
+  10,000). The key's name goes to the handler (`Caller`, batch jobs are
+  scoped by it) and back on the response for `telemetry::track`.
+  Middleware order, outermost first: `track` (so refusals are counted)
+  → `auth` → `guard` (so a refused request takes no slot) → handler.
+- `TraceLayer` request spans; CORS (`--cors-origin`, default any;
+  requested headers mirrored, since `*` doesn't cover `Authorization`).
 
 ## Autocomplete (`suggest.rs`, v3 Phase 11.5)
 

@@ -11,7 +11,7 @@ Phase 11.1, refreshed after the Phase 11.1b ranking fixes, then rerun with the N
 |---|---|---|
 | `crabfinder` | this repo with the Phase 11.1b ranking fixes, index schema v12 from BeSt 2026-10-15, BeSt-only | free text, `/geocode` |
 | `crabfinder-osm` | same, index built with `--places`, service with `--pois` (the optional OSM aids) | free text |
-| `brussels` | Brussels regional geocoder (Paradigm / UrbIS), `geoservices.brussels` | free text with fr/nl fallback, Brussels queries only, 2 req/s |
+| `brussels` | Paradigm (paradigm.brussels, ex-CIRB/CIBG), the Brussels regional geocoder over UrbIS addresses, `geoservices.irisnet.be/geocoding` | free text with fr/nl fallback, Brussels queries only, 2 req/s |
 | `vlaanderen` | Digitaal Vlaanderen Geolocation API v4 | free text, Flanders + Brussels queries, 2 req/s |
 | `wallonie` | SPW `geoservices.wallonie.be/geocodeWS` (ICAR) | structured street/house/city when known, else free text; Wallonia only, 2 req/s |
 | `ngi` | NGI-IGN national geocoder (GeoSearchEngine, built with Smals), `geosearch.ngi.be` | free text, `/search/text?source=ALL_SOURCES`, `FAST` then `FULL` mode, 2 req/s |

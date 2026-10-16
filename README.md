@@ -171,7 +171,7 @@ entrance rather than the BeSt point. Share of top-1 answers within 100 m:
 | BePelias (Smals, self-hosted) | Belgium (1,510) | 0.908 |
 | PhacochR | Belgium (1,510) | 0.907 |
 | NGI-IGN national geocoder (`geosearch.ngi.be`) | Belgium (1,510) | 0.836 |
-| Brussels regional geocoder | Brussels (496) | 0.925 |
+| Paradigm, Brussels regional geocoder | Brussels (496) | 0.925 |
 | Wallonia regional geocoder (SPW) | Wallonia (550) | 0.847 |
 | Flemish Geolocation API | Flanders + Brussels (960) | 0.505 |
 

@@ -12,9 +12,9 @@ top-level `kind`:
 
 | Extension | Type | Source |
 |---|---|---|
-| `.json` | **Synthetic** — generated from the live index | `--generate-eval-set --mvp` |
-| `.yaml` / `.yml` | **Adversarial** — hand-edited | `eval/adversarial-belgium-v1.yaml` |
-| `.yaml` with `kind: realworld` | **Real-world** — addresses from public open-data lists | `eval/realworld-be-v1.yaml` |
+| `.json` | **Synthetic**: generated from the live index | `--generate-eval-set --mvp` |
+| `.yaml` / `.yml` | **Adversarial**: hand-edited | `eval/adversarial-belgium-v1.yaml` |
+| `.yaml` with `kind: realworld` | **Real-world**: addresses from public open-data lists | `eval/realworld-be-v1.yaml` |
 
 You can pass multiple `--eval-set` flags on the runner; the loader
 auto-detects each file.
@@ -31,24 +31,24 @@ Per-region random sample:
 | Boosted cross-language | 200 |
 | Boosted high house number (≥ 1000) | 100 |
 
-Each random bgid generates 6–9 query variants:
+Each random bgid generates up to 10 query variants:
 
-- `canonical` — `Street HN, Postal Muni`
-- `minimal` — `Street HN`
-- `with_postal` — `Street HN Postal`
-- `casing` — lowercased canonical
-- `cross_language` — emitted when the firing policy detects a usable
+- `canonical`: `Street HN, Postal Muni`
+- `minimal`: `Street HN`
+- `with_postal`: `Street HN Postal`
+- `casing`: lowercased canonical
+- `cross_language`: emitted when the firing policy detects a usable
   alias (e.g. FR municipality + NL street name)
-- `abbreviated` — emitted when the street type matches the abbreviation
+- `abbreviated`: emitted when the street type matches the abbreviation
   map (`Avenue Louise` → `Av. Louise`)
-- `typo` — one edit (substitution, deletion, transposition or insertion)
+- `typo`: one edit (substitution, deletion, transposition or insertion)
   on the longest street word of 5+ characters, seeded per address
-- `messy_punctuation` — commas between every part and a `B-` postal
+- `messy_punctuation`: commas between every part and a `B-` postal
   prefix (`Franciskanenlaan, 10, B-1150, Sint-Pieters-Woluwe`)
-- `box_number` — emitted when the address has a box, with the box keyword
+- `box_number`: emitted when the address has a box, with the box keyword
   of the street's language (`Floréallaan 154 bus 1, 1180 Ukkel`)
 
-- `wrong_postal` — `Street HN Postal` with the postal code whose centre
+- `wrong_postal`: `Street HN Postal` with the postal code whose centre
   is nearest to the address among the *other* codes (from the index's
   localities file): the neighbouring-commune mistake. Emitted for every
   random sample, after all other queries.
@@ -77,16 +77,16 @@ Hand-curated entries in `eval/adversarial-belgium-v1.yaml`:
 | `facilites` | Brussels communes with FR/NL facility names |
 | `cross_language` | FR query against NL-canonical doc and vice versa |
 | `special_chars` | Apostrophes, hyphens, mixed casing |
-| `known_failure` | Entries the system fails on by design — tracked separately, excluded from aggregates |
+| `known_failure` | Entries the system fails on by design: tracked separately, excluded from aggregates |
 
 Each entry is scored at a `match_level` (default `address`):
 
 | `match_level` | Correct when |
 |---|---|
 | `address` | The top feature is `expected_best_id` (else, when none is pinned, `expected_building_group_id`) |
-| `building` | Any unit of an expected building — landmarks that can't name a unit |
-| `street` | Any building on an expected building's street — queries without a house number |
-| `locality` | Any building within `within_m` (default 1500 m) of `expected_point` `[lat, lon]` — bare place names |
+| `building` | Any unit of an expected building: landmarks that can't name a unit |
+| `street` | Any building on an expected building's street: queries without a house number |
+| `locality` | Any building within `within_m` (default 1500 m) of `expected_point` `[lat, lon]`: bare place names |
 
 The report shows the levels scored next to each category, e.g.
 `hamlet (locality, street)`.
@@ -132,7 +132,7 @@ each dataset's publisher, licence and attribution.
   --dump-date 2026-10-15
 ```
 
-Reproducible — same `--seed` + same index emits the same eval set.
+Reproducible: the same `--seed` and the same index emit the same eval set.
 
 ## Running an eval
 
@@ -170,7 +170,7 @@ metrics, don't change with the flag.
   --eval-set eval/realworld-be-v1.yaml \
   --geocoder crabfinder=http://127.0.0.1:8080 \
   --geocoder crabfinder-osm:crabfinder=http://127.0.0.1:8081 \
-  --geocoder brussels --geocoder vlaanderen --geocoder wallonie \
+  --geocoder brussels --geocoder vlaanderen --geocoder wallonie --geocoder ngi \
   --geocoder bepelias=http://127.0.0.1:4001/REST/bepelias/v1 \
   --geocoder phacochr \
   --output reports/benchmark-2026-10-16.json \
@@ -188,9 +188,19 @@ the label. The target is a base URL, or the command line for `phacochr`.
 | `brussels` | Brussels regional geocoder (Paradigm / UrbIS, BeSt model) | Brussels | yes |
 | `vlaanderen` | Digitaal Vlaanderen Geolocation API | Flanders + Brussels | no |
 | `wallonie` | SPW `geocodeWS` (ICAR) | Wallonia | no |
+| `ngi` | NGI-IGN national geocoder (GeoSearchEngine, with Smals), `geosearch.ngi.be/search/text`, no key | Belgium | yes |
 
-The NGI national geocoder has no public endpoint yet: `search.geo.be`
-does not resolve (checked 2026-10-16), and `--geocoder ngi` says so.
+The NGI geocoder is the national one announced at BeGeo 2024 as
+"search.geo.be". That name does not resolve; the service runs at
+`https://geosearch.ngi.be`, keyless, with its OpenAPI at `/v3/api-docs`
+(found 2026-10-16). The adapter asks `/search/text` with
+`source=ALL_SOURCES` in `FAST` mode, then `FULL` when nothing comes back.
+Its addresses carry BeSt ids, and the street id gives crabfinder's
+`building_group_id`, so it is scored on ids like crabfinder. For a street,
+municipality or toponym answer it returns a line or polygon; the mean of
+its vertices is used as the point. The older `geocodelist.ngi.be/api/`
+(geo.be and TopoMapViewer search box) is a type-ahead list and returns
+nothing once a postal code is typed, so it is not benchmarked.
 
 Each geocoder is only asked the queries it covers. A regional service gets
 its own region, and the region of a synthetic or adversarial query is read
@@ -263,7 +273,7 @@ it, so ranking changes can't mask a stale id. An entry passes when one
 of its expected buildings exists and, for `address`-level entries that
 pin a `best_id`, that address is one of the building's units.
 `locality`-level entries and entries with nothing expected pass. Aborts
-if more than `--max-missing-pct` of entries fail — the signal that the
+if more than `--max-missing-pct` of entries fail, the signal that the
 eval set is stale and needs regenerating. `scripts/refresh_best.sh` runs
 this on every fresh index before switching `index-current`.
 
@@ -322,9 +332,9 @@ full notability whitelist, full abbreviation dict, no OpenStreetMap aid.
 (index built with `--places`, service with `--pois`);
 `reports/v2-osm-aids.md` diffs the two (hamlets 0.833 → 1.000,
 landmarks 0.269 → 1.000). Evaluate a change in the configuration it
-affects — BeSt-only by default, against the OSM baseline when touching
+affects: BeSt-only by default, against the OSM baseline when touching
 the locality or landmark steps. `reports/pre-v2-baseline.json` is the
-v1 code on the same data and the v2 set — the comparison point for the
+v1 code on the same data and the v2 set, the comparison point for the
 v2 work (`reports/v2-vs-pre-v2.md`, on the shared v2 set). `reports/mvp-v1-baseline.json` is the
 original MVP baseline on the 2026-05-19 dump; per-phase v2 diffs are in
 `reports/archive/v2-phases/`.

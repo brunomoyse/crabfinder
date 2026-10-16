@@ -319,9 +319,9 @@ fn benchmark_argument_errors() {
                 "--output",
                 s(&out),
                 "--geocoder",
-                "ngi",
+                "x:nope",
             ],
-            "no public endpoint",
+            "unknown geocoder kind",
         ),
     ] {
         let err = run_with(&args(&argv)).unwrap_err();

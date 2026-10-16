@@ -124,7 +124,7 @@ pub struct Args {
     pub benchmark: bool,
 
     /// `label[:kind][=target]`: kind is crabfinder, bepelias, brussels,
-    /// vlaanderen, wallonie or phacochr (default: the label); target a
+    /// vlaanderen, wallonie, ngi or phacochr (default: the label); target a
     /// base URL, or phacochr's command line.
     #[arg(long = "geocoder")]
     pub geocoders: Vec<String>,

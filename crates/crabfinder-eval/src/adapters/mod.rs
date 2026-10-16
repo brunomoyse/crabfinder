@@ -18,6 +18,7 @@ pub mod bepelias;
 pub mod brussels;
 pub mod cache;
 pub mod crabfinder;
+pub mod ngi;
 pub mod phacochr;
 pub mod vlaanderen;
 pub mod wallonie;
@@ -513,13 +514,16 @@ pub fn build(spec: &GeocoderSpec, opts: &BuildOptions) -> Result<Arc<dyn Geocode
             opts.work_dir.join(&spec.label),
             opts.cache_dir.as_ref().map(|d| d.join(&spec.label)),
         )?)),
-        "ngi" => bail!(
-            "the NGI geocoder has no public endpoint yet (search.geo.be does not resolve, \
-             2026-10-16); see docs/eval.md"
+        "ngi" => http(
+            spec,
+            opts,
+            rate,
+            true,
+            ngi::Ngi::new(target.unwrap_or(ngi::DEFAULT_BASE)),
         ),
         k => bail!(
             "unknown geocoder kind {k:?}; expected crabfinder, bepelias, brussels, \
-             vlaanderen, wallonie or phacochr"
+             vlaanderen, wallonie, ngi or phacochr"
         ),
     }
 }
@@ -601,25 +605,23 @@ mod tests {
     }
 
     #[test]
-    fn build_knows_every_kind_and_explains_ngi() {
+    fn build_knows_every_kind() {
         for (spec, name) in [
             ("crabfinder", "crabfinder"),
             ("x:bepelias", "x"),
             ("brussels", "brussels"),
             ("vlaanderen", "vlaanderen"),
             ("wallonie", "wallonie"),
+            ("ngi", "ngi"),
             ("phacochr=true", "phacochr"),
         ] {
             let g = build(&GeocoderSpec::parse(spec).unwrap(), &opts()).unwrap();
             assert_eq!(g.name(), name);
         }
-        let err = build(&GeocoderSpec::parse("ngi").unwrap(), &opts())
-            .err()
-            .unwrap();
-        assert!(err.to_string().contains("no public endpoint"), "{err}");
         assert!(build(&GeocoderSpec::parse("nope").unwrap(), &opts()).is_err());
         assert_eq!(default_rate("crabfinder"), 0.0);
         assert_eq!(default_rate("brussels"), 2.0);
+        assert_eq!(default_rate("ngi"), 2.0);
     }
 
     #[test]

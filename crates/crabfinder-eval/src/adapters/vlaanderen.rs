@@ -1,8 +1,6 @@
 //! Digitaal Vlaanderen's Geolocation API (`geo.api.vlaanderen.be/
 //! geolocation/v4/Location?q=&c=`), no key: free text over Flanders and
-//! Brussels, WGS84 points, no BeSt ids (scored on distance only). A
-//! stand-in national-ish reference while the NGI geocoder has no public
-//! endpoint.
+//! Brussels, WGS84 points, no BeSt ids (scored on distance only).
 
 use serde_json::Value;
 

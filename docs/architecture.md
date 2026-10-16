@@ -211,6 +211,14 @@ batch mode.
 4. **Locality-suffix readings**: `<street> <place>` where the place isn't
    in the street's text (an OSM hamlet, another commune): the street
    searched inside the place's area (≥ 3 km), focused on its centre.
+   Then the **village words dropped** (`without_city_words`, v3): when
+   the trailing words name a locality *of the query's postal code*, they
+   only say where in the code the street is, and BeSt may file it under
+   another part. The street is searched without them, inside the postal
+   code ("Rue Rogier 44, 5000 Beez"). The same reading also replaces a
+   step-3 nearest-number or street-level answer when it finds the exact
+   number (under the step-6 rules: "Chaussée de Marche 797, 5100 Jambes",
+   where 797 isn't on the Jambes stretch).
 5. **Landmark step** (`search_landmark`, `--pois`): no house number and
    the words are a landmark name, or a landmark + a locality within
    15 km of it (`landmarks::LandmarkIndex`, keyed by every analyzed
@@ -230,6 +238,16 @@ batch mode.
    off, and the exact number exists across the boundary; and a parser
    alternative that doesn't match its number exactly. Skipped for the
    hard `postal_code=` filter (`AddressQuery::postal_code_strict`).
+   After it, two last strict readings (v3), which come later because the
+   same street across the boundary is the likelier answer:
+   - a leading French street type BeSt doesn't have, dropped
+     (`without_leading_type`: "Rue Faubourg de Charleroi" is *Faubourg de
+     Charleroi*);
+   - the typo tiers with "unknown" meant *inside the postal code*
+     (`search_local_typo`). A word found elsewhere in Belgium but nowhere
+     in the code is corrected too: "Schildknaapstraat 19, 1000" is the
+     Brussels *Schildknaapsstraat*, which Koksijde's *Schildknaapstraat*
+     hides from the regular typo tier.
 7. **OR tiers**: any word, with then without the number
    (`fuzzy_street`).
 

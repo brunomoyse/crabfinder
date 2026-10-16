@@ -185,7 +185,25 @@ entries:
     "Pl." appears standalone (rare in DE) and as a compound suffix ("Rathauspl."
     → token "rathauspl"). This is the entry that fixes the Eupen failure case.
 
-# 13 entries; 21 unique abbreviations. Coverage by frequency:
+# ---------- French — ordinals in royal names (v3 Phase 11.1b) ---------------
+# BeSt writes both "Rue Albert Ier" and "Rue Albert 1er" (Rumes, Antoing…);
+# users type either. Roman and Arabic forms are aliases of each other.
+
+- canonical: 1er
+  abbreviations: [ier]
+  language: fr
+  kind: standalone
+  rationale: |
+    "Albert Ier" typed, "Albert 1er" in BeSt (Rue Albert 1er, 7611 Rumes).
+
+- canonical: ier
+  abbreviations: [1er]
+  language: fr
+  kind: standalone
+  rationale: |
+    The reverse: "Albert 1er" typed, "Albert Ier" in BeSt.
+
+# 15 entries; 23 unique abbreviations. Coverage by frequency:
 #   FR Avenue (3,180 streets) → 2 abbreviations
 #   FR Boulevard (252) → 4
 #   FR Chaussée (316) → 3

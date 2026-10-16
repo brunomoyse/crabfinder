@@ -576,6 +576,19 @@ fn search_readings(
             {
                 return Ok(CandidateSet { reading, ..near });
             }
+            // Same for the exact number elsewhere in the postal code when
+            // the trailing words only named one of its villages ("Chaussée
+            // de Marche 797, 5100 Jambes": 797 is in 5100, not in the part
+            // called Jambes) (v3 Phase 11.1b).
+            if matches!(set.tier, Tier::Street | Tier::Nearest)
+                && q.house_number.is_some()
+                && let Some(r) = without_city_words(q, ctx)
+                && let Some(exact) =
+                    search_tiers(&r, opts, ctx, |t| matches!(t, Tier::Exact | Tier::Typo))?
+                && prefer_exact_nearby(&set, &exact)
+            {
+                return Ok(CandidateSet { reading, ..exact });
+            }
             // Another reading (the postal code read as a house number)
             // that doesn't match that number exactly is weaker evidence
             // than the street near the postal code.
@@ -593,10 +606,31 @@ fn search_readings(
             return Ok(set);
         }
     }
+    // v3 Phase 11.1b: the street without the village words, inside the
+    // postal code ("Rue Rogier 44, 5000 Beez").
+    if let Some(r) = without_city_words(query, ctx)
+        && let Some(set) = search_tiers(&r, opts, ctx, Tier::is_strict)?
+    {
+        return Ok(set);
+    }
     if let Some(set) = search_landmark(query, opts, ctx)? {
         return Ok(set);
     }
     if let Some(set) = search_postal_relaxed(query, opts, ctx, Tier::is_strict)? {
+        return Ok(set);
+    }
+    // After the relaxation (v3 Phase 11.1b): the same street just across
+    // the postal boundary beats a shortened name ("Rue de Namur 113, 1301"
+    // is not Chaussée de Namur) or a correction inside a wrong postal code.
+    // Without a leading street type BeSt doesn't have ("Rue Faubourg de
+    // Charleroi 14B"); then with the words unknown in the postal code
+    // corrected ("Schildknaapstraat 19, 1000").
+    if let Some(r) = without_leading_type(query)
+        && let Some(set) = search_tiers(&r, opts, ctx, Tier::is_strict)?
+    {
+        return Ok(set);
+    }
+    if let Some(set) = search_local_typo(query, opts, ctx)? {
         return Ok(set);
     }
     Ok(search_tiers(query, opts, ctx, |t| !t.is_strict())?.unwrap_or_else(CandidateSet::empty))
@@ -674,12 +708,128 @@ fn search_postal_relaxed(
     Ok(Some(set))
 }
 
+/// `query` without its trailing words when they name a locality of its
+/// postal code (a village, part of municipality or municipality): they
+/// then only say where in the code the street is, and BeSt may file it
+/// under another part (v3 Phase 11.1b). `None` without a postal code or
+/// such words.
+fn without_city_words(query: &AddressQuery, ctx: &ResolverContext<'_>) -> Option<AddressQuery> {
+    let pc = query.postal_code.as_ref()?;
+    if query.area.is_some() {
+        return None;
+    }
+    let toks = &query.street_tokens;
+    (1..toks.len()).find_map(|k| {
+        let (street, place) = toks.split_at(k);
+        ctx.localities
+            .lookup(place)
+            .iter()
+            .any(|l| l.postal_codes.contains(pc))
+            .then(|| AddressQuery {
+                street_tokens: street.to_vec(),
+                alternatives: Vec::new(),
+                ..query.clone()
+            })
+    })
+}
+
+/// French street types a user may put in front of a name BeSt files
+/// without one ("Rue Faubourg de Charleroi" is "Faubourg de Charleroi").
+const LEADING_TYPES: &[&str] = &[
+    "rue",
+    "avenue",
+    "chaussee",
+    "place",
+    "boulevard",
+    "chemin",
+    "route",
+    "allee",
+    "impasse",
+    "quai",
+    "square",
+    "clos",
+    "dreve",
+    "sentier",
+];
+
+/// `query` without a leading street type, when two words or more remain.
+fn without_leading_type(query: &AddressQuery) -> Option<AddressQuery> {
+    let toks = &query.street_tokens;
+    (toks.len() >= 3 && LEADING_TYPES.contains(&toks[0].as_str())).then(|| AddressQuery {
+        street_tokens: toks[1..].to_vec(),
+        alternatives: Vec::new(),
+        ..query.clone()
+    })
+}
+
+/// The typo tiers with "unknown" meant inside the postal code: a word
+/// found elsewhere in Belgium but nowhere in the code is corrected too
+/// ("Schildknaapstraat 19, 1000" is BeSt's Schildknaapsstraat; Koksijde's
+/// Schildknaapstraat hides it from the regular typo tier) (v3 Phase
+/// 11.1b). `None` without a postal code or such a word.
+fn search_local_typo(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<Option<CandidateSet>> {
+    let Some(pc) = query.postal_code.as_deref() else {
+        return Ok(None);
+    };
+    if query.area.is_some() {
+        return Ok(None);
+    }
+    let field = searchable_field(ctx.schema);
+    let searcher = ctx.reader.searcher();
+    let term_q = |field, text: &str| -> Box<dyn tantivy::query::Query> {
+        Box::new(TermQuery::new(
+            Term::from_field_text(field, text),
+            IndexRecordOption::Basic,
+        ))
+    };
+    let mut mask = Vec::with_capacity(query.street_tokens.len());
+    for t in &query.street_tokens {
+        let any_form = ctx
+            .abbrev
+            .expand(t)
+            .iter()
+            .map(|f| (Occur::Should, term_q(field, f)))
+            .collect();
+        let q = BooleanQuery::new(vec![
+            (Occur::Must, Box::new(BooleanQuery::new(any_form))),
+            (Occur::Must, term_q(ctx.schema.postal_code, pc)),
+        ]);
+        mask.push(searcher.search(&q, &tantivy::collector::Count)? == 0);
+    }
+    if !mask.iter().any(|u| *u) {
+        return Ok(None);
+    }
+    search_tiers_masked(
+        query,
+        opts,
+        ctx,
+        |t| matches!(t, Tier::Typo | Tier::TypoStreet),
+        Some(mask),
+    )
+}
+
 /// Run the `tiers` (of `Tier::ORDER`) of one reading, in order.
 fn search_tiers(
     query: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
     tiers: impl Fn(Tier) -> bool,
+) -> tantivy::Result<Option<CandidateSet>> {
+    search_tiers_masked(query, opts, ctx, tiers, None)
+}
+
+/// `search_tiers`, the typo tiers correcting the slots `typo_mask` marks
+/// (default: the words unknown to the whole index).
+fn search_tiers_masked(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+    tiers: impl Fn(Tier) -> bool,
+    typo_mask: Option<Vec<bool>>,
 ) -> tantivy::Result<Option<CandidateSet>> {
     let slots: Vec<Vec<String>> = query
         .street_tokens
@@ -714,7 +864,7 @@ fn search_tiers(
         raw_limit(opts.limit, opts.expand)
     };
     // Which slots the typo tiers make fuzzy; computed on first use.
-    let mut unknown: Option<Vec<bool>> = None;
+    let mut unknown: Option<Vec<bool>> = typo_mask;
     // The Nearest tier's street hits, reused by the Street tier.
     let mut street_top: Option<Vec<(tantivy::Score, tantivy::DocAddress)>> = None;
     let run = |q: &dyn tantivy::query::Query| {
@@ -2741,5 +2891,240 @@ mod tests {
         let ten = search(&q, &opts(10), &c).unwrap();
         assert_eq!(hn_of(&one.candidates[0]), "60");
         assert_eq!(hn_of(&ten.candidates[0]), "60");
+    }
+
+    // --- v3 Phase 11.1b: soft city words, leading types, local typos -------
+
+    fn namur(
+        oid: &str,
+        street_oid: &str,
+        street: &str,
+        hn: &str,
+        pc: &str,
+        pom: &str,
+    ) -> AddressBuilder {
+        AddressBuilder::new(oid, street_oid, hn)
+            .region(crabfinder_core::Region::Wallonia)
+            .municipality("92094", Some("Namur"), None, None)
+            .postal(pc)
+            .part_of_municipality(pom, Some(pom), None)
+            .street(Some(street), None)
+    }
+
+    /// Chaussée de Marche: 174/176 on the Jambes stretch, 797 on the
+    /// stretch BeSt files under Erpent, both 5100. Rue Rogier 44 in 5000,
+    /// far from the Beez village of 5000.
+    fn namur_index() -> (TestIndex, Vec<Locality>) {
+        let addrs = vec![
+            namur(
+                "j174",
+                "9101",
+                "Chaussée de Marche",
+                "174",
+                "5100",
+                "Jambes",
+            )
+            .at(50.455, 4.875)
+            .build(),
+            namur(
+                "j176",
+                "9101",
+                "Chaussée de Marche",
+                "176",
+                "5100",
+                "Jambes",
+            )
+            .at(50.4551, 4.8752)
+            .build(),
+            namur(
+                "e797",
+                "9102",
+                "Chaussée de Marche",
+                "797",
+                "5100",
+                "Erpent",
+            )
+            .at(50.43, 4.92)
+            .build(),
+            namur("r44", "9103", "Rue Rogier", "44", "5000", "Namur")
+                .at(50.468, 4.862)
+                .build(),
+        ];
+        let locs = vec![
+            locality(
+                LocalityKind::PartOfMunicipality,
+                "Jambes",
+                50.455,
+                4.875,
+                &["5100"],
+            ),
+            locality(
+                LocalityKind::PartOfMunicipality,
+                "Beez",
+                50.48,
+                4.92,
+                &["5000"],
+            ),
+            locality(
+                LocalityKind::Municipality,
+                "Namur",
+                50.46,
+                4.87,
+                &["5000", "5100"],
+            ),
+        ];
+        (TestIndex::build(&addrs), locs)
+    }
+
+    #[test]
+    fn village_words_give_way_to_the_exact_number_in_the_postal_code() {
+        let (ti, locs) = namur_index();
+        let c = ctx_with(&ti, locs);
+        let q = |s: &str| search(&parsed_query(&ti, s), &opts(5), &c).unwrap();
+        // The Jambes stretch has no 797: the exact number on the other
+        // stretch beats the nearest one, 621 numbers off.
+        let set = q("Chaussée de Marche 797, 5100 Jambes");
+        assert_eq!(
+            (set.tier, hn_of(&set.candidates[0])),
+            (Tier::Exact, "797".into())
+        );
+        // No exact number anywhere: the village words still choose.
+        let set = q("Chaussée de Marche 180, 5100 Jambes");
+        assert_eq!(
+            (set.tier, hn_of(&set.candidates[0])),
+            (Tier::Nearest, "176".into())
+        );
+        // Strict fails on "rogier beez", the 3 km area around Beez misses
+        // Rue Rogier: the postal code alone finds it.
+        let set = q("Rue Rogier 44, 5000 Beez");
+        assert_eq!(
+            (set.tier, hn_of(&set.candidates[0])),
+            (Tier::Exact, "44".into())
+        );
+        // Words naming a place of another postal code are not dropped.
+        let set = q("Rue Rogier 44, 5000 Jambes");
+        assert_ne!(set.tier, Tier::Exact);
+        // Without a postal code there is nothing to keep the street in.
+        let mut nopc = parsed_query(&ti, "Rue Rogier 44 Beez");
+        nopc.postal_code = None;
+        assert!(without_city_words(&nopc, &c).is_none());
+    }
+
+    #[test]
+    fn a_leading_street_type_is_dropped_only_as_a_last_reading() {
+        let addrs = vec![
+            namur(
+                "f14",
+                "9201",
+                "Faubourg de Charleroi",
+                "14",
+                "6041",
+                "Gosselies",
+            )
+            .build(),
+            namur("n113", "9202", "Rue de Namur", "113", "1300", "Wavre")
+                .at(50.717, 4.611)
+                .build(),
+            namur(
+                "c115",
+                "9203",
+                "Chaussée de Namur",
+                "115",
+                "1301",
+                "Bierges",
+            )
+            .at(50.71, 4.60)
+            .build(),
+        ];
+        let ti = TestIndex::build(&addrs);
+        let c = ctx_with(
+            &ti,
+            vec![
+                locality(
+                    LocalityKind::Municipality,
+                    "Wavre",
+                    50.717,
+                    4.611,
+                    &["1300", "1301"],
+                ),
+                locality(
+                    LocalityKind::Municipality,
+                    "Charleroi",
+                    50.41,
+                    4.44,
+                    &["6041"],
+                ),
+            ],
+        );
+        let q = |s: &str| search(&parsed_query(&ti, s), &opts(5), &c).unwrap();
+        let set = q("Rue Faubourg de Charleroi 14, 6041");
+        assert_eq!(
+            (set.tier, hn_of(&set.candidates[0])),
+            (Tier::Exact, "14".into())
+        );
+        // The right street across the postal boundary wins over
+        // "de namur" (Chaussée de Namur) inside it.
+        let set = q("Rue de Namur 113, 1301");
+        assert_eq!(set.candidates[0].confidence, Confidence::AdjacentCommune);
+        assert_eq!(street_of_candidate(&set.candidates[0]), "Rue de Namur");
+        // Two words at least must remain, and only a known type goes.
+        let two = parsed_query(&ti, "Rue Rogier 1");
+        assert!(without_leading_type(&two).is_none());
+        let other = parsed_query(&ti, "Grand Faubourg de Charleroi 1");
+        assert!(without_leading_type(&other).is_none());
+    }
+
+    #[test]
+    fn words_unknown_in_the_postal_code_are_corrected_there() {
+        let addrs = vec![
+            // BeSt's Brussels spelling, and a Koksijde namesake of the
+            // typed form that keeps the regular typo tier away.
+            AddressBuilder::new("ecu", "9301", "19")
+                .street(Some("Rue de l'Ecuyer"), Some("Schildknaapsstraat"))
+                .postal("1000")
+                .build(),
+            AddressBuilder::new("kok", "9302", "7")
+                .region(crabfinder_core::Region::Flanders)
+                .street(None, Some("Schildknaapstraat"))
+                .postal("8670")
+                .at(51.12, 2.65)
+                .build(),
+        ];
+        let ti = TestIndex::build(&addrs);
+        let c = ctx_with(
+            &ti,
+            vec![
+                locality(
+                    LocalityKind::Municipality,
+                    "Bruxelles",
+                    50.85,
+                    4.35,
+                    &["1000"],
+                ),
+                locality(
+                    LocalityKind::Municipality,
+                    "Koksijde",
+                    51.12,
+                    2.65,
+                    &["8670"],
+                ),
+            ],
+        );
+        let set = search(
+            &parsed_query(&ti, "Schildknaapstraat 19, 1000"),
+            &opts(5),
+            &c,
+        )
+        .unwrap();
+        assert_eq!(
+            (set.tier, hn_of(&set.candidates[0])),
+            (Tier::Typo, "19".into())
+        );
+        // Nothing unknown in the postal code: no local typo pass.
+        let ok = parsed_query(&ti, "Schildknaapsstraat 19, 1000");
+        assert!(search_local_typo(&ok, &opts(5), &c).unwrap().is_none());
+        let mut nopc = parsed_query(&ti, "Schildknaapstraat 19");
+        nopc.postal_code = None;
+        assert!(search_local_typo(&nopc, &opts(5), &c).unwrap().is_none());
     }
 }

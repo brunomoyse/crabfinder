@@ -1,4 +1,9 @@
-# crabfinder
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/crabfinder-lockup-dark.svg">
+    <img alt="crabfinder" src="docs/assets/crabfinder-lockup.svg" width="420">
+  </picture>
+</h1>
 
 A Belgium-only geocoder, written in Rust. Indexes the federal **BeSt
 Address** open dataset (6.9M addresses, three regions) into a single

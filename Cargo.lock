@@ -589,6 +589,7 @@ dependencies = [
  "crabfinder-parser",
  "crabfinder-service",
  "crabfinder-test-support",
+ "csv",
  "flate2",
  "futures",
  "insta",

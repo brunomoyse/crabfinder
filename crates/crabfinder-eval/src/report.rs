@@ -17,7 +17,7 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
 
-use crate::metrics::{LatencyBucket, MetricBucket, Metrics};
+use crate::metrics::{DistanceBucket, LatencyBucket, MetricBucket, Metrics};
 use crate::runner::QueryResult;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -166,6 +166,16 @@ user-perceived end-to-end latency, not search-engine latency._\n",
     s.push_str("\n## Adversarial — by category\n\n");
     region_variant_table(&mut s, &m.by_adversarial_category, "Category");
 
+    if !m.by_realworld_source.is_empty() {
+        s.push_str("\n## Real-world — by dataset\n\n");
+        region_variant_table(&mut s, &m.by_realworld_source, "Dataset");
+    }
+
+    if m.distance.n > 0 {
+        s.push_str("\n## Distance to the reference point (top-1)\n\n");
+        distance_table(&mut s, &m.distance, &m.distance_by);
+    }
+
     s.push_str("\n## Known-failure tracking\n\n");
     if m.known_failure_tracking.is_empty() {
         s.push_str("_(no known_failure entries)_\n");
@@ -185,6 +195,39 @@ user-perceived end-to-end latency, not search-engine latency._\n",
         }
     }
     s
+}
+
+/// Header of a distance table (`distance_row` fills it).
+pub(crate) const DISTANCE_HEADER: &str = "| n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 |";
+
+/// One distance table row's cells after the label.
+pub(crate) fn distance_row(d: &DistanceBucket) -> String {
+    let m = |x: Option<f64>| x.map_or("–".to_string(), |x| format!("{x:.0} m"));
+    format!(
+        "{} | {:.3} | {:.3} | {:.3} | {:.3} | {} | {} |",
+        d.n,
+        d.found_rate,
+        d.within_25m,
+        d.within_100m,
+        d.within_250m,
+        m(d.median_error_m),
+        m(d.p90_error_m)
+    )
+}
+
+fn distance_table(
+    s: &mut String,
+    overall: &DistanceBucket,
+    by: &std::collections::HashMap<String, DistanceBucket>,
+) {
+    s.push_str(&format!("| Slice {DISTANCE_HEADER}\n"));
+    s.push_str("|---|---|---|---|---|---|---|---|\n");
+    s.push_str(&format!("| **all** | {}\n", distance_row(overall)));
+    let mut entries: Vec<_> = by.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+    for (k, d) in entries {
+        s.push_str(&format!("| {k} | {}\n", distance_row(d)));
+    }
 }
 
 fn bucket_table(s: &mut String, b: &MetricBucket) {
@@ -324,6 +367,33 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         "Category",
     );
 
+    if !base_or_cur_empty(
+        &baseline.metrics.by_realworld_source,
+        &current.metrics.by_realworld_source,
+    ) {
+        s.push_str("\n## Real-world — by dataset — Δ\n\n");
+        map_diff_table(
+            &mut s,
+            &baseline.metrics.by_realworld_source,
+            &current.metrics.by_realworld_source,
+            "Dataset",
+        );
+    }
+
+    if baseline.metrics.distance.n + current.metrics.distance.n > 0 {
+        s.push_str("\n## Distance to the reference point — Δ\n\n");
+        s.push_str(&format!("| Report {DISTANCE_HEADER}\n"));
+        s.push_str("|---|---|---|---|---|---|---|---|\n");
+        s.push_str(&format!(
+            "| baseline | {}\n",
+            distance_row(&baseline.metrics.distance)
+        ));
+        s.push_str(&format!(
+            "| current | {}\n",
+            distance_row(&current.metrics.distance)
+        ));
+    }
+
     s.push_str("\n## Known-failure state changes\n\n");
     let mut base_state: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
     for kf in &baseline.metrics.known_failure_tracking {
@@ -351,6 +421,13 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
     }
     fs::write(output_md, s).with_context(|| format!("writing {output_md:?}"))?;
     Ok(())
+}
+
+fn base_or_cur_empty(
+    base: &std::collections::HashMap<String, MetricBucket>,
+    cur: &std::collections::HashMap<String, MetricBucket>,
+) -> bool {
+    base.is_empty() && cur.is_empty()
 }
 
 fn bucket_diff_table(s: &mut String, base: &MetricBucket, cur: &MetricBucket) {
@@ -480,6 +557,32 @@ mod tests {
                 ),
                 ("notability".to_string(), bucket(5, 0.6, &["building"])),
             ]),
+            by_realworld_source: if extra_variant {
+                HashMap::from([(
+                    "brussels-schools".to_string(),
+                    bucket(10, 0.7, &["locality"]),
+                )])
+            } else {
+                HashMap::new()
+            },
+            distance: if extra_variant {
+                DistanceBucket {
+                    n: 10,
+                    found_rate: 1.0,
+                    within_25m: 0.6,
+                    within_100m: 0.9,
+                    within_250m: 1.0,
+                    median_error_m: Some(12.0),
+                    p90_error_m: None,
+                }
+            } else {
+                DistanceBucket::default()
+            },
+            distance_by: if extra_variant {
+                HashMap::from([("realworld".to_string(), DistanceBucket::default())])
+            } else {
+                HashMap::new()
+            },
             cross_language_recall_at_1: r1,
             cross_language_n: 12,
             cross_language_recall_at_1_boosted: 0.9,
@@ -506,6 +609,22 @@ mod tests {
     fn report_markdown_without_known_failures() {
         let md = render_report_md(&metrics(0.9, vec![], false), "u", 60);
         assert!(md.contains("_(no known_failure entries)_"));
+        assert!(!md.contains("Real-world"));
+        assert!(!md.contains("Distance"));
+    }
+
+    #[test]
+    fn report_markdown_with_realworld_and_distances() {
+        let md = render_report_md(&metrics(0.9, vec![], true), "u", 70);
+        assert!(
+            md.contains("| brussels-schools (locality) | 10 | 0.700 |"),
+            "{md}"
+        );
+        assert!(
+            md.contains("| **all** | 10 | 1.000 | 0.600 | 0.900 | 1.000 | 12 m | – |"),
+            "{md}"
+        );
+        assert!(md.contains("| realworld | 0 |"), "{md}");
     }
 
     fn write_report(dir: &Path, name: &str, m: Metrics) -> PathBuf {
@@ -551,6 +670,8 @@ mod tests {
         assert!(d.contains("| typo | 0/10 |"), "{d}");
         assert!(d.contains("**still_failing → now_passing**"), "{d}");
         assert!(d.contains("**(new) → still_failing**"), "{d}");
+        assert!(d.contains("| brussels-schools | 0/10 |"), "{d}");
+        assert!(d.contains("| current | 10 | 1.000 |"), "{d}");
 
         write_diff(&base, &base, &out).unwrap();
         assert!(

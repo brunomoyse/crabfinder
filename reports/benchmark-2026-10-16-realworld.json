@@ -1,0 +1,1620 @@
+{
+  "report_version": "bench-1",
+  "query_count": 1510,
+  "with_reference_point": 1510,
+  "geocoders": [
+    {
+      "name": "crabfinder",
+      "kind": "crabfinder",
+      "covered": 1510,
+      "errors": 0,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 1510,
+        "aggregated_query_count": 1510,
+        "error_count": 0,
+        "overall": {
+          "n": 1510,
+          "recall_at_1": 0.9231788079470199,
+          "recall_at_5": 0.9317880794701987,
+          "recall_at_10": 0.9331125827814569,
+          "mrr": 0.927075843582466,
+          "building_group_recall_at_1": 0.9231788079470199,
+          "strict_match_rate": 0.9695364238410596
+        },
+        "latency": {
+          "n": 1510,
+          "p50_ms": 1.9767500000000002,
+          "p95_ms": 10.590417,
+          "p99_ms": 18.383625000000002,
+          "mean_ms": 3.162480824503311,
+          "max_ms": 47.744291000000004
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "flanders-schools": {
+            "n": 250,
+            "recall_at_1": 0.992,
+            "recall_at_5": 0.992,
+            "recall_at_10": 0.992,
+            "mrr": 0.992,
+            "building_group_recall_at_1": 0.992,
+            "strict_match_rate": 0.992,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "namur-commerces": {
+            "n": 150,
+            "recall_at_1": 0.9533333333333334,
+            "recall_at_5": 0.9533333333333334,
+            "recall_at_10": 0.96,
+            "mrr": 0.9542857142857143,
+            "building_group_recall_at_1": 0.9533333333333334,
+            "strict_match_rate": 0.9733333333333334,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "brussels-pharmacies": {
+            "n": 60,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-wallonia": {
+            "n": 400,
+            "recall_at_1": 0.84,
+            "recall_at_5": 0.8625,
+            "recall_at_10": 0.8625,
+            "mrr": 0.8504166666666667,
+            "building_group_recall_at_1": 0.84,
+            "strict_match_rate": 0.95,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "brussels-bpost": {
+            "n": 100,
+            "recall_at_1": 0.89,
+            "recall_at_5": 0.91,
+            "recall_at_10": 0.91,
+            "mrr": 0.8975,
+            "building_group_recall_at_1": 0.89,
+            "strict_match_rate": 0.92,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-brussels": {
+            "n": 300,
+            "recall_at_1": 0.9533333333333334,
+            "recall_at_5": 0.96,
+            "recall_at_10": 0.9633333333333334,
+            "mrr": 0.9560833333333333,
+            "building_group_recall_at_1": 0.9533333333333334,
+            "strict_match_rate": 0.9666666666666667,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-care": {
+            "n": 250,
+            "recall_at_1": 0.928,
+            "recall_at_5": 0.928,
+            "recall_at_10": 0.928,
+            "mrr": 0.928,
+            "building_group_recall_at_1": 0.928,
+            "strict_match_rate": 0.992,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 1510,
+          "found_rate": 1.0,
+          "within_25m": 0.7304635761589404,
+          "within_100m": 0.9231788079470199,
+          "within_250m": 0.9615894039735099,
+          "median_error_m": 4.687325156668691,
+          "p90_error_m": 77.73149577498957
+        },
+        "distance_by": {
+          "region:brussels": {
+            "n": 496,
+            "found_rate": 1.0,
+            "within_25m": 0.7903225806451613,
+            "within_100m": 0.9334677419354839,
+            "within_250m": 0.9576612903225806,
+            "median_error_m": 7.359746094132897,
+            "p90_error_m": 62.01506969042241
+          },
+          "realworld:fwb-schools-wallonia": {
+            "n": 400,
+            "found_rate": 1.0,
+            "within_25m": 0.3675,
+            "within_100m": 0.84,
+            "within_250m": 0.94,
+            "median_error_m": 35.57865766621244,
+            "p90_error_m": 152.3653020709303
+          },
+          "realworld:namur-commerces": {
+            "n": 150,
+            "found_rate": 1.0,
+            "within_25m": 0.88,
+            "within_100m": 0.9533333333333334,
+            "within_250m": 0.96,
+            "median_error_m": 4.073102748075075,
+            "p90_error_m": 27.02954602244022
+          },
+          "region:wallonia": {
+            "n": 550,
+            "found_rate": 1.0,
+            "within_25m": 0.5072727272727273,
+            "within_100m": 0.8709090909090909,
+            "within_250m": 0.9454545454545454,
+            "median_error_m": 24.120733819210265,
+            "p90_error_m": 125.63351489795681
+          },
+          "realworld:flanders-care": {
+            "n": 250,
+            "found_rate": 1.0,
+            "within_25m": 0.86,
+            "within_100m": 0.928,
+            "within_250m": 0.94,
+            "median_error_m": 0.046696656989452426,
+            "p90_error_m": 46.926003515887984
+          },
+          "realworld:fwb-schools-brussels": {
+            "n": 300,
+            "found_rate": 1.0,
+            "within_25m": 0.7733333333333333,
+            "within_100m": 0.9533333333333334,
+            "within_250m": 0.97,
+            "median_error_m": 10.883870942578486,
+            "p90_error_m": 52.643251482089404
+          },
+          "realworld:brussels-bpost": {
+            "n": 100,
+            "found_rate": 1.0,
+            "within_25m": 0.72,
+            "within_100m": 0.89,
+            "within_250m": 0.96,
+            "median_error_m": 12.400929052129792,
+            "p90_error_m": 109.7626637437848
+          },
+          "region:flanders": {
+            "n": 464,
+            "found_rate": 1.0,
+            "within_25m": 0.9310344827586207,
+            "within_100m": 0.9741379310344828,
+            "within_250m": 0.9849137931034483,
+            "median_error_m": 0.3172621694457199,
+            "p90_error_m": 10.61777290872191
+          },
+          "realworld:flanders-schools": {
+            "n": 250,
+            "found_rate": 1.0,
+            "within_25m": 0.98,
+            "within_100m": 0.992,
+            "within_250m": 1.0,
+            "median_error_m": 0.4095462592285603,
+            "p90_error_m": 0.6094771458653488
+          },
+          "realworld": {
+            "n": 1510,
+            "found_rate": 1.0,
+            "within_25m": 0.7304635761589404,
+            "within_100m": 0.9231788079470199,
+            "within_250m": 0.9615894039735099,
+            "median_error_m": 4.687325156668691,
+            "p90_error_m": 77.73149577498957
+          },
+          "realworld:brussels-pharmacies": {
+            "n": 60,
+            "found_rate": 1.0,
+            "within_25m": 1.0,
+            "within_100m": 1.0,
+            "within_250m": 1.0,
+            "median_error_m": 0.1276673761926805,
+            "p90_error_m": 1.2432647049874863
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "crabfinder-osm",
+      "kind": "crabfinder",
+      "covered": 1510,
+      "errors": 0,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 1510,
+        "aggregated_query_count": 1510,
+        "error_count": 0,
+        "overall": {
+          "n": 1510,
+          "recall_at_1": 0.9231788079470199,
+          "recall_at_5": 0.9317880794701987,
+          "recall_at_10": 0.9331125827814569,
+          "mrr": 0.927075843582466,
+          "building_group_recall_at_1": 0.9231788079470199,
+          "strict_match_rate": 0.9695364238410596
+        },
+        "latency": {
+          "n": 1510,
+          "p50_ms": 2.827542,
+          "p95_ms": 25.284333,
+          "p99_ms": 77.73537499999999,
+          "mean_ms": 6.208840745033117,
+          "max_ms": 104.867792
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "brussels-bpost": {
+            "n": 100,
+            "recall_at_1": 0.89,
+            "recall_at_5": 0.91,
+            "recall_at_10": 0.91,
+            "mrr": 0.8975,
+            "building_group_recall_at_1": 0.89,
+            "strict_match_rate": 0.92,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-wallonia": {
+            "n": 400,
+            "recall_at_1": 0.84,
+            "recall_at_5": 0.8625,
+            "recall_at_10": 0.8625,
+            "mrr": 0.8504166666666667,
+            "building_group_recall_at_1": 0.84,
+            "strict_match_rate": 0.95,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "flanders-schools": {
+            "n": 250,
+            "recall_at_1": 0.992,
+            "recall_at_5": 0.992,
+            "recall_at_10": 0.992,
+            "mrr": 0.992,
+            "building_group_recall_at_1": 0.992,
+            "strict_match_rate": 0.992,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-care": {
+            "n": 250,
+            "recall_at_1": 0.928,
+            "recall_at_5": 0.928,
+            "recall_at_10": 0.928,
+            "mrr": 0.928,
+            "building_group_recall_at_1": 0.928,
+            "strict_match_rate": 0.992,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "namur-commerces": {
+            "n": 150,
+            "recall_at_1": 0.9533333333333334,
+            "recall_at_5": 0.9533333333333334,
+            "recall_at_10": 0.96,
+            "mrr": 0.9542857142857143,
+            "building_group_recall_at_1": 0.9533333333333334,
+            "strict_match_rate": 0.9733333333333334,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "fwb-schools-brussels": {
+            "n": 300,
+            "recall_at_1": 0.9533333333333334,
+            "recall_at_5": 0.96,
+            "recall_at_10": 0.9633333333333334,
+            "mrr": 0.9560833333333333,
+            "building_group_recall_at_1": 0.9533333333333334,
+            "strict_match_rate": 0.9666666666666667,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "brussels-pharmacies": {
+            "n": 60,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 1510,
+          "found_rate": 1.0,
+          "within_25m": 0.7304635761589404,
+          "within_100m": 0.9231788079470199,
+          "within_250m": 0.9615894039735099,
+          "median_error_m": 4.687325156668691,
+          "p90_error_m": 77.73149577498957
+        },
+        "distance_by": {
+          "realworld:fwb-schools-brussels": {
+            "n": 300,
+            "found_rate": 1.0,
+            "within_25m": 0.7733333333333333,
+            "within_100m": 0.9533333333333334,
+            "within_250m": 0.97,
+            "median_error_m": 10.883870942578486,
+            "p90_error_m": 52.643251482089404
+          },
+          "realworld:flanders-schools": {
+            "n": 250,
+            "found_rate": 1.0,
+            "within_25m": 0.98,
+            "within_100m": 0.992,
+            "within_250m": 1.0,
+            "median_error_m": 0.4095462592285603,
+            "p90_error_m": 0.6094771458653488
+          },
+          "realworld:brussels-bpost": {
+            "n": 100,
+            "found_rate": 1.0,
+            "within_25m": 0.72,
+            "within_100m": 0.89,
+            "within_250m": 0.96,
+            "median_error_m": 12.400929052129792,
+            "p90_error_m": 109.7626637437848
+          },
+          "region:wallonia": {
+            "n": 550,
+            "found_rate": 1.0,
+            "within_25m": 0.5072727272727273,
+            "within_100m": 0.8709090909090909,
+            "within_250m": 0.9454545454545454,
+            "median_error_m": 24.120733819210265,
+            "p90_error_m": 125.63351489795681
+          },
+          "region:flanders": {
+            "n": 464,
+            "found_rate": 1.0,
+            "within_25m": 0.9310344827586207,
+            "within_100m": 0.9741379310344828,
+            "within_250m": 0.9849137931034483,
+            "median_error_m": 0.3172621694457199,
+            "p90_error_m": 10.61777290872191
+          },
+          "realworld:brussels-pharmacies": {
+            "n": 60,
+            "found_rate": 1.0,
+            "within_25m": 1.0,
+            "within_100m": 1.0,
+            "within_250m": 1.0,
+            "median_error_m": 0.1276673761926805,
+            "p90_error_m": 1.2432647049874863
+          },
+          "region:brussels": {
+            "n": 496,
+            "found_rate": 1.0,
+            "within_25m": 0.7903225806451613,
+            "within_100m": 0.9334677419354839,
+            "within_250m": 0.9576612903225806,
+            "median_error_m": 7.359746094132897,
+            "p90_error_m": 62.01506969042241
+          },
+          "realworld": {
+            "n": 1510,
+            "found_rate": 1.0,
+            "within_25m": 0.7304635761589404,
+            "within_100m": 0.9231788079470199,
+            "within_250m": 0.9615894039735099,
+            "median_error_m": 4.687325156668691,
+            "p90_error_m": 77.73149577498957
+          },
+          "realworld:fwb-schools-wallonia": {
+            "n": 400,
+            "found_rate": 1.0,
+            "within_25m": 0.3675,
+            "within_100m": 0.84,
+            "within_250m": 0.94,
+            "median_error_m": 35.57865766621244,
+            "p90_error_m": 152.3653020709303
+          },
+          "realworld:namur-commerces": {
+            "n": 150,
+            "found_rate": 1.0,
+            "within_25m": 0.88,
+            "within_100m": 0.9533333333333334,
+            "within_250m": 0.96,
+            "median_error_m": 4.073102748075075,
+            "p90_error_m": 27.02954602244022
+          },
+          "realworld:flanders-care": {
+            "n": 250,
+            "found_rate": 1.0,
+            "within_25m": 0.86,
+            "within_100m": 0.928,
+            "within_250m": 0.94,
+            "median_error_m": 0.046696656989452426,
+            "p90_error_m": 46.926003515887984
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "brussels",
+      "kind": "brussels",
+      "covered": 496,
+      "errors": 0,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 496,
+        "aggregated_query_count": 496,
+        "error_count": 0,
+        "overall": {
+          "n": 496,
+          "recall_at_1": 0.9254032258064516,
+          "recall_at_5": 0.9294354838709677,
+          "recall_at_10": 0.9294354838709677,
+          "mrr": 0.9274193548387096,
+          "building_group_recall_at_1": 0.9254032258064516,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 496,
+          "p50_ms": 111.201917,
+          "p95_ms": 504.279084,
+          "p99_ms": 4739.061167,
+          "mean_ms": 275.1095007177419,
+          "max_ms": 21662.15975
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "brussels-pharmacies": {
+            "n": 60,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-care": {
+            "n": 18,
+            "recall_at_1": 0.5555555555555556,
+            "recall_at_5": 0.5555555555555556,
+            "recall_at_10": 0.5555555555555556,
+            "mrr": 0.5555555555555556,
+            "building_group_recall_at_1": 0.5555555555555556,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-schools": {
+            "n": 18,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "brussels-bpost": {
+            "n": 100,
+            "recall_at_1": 0.87,
+            "recall_at_5": 0.88,
+            "recall_at_10": 0.88,
+            "mrr": 0.875,
+            "building_group_recall_at_1": 0.87,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-brussels": {
+            "n": 300,
+            "recall_at_1": 0.9466666666666667,
+            "recall_at_5": 0.95,
+            "recall_at_10": 0.95,
+            "mrr": 0.9483333333333334,
+            "building_group_recall_at_1": 0.9466666666666667,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 496,
+          "found_rate": 0.9798387096774194,
+          "within_25m": 0.780241935483871,
+          "within_100m": 0.9254032258064516,
+          "within_250m": 0.9415322580645161,
+          "median_error_m": 7.2919203347106185,
+          "p90_error_m": 51.21024891088099
+        },
+        "distance_by": {
+          "realworld:fwb-schools-brussels": {
+            "n": 300,
+            "found_rate": 0.9866666666666667,
+            "within_25m": 0.7633333333333333,
+            "within_100m": 0.9466666666666667,
+            "within_250m": 0.9533333333333334,
+            "median_error_m": 10.829211723865908,
+            "p90_error_m": 51.2100764561083
+          },
+          "realworld:flanders-care": {
+            "n": 18,
+            "found_rate": 1.0,
+            "within_25m": 0.5555555555555556,
+            "within_100m": 0.5555555555555556,
+            "within_250m": 0.5555555555555556,
+            "median_error_m": 0.10275390428248822,
+            "p90_error_m": 2851.016728526518
+          },
+          "realworld:brussels-pharmacies": {
+            "n": 60,
+            "found_rate": 1.0,
+            "within_25m": 1.0,
+            "within_100m": 1.0,
+            "within_250m": 1.0,
+            "median_error_m": 0.1276673761926805,
+            "p90_error_m": 1.2432647049874863
+          },
+          "realworld": {
+            "n": 496,
+            "found_rate": 0.9798387096774194,
+            "within_25m": 0.780241935483871,
+            "within_100m": 0.9254032258064516,
+            "within_250m": 0.9415322580645161,
+            "median_error_m": 7.2919203347106185,
+            "p90_error_m": 51.21024891088099
+          },
+          "realworld:brussels-bpost": {
+            "n": 100,
+            "found_rate": 0.94,
+            "within_25m": 0.7,
+            "within_100m": 0.87,
+            "within_250m": 0.93,
+            "median_error_m": 12.74030881138146,
+            "p90_error_m": 71.957735779063
+          },
+          "realworld:flanders-schools": {
+            "n": 18,
+            "found_rate": 1.0,
+            "within_25m": 1.0,
+            "within_100m": 1.0,
+            "within_250m": 1.0,
+            "median_error_m": 0.40319861368505416,
+            "p90_error_m": 0.6286450788253506
+          },
+          "region:brussels": {
+            "n": 496,
+            "found_rate": 0.9798387096774194,
+            "within_25m": 0.780241935483871,
+            "within_100m": 0.9254032258064516,
+            "within_250m": 0.9415322580645161,
+            "median_error_m": 7.2919203347106185,
+            "p90_error_m": 51.21024891088099
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "vlaanderen",
+      "kind": "vlaanderen",
+      "covered": 960,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 960,
+        "aggregated_query_count": 960,
+        "error_count": 0,
+        "overall": {
+          "n": 960,
+          "recall_at_1": 0.4895833333333333,
+          "recall_at_5": 0.490625,
+          "recall_at_10": 0.490625,
+          "mrr": 0.48993055555555554,
+          "building_group_recall_at_1": 0.4895833333333333,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 960,
+          "p50_ms": 85.73454199999999,
+          "p95_ms": 200.883333,
+          "p99_ms": 923.671833,
+          "mean_ms": 318.30052160833355,
+          "max_ms": 29902.036541
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "brussels-pharmacies": {
+            "n": 60,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-schools": {
+            "n": 250,
+            "recall_at_1": 0.94,
+            "recall_at_5": 0.94,
+            "recall_at_10": 0.94,
+            "mrr": 0.94,
+            "building_group_recall_at_1": 0.94,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "brussels-bpost": {
+            "n": 100,
+            "recall_at_1": 0.04,
+            "recall_at_5": 0.04,
+            "recall_at_10": 0.04,
+            "mrr": 0.04,
+            "building_group_recall_at_1": 0.04,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-brussels": {
+            "n": 300,
+            "recall_at_1": 0.01,
+            "recall_at_5": 0.01,
+            "recall_at_10": 0.01,
+            "mrr": 0.01,
+            "building_group_recall_at_1": 0.01,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-care": {
+            "n": 250,
+            "recall_at_1": 0.912,
+            "recall_at_5": 0.916,
+            "recall_at_10": 0.916,
+            "mrr": 0.9133333333333332,
+            "building_group_recall_at_1": 0.912,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 960,
+          "found_rate": 0.5260416666666666,
+          "within_25m": 0.48125,
+          "within_100m": 0.5052083333333334,
+          "within_250m": 0.5104166666666666,
+          "median_error_m": 0.324847201986979,
+          "p90_error_m": 12.712005613617379
+        },
+        "distance_by": {
+          "realworld:brussels-bpost": {
+            "n": 100,
+            "found_rate": 0.08,
+            "within_25m": 0.05,
+            "within_100m": 0.07,
+            "within_250m": 0.08,
+            "median_error_m": 9.054952349466854,
+            "p90_error_m": 247.56509722853505
+          },
+          "realworld:fwb-schools-brussels": {
+            "n": 300,
+            "found_rate": 0.016666666666666666,
+            "within_25m": 0.013333333333333334,
+            "within_100m": 0.016666666666666666,
+            "within_250m": 0.016666666666666666,
+            "median_error_m": 7.61302910296341,
+            "p90_error_m": 44.252650670536404
+          },
+          "region:brussels": {
+            "n": 496,
+            "found_rate": 0.09475806451612903,
+            "within_25m": 0.07056451612903226,
+            "within_100m": 0.07661290322580645,
+            "within_250m": 0.07862903225806452,
+            "median_error_m": 0.5795715713855273,
+            "p90_error_m": 1310.3923164805303
+          },
+          "realworld:brussels-pharmacies": {
+            "n": 60,
+            "found_rate": 0.0,
+            "within_25m": 0.0,
+            "within_100m": 0.0,
+            "within_250m": 0.0,
+            "median_error_m": null,
+            "p90_error_m": null
+          },
+          "region:flanders": {
+            "n": 464,
+            "found_rate": 0.9870689655172413,
+            "within_25m": 0.9202586206896551,
+            "within_100m": 0.9633620689655172,
+            "within_250m": 0.9719827586206896,
+            "median_error_m": 0.30229123210482856,
+            "p90_error_m": 10.159878043114407
+          },
+          "realworld:flanders-schools": {
+            "n": 250,
+            "found_rate": 0.976,
+            "within_25m": 0.96,
+            "within_100m": 0.972,
+            "within_250m": 0.976,
+            "median_error_m": 0.41533774112274835,
+            "p90_error_m": 0.6108378651626893
+          },
+          "realworld": {
+            "n": 960,
+            "found_rate": 0.5260416666666666,
+            "within_25m": 0.48125,
+            "within_100m": 0.5052083333333334,
+            "within_250m": 0.5104166666666666,
+            "median_error_m": 0.324847201986979,
+            "p90_error_m": 12.712005613617379
+          },
+          "realworld:flanders-care": {
+            "n": 250,
+            "found_rate": 0.992,
+            "within_25m": 0.852,
+            "within_100m": 0.92,
+            "within_250m": 0.932,
+            "median_error_m": 0.04537377484810611,
+            "p90_error_m": 49.194654266688865
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "wallonie",
+      "kind": "wallonie",
+      "covered": 550,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 550,
+        "aggregated_query_count": 550,
+        "error_count": 0,
+        "overall": {
+          "n": 550,
+          "recall_at_1": 0.8472727272727273,
+          "recall_at_5": 0.8618181818181818,
+          "recall_at_10": 0.8618181818181818,
+          "mrr": 0.853030303030303,
+          "building_group_recall_at_1": 0.8472727272727273,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 550,
+          "p50_ms": 126.595125,
+          "p95_ms": 308.014458,
+          "p99_ms": 2343.0431249999997,
+          "mean_ms": 248.14710719272742,
+          "max_ms": 22941.0055
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "fwb-schools-wallonia": {
+            "n": 400,
+            "recall_at_1": 0.805,
+            "recall_at_5": 0.825,
+            "recall_at_10": 0.825,
+            "mrr": 0.8129166666666667,
+            "building_group_recall_at_1": 0.805,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "namur-commerces": {
+            "n": 150,
+            "recall_at_1": 0.96,
+            "recall_at_5": 0.96,
+            "recall_at_10": 0.96,
+            "mrr": 0.96,
+            "building_group_recall_at_1": 0.96,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 550,
+          "found_rate": 0.9890909090909091,
+          "within_25m": 0.5,
+          "within_100m": 0.8472727272727273,
+          "within_250m": 0.9109090909090909,
+          "median_error_m": 24.1207338196471,
+          "p90_error_m": 185.8608184513936
+        },
+        "distance_by": {
+          "realworld:fwb-schools-wallonia": {
+            "n": 400,
+            "found_rate": 0.9875,
+            "within_25m": 0.3575,
+            "within_100m": 0.805,
+            "within_250m": 0.8925,
+            "median_error_m": 36.44509608519872,
+            "p90_error_m": 233.73489214678418
+          },
+          "realworld:namur-commerces": {
+            "n": 150,
+            "found_rate": 0.9933333333333333,
+            "within_25m": 0.88,
+            "within_100m": 0.96,
+            "within_250m": 0.96,
+            "median_error_m": 4.0080865756613395,
+            "p90_error_m": 27.017846222088377
+          },
+          "region:wallonia": {
+            "n": 550,
+            "found_rate": 0.9890909090909091,
+            "within_25m": 0.5,
+            "within_100m": 0.8472727272727273,
+            "within_250m": 0.9109090909090909,
+            "median_error_m": 24.1207338196471,
+            "p90_error_m": 185.8608184513936
+          },
+          "realworld": {
+            "n": 550,
+            "found_rate": 0.9890909090909091,
+            "within_25m": 0.5,
+            "within_100m": 0.8472727272727273,
+            "within_250m": 0.9109090909090909,
+            "median_error_m": 24.1207338196471,
+            "p90_error_m": 185.8608184513936
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "phacochr",
+      "kind": "phacochr",
+      "covered": 1510,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 1510,
+        "aggregated_query_count": 1510,
+        "error_count": 0,
+        "overall": {
+          "n": 1510,
+          "recall_at_1": 0.7768211920529802,
+          "recall_at_5": 0.7768211920529802,
+          "recall_at_10": 0.7768211920529802,
+          "mrr": 0.7768211920529802,
+          "building_group_recall_at_1": 0.7768211920529802,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 1510,
+          "p50_ms": 19.771873758278144,
+          "p95_ms": 19.771873758278144,
+          "p99_ms": 19.771873758278144,
+          "mean_ms": 19.77187375827734,
+          "max_ms": 19.771873758278144
+        },
+        "by_region": {},
+        "by_variant": {},
+        "by_language": {},
+        "by_adversarial_category": {},
+        "by_realworld_source": {
+          "brussels-bpost": {
+            "n": 100,
+            "recall_at_1": 0.44,
+            "recall_at_5": 0.44,
+            "recall_at_10": 0.44,
+            "mrr": 0.44,
+            "building_group_recall_at_1": 0.44,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "namur-commerces": {
+            "n": 150,
+            "recall_at_1": 0.9933333333333333,
+            "recall_at_5": 0.9933333333333333,
+            "recall_at_10": 0.9933333333333333,
+            "mrr": 0.9933333333333333,
+            "building_group_recall_at_1": 0.9933333333333333,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "brussels-pharmacies": {
+            "n": 60,
+            "recall_at_1": 0.55,
+            "recall_at_5": 0.55,
+            "recall_at_10": 0.55,
+            "mrr": 0.55,
+            "building_group_recall_at_1": 0.55,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-care": {
+            "n": 250,
+            "recall_at_1": 0.896,
+            "recall_at_5": 0.896,
+            "recall_at_10": 0.896,
+            "mrr": 0.896,
+            "building_group_recall_at_1": 0.896,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "flanders-schools": {
+            "n": 250,
+            "recall_at_1": 0.9,
+            "recall_at_5": 0.9,
+            "recall_at_10": 0.9,
+            "mrr": 0.9,
+            "building_group_recall_at_1": 0.9,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          },
+          "fwb-schools-wallonia": {
+            "n": 400,
+            "recall_at_1": 0.8175,
+            "recall_at_5": 0.8175,
+            "recall_at_10": 0.8175,
+            "mrr": 0.8175,
+            "building_group_recall_at_1": 0.8175,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "fwb-schools-brussels": {
+            "n": 300,
+            "recall_at_1": 0.57,
+            "recall_at_5": 0.57,
+            "recall_at_10": 0.57,
+            "mrr": 0.57,
+            "building_group_recall_at_1": 0.57,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address",
+              "locality"
+            ]
+          }
+        },
+        "distance": {
+          "n": 1510,
+          "found_rate": 0.9794701986754967,
+          "within_25m": 0.6986754966887417,
+          "within_100m": 0.9072847682119205,
+          "within_250m": 0.9516556291390729,
+          "median_error_m": 7.396705903843918,
+          "p90_error_m": 76.72516588981918
+        },
+        "distance_by": {
+          "realworld:brussels-bpost": {
+            "n": 100,
+            "found_rate": 0.96,
+            "within_25m": 0.71,
+            "within_100m": 0.87,
+            "within_250m": 0.93,
+            "median_error_m": 13.208038898087167,
+            "p90_error_m": 82.19878891570511
+          },
+          "realworld:flanders-care": {
+            "n": 250,
+            "found_rate": 1.0,
+            "within_25m": 0.828,
+            "within_100m": 0.904,
+            "within_250m": 0.94,
+            "median_error_m": 0.48735393893563483,
+            "p90_error_m": 75.7176593742964
+          },
+          "realworld:fwb-schools-brussels": {
+            "n": 300,
+            "found_rate": 0.9933333333333333,
+            "within_25m": 0.7566666666666667,
+            "within_100m": 0.96,
+            "within_250m": 0.9733333333333334,
+            "median_error_m": 11.381089718313644,
+            "p90_error_m": 54.10101506476589
+          },
+          "realworld:fwb-schools-wallonia": {
+            "n": 400,
+            "found_rate": 0.96,
+            "within_25m": 0.35,
+            "within_100m": 0.8175,
+            "within_250m": 0.9175,
+            "median_error_m": 35.7521942140589,
+            "p90_error_m": 128.9619926654728
+          },
+          "region:flanders": {
+            "n": 464,
+            "found_rate": 0.9827586206896551,
+            "within_25m": 0.8512931034482759,
+            "within_100m": 0.9310344827586207,
+            "within_250m": 0.9676724137931034,
+            "median_error_m": 0.30681570104310296,
+            "p90_error_m": 44.84509928699768
+          },
+          "region:wallonia": {
+            "n": 550,
+            "found_rate": 0.9709090909090909,
+            "within_25m": 0.5,
+            "within_100m": 0.8654545454545455,
+            "within_250m": 0.9381818181818182,
+            "median_error_m": 23.66611402768181,
+            "p90_error_m": 103.92638371046
+          },
+          "realworld:namur-commerces": {
+            "n": 150,
+            "found_rate": 1.0,
+            "within_25m": 0.9,
+            "within_100m": 0.9933333333333333,
+            "within_250m": 0.9933333333333333,
+            "median_error_m": 3.723298293705862,
+            "p90_error_m": 24.251784201411983
+          },
+          "region:brussels": {
+            "n": 496,
+            "found_rate": 0.9858870967741935,
+            "within_25m": 0.7762096774193549,
+            "within_100m": 0.9314516129032258,
+            "within_250m": 0.9516129032258065,
+            "median_error_m": 8.595214998392104,
+            "p90_error_m": 60.72520290327087
+          },
+          "realworld": {
+            "n": 1510,
+            "found_rate": 0.9794701986754967,
+            "within_25m": 0.6986754966887417,
+            "within_100m": 0.9072847682119205,
+            "within_250m": 0.9516556291390729,
+            "median_error_m": 7.396705903843918,
+            "p90_error_m": 76.72516588981918
+          },
+          "realworld:flanders-schools": {
+            "n": 250,
+            "found_rate": 0.964,
+            "within_25m": 0.86,
+            "within_100m": 0.932,
+            "within_250m": 0.964,
+            "median_error_m": 0.03914726048325181,
+            "p90_error_m": 33.51474605530946
+          },
+          "realworld:brussels-pharmacies": {
+            "n": 60,
+            "found_rate": 1.0,
+            "within_25m": 1.0,
+            "within_100m": 1.0,
+            "within_250m": 1.0,
+            "median_error_m": 0.4304722747099556,
+            "p90_error_m": 2.521581953334752
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    }
+  ],
+  "reference": "crabfinder",
+  "head_to_head": [
+    {
+      "other": "crabfinder-osm",
+      "common": 1510,
+      "both": 1394,
+      "crabfinder_only": 0,
+      "other_only": 0,
+      "neither": 116
+    },
+    {
+      "other": "brussels",
+      "common": 496,
+      "both": 454,
+      "crabfinder_only": 9,
+      "other_only": 5,
+      "neither": 28
+    },
+    {
+      "other": "vlaanderen",
+      "common": 960,
+      "both": 485,
+      "crabfinder_only": 430,
+      "other_only": 0,
+      "neither": 45
+    },
+    {
+      "other": "wallonie",
+      "common": 550,
+      "both": 458,
+      "crabfinder_only": 21,
+      "other_only": 8,
+      "neither": 63
+    },
+    {
+      "other": "phacochr",
+      "common": 1510,
+      "both": 1344,
+      "crabfinder_only": 50,
+      "other_only": 26,
+      "neither": 90
+    }
+  ],
+  "losses": [
+    {
+      "id": "rw-brussels-bpost-0072",
+      "query": "Rue Wiertz 60, 1000 Bruxelles",
+      "crabfinder_error_m": 109.7626637437848,
+      "winners": [
+        [
+          "brussels",
+          21.731477894436942
+        ]
+      ]
+    },
+    {
+      "id": "rw-brussels-bpost-0073",
+      "query": "Rue Du Cloà®tre 7, 1020 Bruxelles",
+      "crabfinder_error_m": 1161.7636778059143,
+      "winners": [
+        [
+          "brussels",
+          18.73448419433403
+        ],
+        [
+          "phacochr",
+          19.223930721754687
+        ]
+      ]
+    },
+    {
+      "id": "rw-brussels-bpost-0079",
+      "query": "Schildknaapstraat 19, 1000 Bruxelles",
+      "crabfinder_error_m": 498.58465812510485,
+      "winners": [
+        [
+          "brussels",
+          6.49525324648396
+        ],
+        [
+          "phacochr",
+          6.334318523645442
+        ]
+      ]
+    },
+    {
+      "id": "rw-flanders-schools-0156",
+      "query": "Herestraat 49, 3000 Leuven",
+      "crabfinder_error_m": 148.03808762983013,
+      "winners": [
+        [
+          "phacochr",
+          0.04129317029315914
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-brussels-0109",
+      "query": "Avenue de la Libre Académie 1, 1070 Anderlecht",
+      "crabfinder_error_m": 108.26821154534504,
+      "winners": [
+        [
+          "brussels",
+          12.299280543901471
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-brussels-0141",
+      "query": "Place du temps libre 6, 1200 Woluwe-Saint-Lambert",
+      "crabfinder_error_m": 931.4997361356437,
+      "winners": [
+        [
+          "phacochr",
+          5.637387822558732
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-brussels-0148",
+      "query": "Avenue de L Astronomie 46, 1030 Schaerbeek",
+      "crabfinder_error_m": 1928.3923185241595,
+      "winners": [
+        [
+          "phacochr",
+          9.782670668003282
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-brussels-0207",
+      "query": "Avenue Franklin Roosevelt 50, 1050 Ixelles",
+      "crabfinder_error_m": 110.59051249130259,
+      "winners": [
+        [
+          "phacochr",
+          89.01036807328596
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-brussels-0223",
+      "query": "Rue Belliard 135A, 1040 Etterbeek",
+      "crabfinder_error_m": 155.8837952007525,
+      "winners": [
+        [
+          "brussels",
+          0.03169259105121223
+        ],
+        [
+          "phacochr",
+          0.1757412768370281
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0078",
+      "query": "Rue Verlaine 9, 5030 Gembloux",
+      "crabfinder_error_m": 132.5655670978203,
+      "winners": [
+        [
+          "wallonie",
+          33.34732775742508
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0125",
+      "query": "Boulevard Président Kennedy 2, 7000 Mons",
+      "crabfinder_error_m": 243.22691263617867,
+      "winners": [
+        [
+          "phacochr",
+          85.54246890740828
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0129",
+      "query": "Rue Albert Ier 17, 7611 Rumes",
+      "crabfinder_error_m": 437.0115871672212,
+      "winners": [
+        [
+          "wallonie",
+          12.384258743102668
+        ],
+        [
+          "phacochr",
+          12.109564167791833
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0144",
+      "query": "Passage des Déportés 2, 5030 Gembloux",
+      "crabfinder_error_m": 135.71397776347484,
+      "winners": [
+        [
+          "phacochr",
+          0.45861138159379217
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0153",
+      "query": "Place des Combattants et Déportés 1, 6534 Thuin",
+      "crabfinder_error_m": 2787.843788639985,
+      "winners": [
+        [
+          "phacochr",
+          25.719537959290072
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0159",
+      "query": "Rue de l'Avenir 5, 7160 Chapelle-lez-Herlaimont",
+      "crabfinder_error_m": 254.70880821775128,
+      "winners": [
+        [
+          "phacochr",
+          53.74092617214963
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0182",
+      "query": "Rue Faubourg de Charleroi 14B, 6041 Charleroi",
+      "crabfinder_error_m": 1227.8681594357831,
+      "winners": [
+        [
+          "phacochr",
+          24.943431006305293
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0206",
+      "query": "Borsu 4, 4560 Clavier",
+      "crabfinder_error_m": 812.4340688305832,
+      "winners": [
+        [
+          "phacochr",
+          99.98925502949952
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0218",
+      "query": "Rue de Noailles 3, 6460 Chimay",
+      "crabfinder_error_m": 117.65465982066353,
+      "winners": [
+        [
+          "wallonie",
+          70.7027208091465
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0257",
+      "query": "Rue du Moustier 3, 7050 Jurbise",
+      "crabfinder_error_m": 198.0114997962307,
+      "winners": [
+        [
+          "phacochr",
+          13.087128275499749
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0279",
+      "query": "Place du Palais de Justice 8, 5500 Dinant",
+      "crabfinder_error_m": 112.2896797425944,
+      "winners": [
+        [
+          "phacochr",
+          74.81079144442255
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0314",
+      "query": "Rue de la Pte Chenevière 40, 6001 Charleroi",
+      "crabfinder_error_m": 162.22381195211773,
+      "winners": [
+        [
+          "phacochr",
+          46.497839877964445
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0330",
+      "query": "Chemin Gabrielle Petit 2, 7940 Brugelette",
+      "crabfinder_error_m": 231.27663914041256,
+      "winners": [
+        [
+          "phacochr",
+          35.48377990229819
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0337",
+      "query": "Rue de Monz-lez-Liège 262, 4400 Flémalle",
+      "crabfinder_error_m": 1121.9678354745333,
+      "winners": [
+        [
+          "phacochr",
+          17.8240302072502
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0348",
+      "query": "Rue des Cent Bonniers 68, 6150 Anderlues",
+      "crabfinder_error_m": 119.28848595760422,
+      "winners": [
+        [
+          "wallonie",
+          97.28069071994793
+        ]
+      ]
+    },
+    {
+      "id": "rw-fwb-schools-wallonia-0376",
+      "query": "Rue de l'Aurore 223, 5100 Namur",
+      "crabfinder_error_m": 125.28973200027711,
+      "winners": [
+        [
+          "phacochr",
+          55.55809622643305
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0012",
+      "query": "Chaussée de Marche 797, 5100 Jambes",
+      "crabfinder_error_m": 4316.154831604932,
+      "winners": [
+        [
+          "wallonie",
+          0.1159176212042607
+        ],
+        [
+          "phacochr",
+          0.3824538131554679
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0018",
+      "query": "Chaussée de Marche 823, 5100 Jambes",
+      "crabfinder_error_m": 4698.374101893495,
+      "winners": [
+        [
+          "wallonie",
+          1.8611333193027249
+        ],
+        [
+          "phacochr",
+          2.1865035403170574
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0053",
+      "query": "Rue Rogier 44, 5000 Beez",
+      "crabfinder_error_m": 4004.1549377012407,
+      "winners": [
+        [
+          "phacochr",
+          0.5362783113021863
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0059",
+      "query": "Rue du Réemploi 14, 5020 Suarlée",
+      "crabfinder_error_m": 196.21580461937083,
+      "winners": [
+        [
+          "wallonie",
+          22.22715461127206
+        ],
+        [
+          "phacochr",
+          22.508575672967527
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0089",
+      "query": "Rue de Bruxelles 20, 5000 Beez",
+      "crabfinder_error_m": 4090.3923588267844,
+      "winners": [
+        [
+          "phacochr",
+          9.580326284672816
+        ]
+      ]
+    },
+    {
+      "id": "rw-namur-commerces-0138",
+      "query": "Chaussée de Marche 654, 5100 Jambes",
+      "crabfinder_error_m": 1911.1016667237536,
+      "winners": [
+        [
+          "wallonie",
+          7.038743693169431
+        ],
+        [
+          "phacochr",
+          6.96067669697391
+        ]
+      ]
+    }
+  ]
+}

@@ -1,10 +1,13 @@
 //! Eval set types + loaders (file 14 §4).
 //!
-//! Two on-disk formats:
+//! Three on-disk formats:
 //!   - SyntheticEvalSet — JSON, machine-generated (file 14 §2)
 //!   - AdversarialEvalSet — YAML, hand-edited (file 14 §3)
+//!   - RealWorldEvalSet — YAML with `kind: realworld`: addresses from
+//!     public open-data lists with their published coordinates (v3
+//!     Phase 11.1, `scripts/build_realworld_eval.py`)
 //!
-//! Both fold into a unified `EvalSet` enum the runner iterates over.
+//! All fold into a unified `EvalSet` enum the runner iterates over.
 
 use std::fs;
 use std::path::Path;
@@ -226,26 +229,117 @@ impl AdversarialEvalSet {
     }
 }
 
+// --- Real-world -------------------------------------------------------------
+
+/// One address from a public open-data list (a school, a pharmacy…): the
+/// fields as published, the joined free-text query, and the published
+/// coordinates as ground truth (v3 Phase 11.1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealWorldQuery {
+    pub id: String,
+    /// Dataset key (`brussels-schools`), described in `eval/realworld/SOURCES.md`.
+    pub source: String,
+    /// `brussels` / `flanders` / `wallonia`.
+    pub region: String,
+    pub query: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub street: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub house_number: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub postal_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub city: Option<String>,
+    /// `[lat, lon]` as published by the source.
+    pub expected_point: [f64; 2],
+    /// Radius around `expected_point`, metres (default
+    /// `REALWORLD_WITHIN_M`): published points are often a parcel or an
+    /// entrance, not the BeSt address point.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub within_m: Option<f64>,
+    /// Hand-verified BeSt address: the entry is then scored at address
+    /// level, not by distance.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expected_best_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub expected_building_group_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub notes: Option<String>,
+}
+
+/// Default radius of a real-world match.
+pub const REALWORLD_WITHIN_M: f64 = 100.0;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealWorldEvalSet {
+    pub version: String,
+    /// Always `realworld`: what tells this YAML from an adversarial set.
+    pub kind: String,
+    pub queries: Vec<RealWorldQuery>,
+}
+
+impl RealWorldEvalSet {
+    pub fn load(path: &Path) -> Result<Self> {
+        let body = fs::read_to_string(path)
+            .with_context(|| format!("reading real-world eval set {path:?}"))?;
+        serde_saphyr::from_str(&body)
+            .with_context(|| format!("parsing real-world eval set {path:?} as YAML"))
+    }
+}
+
 // --- Unified ----------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub enum EvalSet {
     Synthetic(SyntheticEvalSet),
     Adversarial(AdversarialEvalSet),
+    RealWorld(RealWorldEvalSet),
+}
+
+/// Just the top-level `kind` of a YAML set (adversarial when absent).
+#[derive(Deserialize)]
+struct YamlKind {
+    #[serde(default)]
+    kind: Option<String>,
 }
 
 impl EvalSet {
-    /// Dispatch by extension. JSON → synthetic, YAML/YML → adversarial.
+    /// Dispatch by extension. JSON → synthetic; YAML/YML → real-world when
+    /// it says `kind: realworld`, adversarial otherwise.
     pub fn auto_load(path: &Path) -> Result<Self> {
         match path.extension().and_then(|s| s.to_str()) {
             Some("json") => Ok(Self::Synthetic(SyntheticEvalSet::load(path)?)),
-            Some("yaml") | Some("yml") => Ok(Self::Adversarial(AdversarialEvalSet::load(path)?)),
+            Some("yaml") | Some("yml") => {
+                let body = fs::read_to_string(path)
+                    .with_context(|| format!("reading eval set {path:?}"))?;
+                let kind: YamlKind = serde_saphyr::from_str(&body)
+                    .with_context(|| format!("parsing eval set {path:?} as YAML"))?;
+                match kind.kind.as_deref() {
+                    None | Some("adversarial") => {
+                        Ok(Self::Adversarial(AdversarialEvalSet::load(path)?))
+                    }
+                    Some("realworld") => Ok(Self::RealWorld(RealWorldEvalSet::load(path)?)),
+                    Some(k) => bail!(
+                        "unknown eval set kind {k:?} in {path:?}; expected adversarial or realworld"
+                    ),
+                }
+            }
             ext => bail!(
                 "unknown eval set format for {path:?} (extension={ext:?}); \
                  expected .json or .yaml/.yml"
             ),
         }
     }
+}
+
+/// An address split into fields, for geocoders that take structured
+/// input (real-world entries carry them; other sets are free text only).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StructuredAddress {
+    pub street: Option<String>,
+    pub house_number: Option<String>,
+    pub postal_code: Option<String>,
+    pub city: Option<String>,
 }
 
 /// Runner-facing unified view of a single query, independent of source format.
@@ -267,6 +361,13 @@ pub struct EvalQuery {
     pub match_level: MatchLevel,
     /// `(lat, lon)` and radius for `MatchLevel::Locality`.
     pub expected_point: Option<((f64, f64), f64)>,
+    /// Where the answer is, for the distance metrics (v3 Phase 11.1): the
+    /// published point of a real-world entry, the place of a locality
+    /// one, else the BeSt point of the expected address when the
+    /// benchmark looked it up (`--with-points`).
+    pub reference_point: Option<(f64, f64)>,
+    /// The same address in fields, when the set has them.
+    pub structured: Option<StructuredAddress>,
     pub source: EvalQuerySource,
 }
 
@@ -282,6 +383,43 @@ pub enum EvalQuerySource {
         category: AdversarialCategory,
         subcategory: String,
     },
+    RealWorld {
+        source: String,
+        region: String,
+    },
+}
+
+impl EvalQuerySource {
+    /// The set a query comes from, for per-set report rows:
+    /// `synthetic`, `adversarial`, `realworld`.
+    pub fn set_kind(&self) -> &'static str {
+        match self {
+            EvalQuerySource::Synthetic { .. } => "synthetic",
+            EvalQuerySource::Adversarial { .. } => "adversarial",
+            EvalQuerySource::RealWorld { .. } => "realworld",
+        }
+    }
+
+    /// Region of a synthetic or real-world query, spelled the same for
+    /// both (`brussels` / `flanders` / `wallonia`; synthetic sets say
+    /// `BE-BRU` / `BE-VLG` / `BE-WAL`). `None` for adversarial queries and
+    /// unknown spellings.
+    pub fn region(&self) -> Option<&'static str> {
+        match self {
+            EvalQuerySource::Synthetic { region, .. }
+            | EvalQuerySource::RealWorld { region, .. } => normalize_region(region),
+            EvalQuerySource::Adversarial { .. } => None,
+        }
+    }
+}
+
+pub fn normalize_region(r: &str) -> Option<&'static str> {
+    match r.to_ascii_lowercase().as_str() {
+        "brussels" | "be-bru" => Some("brussels"),
+        "flanders" | "be-vlg" => Some("flanders"),
+        "wallonia" | "be-wal" => Some("wallonia"),
+        _ => None,
+    }
 }
 
 impl EvalQuery {
@@ -294,6 +432,8 @@ impl EvalQuery {
             expected_to_fail: false,
             match_level: MatchLevel::Address,
             expected_point: None,
+            reference_point: None,
+            structured: None,
             source: EvalQuerySource::Synthetic {
                 variant_type: q.variant_type,
                 region: q.sample_region.clone(),
@@ -322,9 +462,42 @@ impl EvalQuery {
             expected_point: q
                 .expected_point
                 .map(|[lat, lon]| ((lat, lon), q.within_m.unwrap_or(DEFAULT_WITHIN_M))),
+            reference_point: q.expected_point.map(|[lat, lon]| (lat, lon)),
+            structured: None,
             source: EvalQuerySource::Adversarial {
                 category: q.category,
                 subcategory: q.subcategory.clone(),
+            },
+        }
+    }
+
+    /// Scored by distance to the published point, or at address level
+    /// once a BeSt address is pinned.
+    pub fn from_realworld(q: &RealWorldQuery) -> Self {
+        let [lat, lon] = q.expected_point;
+        let match_level = if q.expected_best_id.is_some() {
+            MatchLevel::Address
+        } else {
+            MatchLevel::Locality
+        };
+        EvalQuery {
+            id: q.id.clone(),
+            query_string: q.query.clone(),
+            expected_bgid_set: q.expected_building_group_id.iter().cloned().collect(),
+            expected_best_id_set: q.expected_best_id.iter().cloned().collect(),
+            expected_to_fail: false,
+            match_level,
+            expected_point: Some(((lat, lon), q.within_m.unwrap_or(REALWORLD_WITHIN_M))),
+            reference_point: Some((lat, lon)),
+            structured: Some(StructuredAddress {
+                street: q.street.clone(),
+                house_number: q.house_number.clone(),
+                postal_code: q.postal_code.clone(),
+                city: q.city.clone(),
+            }),
+            source: EvalQuerySource::RealWorld {
+                source: q.source.clone(),
+                region: q.region.clone(),
             },
         }
     }
@@ -339,6 +512,7 @@ pub fn flatten(sets: &[EvalSet]) -> Vec<EvalQuery> {
             EvalSet::Adversarial(a) => {
                 out.extend(a.queries.iter().map(EvalQuery::from_adversarial))
             }
+            EvalSet::RealWorld(r) => out.extend(r.queries.iter().map(EvalQuery::from_realworld)),
         }
     }
     out
@@ -456,6 +630,109 @@ queries: []
             EvalSet::Adversarial(_) => {}
             _ => panic!("expected adversarial"),
         }
+    }
+
+    const REALWORLD_YAML: &str = r#"version: realworld-be-v1
+kind: realworld
+queries:
+  - id: rw-brussels-schools-0001
+    source: brussels-schools
+    region: brussels
+    query: "Rue de la Loi 16, 1000 Bruxelles"
+    street: "Rue de la Loi"
+    house_number: "16"
+    postal_code: "1000"
+    city: "Bruxelles"
+    expected_point: [50.8466, 4.3669]
+  - id: rw-flanders-schools-0001
+    source: flanders-schools
+    region: flanders
+    query: "Grote Markt 1, 2000 Antwerpen"
+    expected_point: [51.2213, 4.3997]
+    within_m: 250
+    expected_best_id: "https://data.vlaanderen.be/id/adres/1/2020"
+    expected_building_group_id: "ns|1|1"
+"#;
+
+    #[test]
+    fn realworld_yaml_is_told_apart_by_kind_and_flattens() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("rw.yaml");
+        write(&path, REALWORLD_YAML);
+        let EvalSet::RealWorld(set) = EvalSet::auto_load(&path).unwrap() else {
+            panic!("expected real-world");
+        };
+        assert_eq!(set.queries.len(), 2);
+        let flat = flatten(&[EvalSet::RealWorld(set)]);
+        // No pinned address: by distance, 100 m by default.
+        let a = &flat[0];
+        assert_eq!(a.match_level, MatchLevel::Locality);
+        assert_eq!(
+            a.expected_point,
+            Some(((50.8466, 4.3669), REALWORLD_WITHIN_M))
+        );
+        assert_eq!(a.reference_point, Some((50.8466, 4.3669)));
+        let st = a.structured.as_ref().unwrap();
+        assert_eq!(
+            (st.street.as_deref(), st.house_number.as_deref()),
+            (Some("Rue de la Loi"), Some("16"))
+        );
+        assert_eq!(a.source.set_kind(), "realworld");
+        assert_eq!(a.source.region(), Some("brussels"));
+        // A pinned address: address level, radius kept for distances.
+        let b = &flat[1];
+        assert_eq!(b.match_level, MatchLevel::Address);
+        assert_eq!(b.expected_bgid_set, ["ns|1|1"]);
+        assert_eq!(b.expected_point.unwrap().1, 250.0);
+        assert_eq!(b.structured.as_ref().unwrap().street, None);
+    }
+
+    #[test]
+    fn yaml_kind_dispatch_rejects_unknown_kinds() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("x.yaml");
+        write(&path, "version: v\nkind: adversarial\nqueries: []\n");
+        assert!(matches!(
+            EvalSet::auto_load(&path).unwrap(),
+            EvalSet::Adversarial(_)
+        ));
+        write(&path, "version: v\nkind: other\nqueries: []\n");
+        let err = EvalSet::auto_load(&path).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("unknown eval set kind"),
+            "{err:#}"
+        );
+        write(&path, "[: not yaml");
+        assert!(EvalSet::auto_load(&path).is_err());
+        assert!(EvalSet::auto_load(&tmp.path().join("missing.yaml")).is_err());
+        assert!(RealWorldEvalSet::load(&tmp.path().join("missing.yaml")).is_err());
+    }
+
+    #[test]
+    fn source_kinds_and_regions() {
+        let adv = EvalQuerySource::Adversarial {
+            category: AdversarialCategory::Hamlet,
+            subcategory: "x".into(),
+        };
+        assert_eq!((adv.set_kind(), adv.region()), ("adversarial", None));
+        let syn = EvalQuerySource::Synthetic {
+            variant_type: VariantType::Typo,
+            region: "wallonia".into(),
+            street_primary_lang: "fr".into(),
+            boosted: false,
+        };
+        assert_eq!(
+            (syn.set_kind(), syn.region()),
+            ("synthetic", Some("wallonia"))
+        );
+        for (r, n) in [
+            ("BE-BRU", "brussels"),
+            ("BE-VLG", "flanders"),
+            ("be-wal", "wallonia"),
+        ] {
+            assert_eq!(normalize_region(r), Some(n));
+        }
+        assert_eq!(normalize_region("mars"), None);
     }
 
     #[test]

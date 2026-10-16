@@ -64,6 +64,30 @@ fn point_of(geometry: Option<&serde_json::Value>) -> Option<(f64, f64)> {
     Some((c.get(1)?.as_f64()?, c.first()?.as_f64()?))
 }
 
+/// Read a `/geocode` body into the ranked features and points.
+pub(crate) fn parse_geocode_body(body: &str) -> Result<crate::adapters::Answer, String> {
+    let body: GeocodeResponse = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let points = body
+        .features
+        .iter()
+        .map(|f| point_of(f.geometry.as_ref()))
+        .collect();
+    let features = body
+        .features
+        .into_iter()
+        .map(|f| {
+            let best_id = extract_best_id_canonical(&f.properties);
+            (f.building_group_id, best_id, f.match_type)
+        })
+        .collect();
+    Ok(crate::adapters::Answer {
+        features,
+        points,
+        top_match_type: body.match_type,
+        raw_hits: body.raw_hits,
+    })
+}
+
 /// Best-id object as carried inside `feature.properties.id`. We reassemble
 /// the canonical "namespace/object_id/version_id" form (matching BestId's
 /// Display impl) for string comparison against the eval set's expected.
@@ -157,40 +181,22 @@ async fn execute_one(client: &Client, base: &str, limit: usize, query: EvalQuery
                     error: Some(format!("http {status}")),
                 };
             }
-            match resp.json::<GeocodeResponse>().await {
-                Err(e) => QueryResult {
+            let parsed = match resp.text().await {
+                Ok(body) => parse_geocode_body(&body),
+                Err(e) => Err(e.to_string()),
+            };
+            let latency_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            match parsed {
+                Err(e) => crate::adapters::failed(query, latency_ms, format!("json: {e}")),
+                Ok(a) => QueryResult {
                     query,
-                    features: Vec::new(),
-                    points: Vec::new(),
-                    top_match_type: String::new(),
-                    raw_hits: 0,
-                    latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
-                    error: Some(format!("json: {e}")),
+                    features: a.features,
+                    points: a.points,
+                    top_match_type: a.top_match_type,
+                    raw_hits: a.raw_hits,
+                    latency_ms,
+                    error: None,
                 },
-                Ok(body) => {
-                    let points = body
-                        .features
-                        .iter()
-                        .map(|f| point_of(f.geometry.as_ref()))
-                        .collect();
-                    let features: Vec<(String, String, String)> = body
-                        .features
-                        .into_iter()
-                        .map(|f| {
-                            let best_id = extract_best_id_canonical(&f.properties);
-                            (f.building_group_id, best_id, f.match_type)
-                        })
-                        .collect();
-                    QueryResult {
-                        query,
-                        features,
-                        points,
-                        top_match_type: body.match_type,
-                        raw_hits: body.raw_hits,
-                        latency_ms: (t0.elapsed().as_secs_f64() * 1000.0),
-                        error: None,
-                    }
-                }
             }
         }
     }
@@ -288,6 +294,7 @@ pub async fn dry_run(config: &RunnerConfig, mut queries: Vec<EvalQuery>) -> Resu
             crate::eval_set::EvalQuerySource::Adversarial { category, .. } => {
                 format!("adv:{}", category.as_str())
             }
+            crate::eval_set::EvalQuerySource::RealWorld { source, .. } => format!("rw:{source}"),
         };
         *variant_seen.entry(variant).or_default() += 1;
     }
@@ -399,8 +406,8 @@ async fn expected_ids_exist(client: &Client, base: &reqwest::Url, q: &EvalQuery)
     }
     let need_address = q.match_level == MatchLevel::Address && !q.expected_best_id_set.is_empty();
     for bgid in &q.expected_bgid_set {
-        let units = match building_unit_ids(client, base, bgid).await {
-            Ok(u) => u,
+        let units = match building_units(client, base, bgid).await {
+            Ok(u) => u.into_iter().map(|(id, _)| id).collect::<Vec<_>>(),
             Err(e) => {
                 warn!(id = %q.id, bgid, error = %e, "validator: building lookup failed");
                 continue;
@@ -416,13 +423,11 @@ async fn expected_ids_exist(client: &Client, base: &reqwest::Url, q: &EvalQuery)
     false
 }
 
-/// Canonical best ids of every unit of building `bgid` (empty when the
-/// building doesn't exist).
-async fn building_unit_ids(
-    client: &Client,
-    base: &reqwest::Url,
-    bgid: &str,
-) -> Result<Vec<String>> {
+/// Canonical best id and `(lat, lon)` of one unit.
+type Unit = (String, Option<(f64, f64)>);
+
+/// Every unit of building `bgid` (empty when the building doesn't exist).
+async fn building_units(client: &Client, base: &reqwest::Url, bgid: &str) -> Result<Vec<Unit>> {
     let mut url = base.clone();
     url.path_segments_mut()
         .map_err(|_| anyhow::anyhow!("service url {base} can't be a base"))?
@@ -438,9 +443,72 @@ async fn building_unit_ids(
         .and_then(|f| f.as_array())
         .map(|fs| {
             fs.iter()
-                .filter_map(|f| f.get("properties"))
-                .map(extract_best_id_canonical)
+                .filter_map(|f| {
+                    let id = extract_best_id_canonical(f.get("properties")?);
+                    Some((id, point_of(f.get("geometry"))))
+                })
                 .collect()
         })
         .unwrap_or_default())
+}
+
+/// Fill the missing `reference_point`s of address- and building-level
+/// queries with the BeSt point of their expected address (else of the
+/// expected building's first unit), looked up on a crabfinder service, so
+/// geocoders without BeSt ids can be scored on these sets by distance
+/// (v3 Phase 11.1, `--with-points`). Returns how many were filled.
+pub async fn fill_reference_points(
+    config: &RunnerConfig,
+    queries: &mut [EvalQuery],
+) -> Result<usize> {
+    let client = Client::builder()
+        .timeout(config.timeout)
+        .build()
+        .context("constructing reqwest client")?;
+    health_check(&client, &config.service_url).await?;
+    let base = reqwest::Url::parse(&config.service_url)
+        .with_context(|| format!("parsing service url {:?}", config.service_url))?;
+    let wanted: std::collections::BTreeSet<String> = queries
+        .iter()
+        .filter(|q| needs_point(q))
+        .filter_map(|q| q.expected_bgid_set.first().cloned())
+        .collect();
+    let units: std::collections::HashMap<String, Vec<Unit>> = stream::iter(wanted)
+        .map(|bgid| {
+            let client = client.clone();
+            let base = base.clone();
+            async move {
+                let u = building_units(&client, &base, &bgid)
+                    .await
+                    .unwrap_or_default();
+                (bgid, u)
+            }
+        })
+        .buffer_unordered(config.parallel)
+        .collect()
+        .await;
+    let mut filled = 0;
+    for q in queries.iter_mut().filter(|q| needs_point(q)) {
+        let Some(us) = q.expected_bgid_set.first().and_then(|b| units.get(b)) else {
+            continue;
+        };
+        let unit = us
+            .iter()
+            .find(|(id, _)| q.expected_best_id_set.contains(id))
+            .or(us.first());
+        if let Some((_, Some(p))) = unit {
+            q.reference_point = Some(*p);
+            filled += 1;
+        }
+    }
+    info!(filled, "benchmark: reference points from BeSt");
+    Ok(filled)
+}
+
+/// Address / building queries without a reference point (a street or
+/// place answer has no single point to measure against).
+fn needs_point(q: &EvalQuery) -> bool {
+    q.reference_point.is_none()
+        && matches!(q.match_level, MatchLevel::Address | MatchLevel::Building)
+        && !q.expected_bgid_set.is_empty()
 }

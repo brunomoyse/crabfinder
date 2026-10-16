@@ -40,3 +40,8 @@ Thumbs.db
 # BeSt refreshes (scripts/refresh_best.sh)
 /best-*/
 /index-*
+
+# Real-world eval downloads + benchmark cache/scratch (v3 Phase 11.1)
+/eval/realworld/sources/
+/eval/bench-cache/
+/reports/.bench-work/

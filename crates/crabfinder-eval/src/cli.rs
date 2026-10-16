@@ -110,6 +110,38 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub no_notability_boost: bool,
 
+    // --- Benchmark mode (v3 Phase 11.1) --------------------------------------
+    /// Run the --eval-set queries through several geocoders and compare
+    /// them (`--geocoder`, repeatable). Writes --output (JSON), its
+    /// `-detail.json.gz` and --output-md.
+    #[arg(long)]
+    pub benchmark: bool,
+
+    /// `label[:kind][=target]`: kind is crabfinder, bepelias, brussels,
+    /// vlaanderen, wallonie or phacochr (default: the label); target a
+    /// base URL, or phacochr's command line.
+    #[arg(long = "geocoder")]
+    pub geocoders: Vec<String>,
+
+    /// `label=N`: at most N requests per second to that geocoder
+    /// (defaults: 2/s for public services, unlimited for local ones).
+    #[arg(long = "rate")]
+    pub rates: Vec<String>,
+
+    /// Response cache for the competitors (crabfinder is never cached).
+    #[arg(long, default_value = "eval/bench-cache")]
+    pub bench_cache: PathBuf,
+
+    /// Disable the response cache.
+    #[arg(long)]
+    pub no_bench_cache: bool,
+
+    /// Score address-level queries by distance too: fill their reference
+    /// point with the BeSt point of the expected address, looked up on
+    /// --service.
+    #[arg(long)]
+    pub with_points: bool,
+
     // --- Diff mode (Step 8) -------------------------------------------------
     /// Path to the baseline report.json for --diff.
     #[arg(long)]
@@ -143,12 +175,15 @@ pub fn run_with(args: &Args) -> Result<()> {
     if args.batch_mode {
         return run_batch_mode(args);
     }
+    if args.benchmark {
+        return run_benchmark(args);
+    }
     if !args.eval_sets.is_empty() {
         return run_eval(args);
     }
     anyhow::bail!(
         "no mode selected — pass one of: --generate-eval-set, --validate-eval-set, \
-         --batch-mode, --baseline+--current, or --eval-set"
+         --batch-mode, --benchmark, --baseline+--current, or --eval-set"
     )
 }
 
@@ -229,6 +264,57 @@ fn run_batch_mode(args: &Args) -> Result<()> {
         notability_enabled: !args.no_notability_boost,
     };
     crate::batch_mode::run(&config, queries, &args.eval_sets)
+}
+
+fn run_benchmark(args: &Args) -> Result<()> {
+    if args.eval_sets.is_empty() {
+        anyhow::bail!("--benchmark requires at least one --eval-set");
+    }
+    let output = args
+        .output
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("--benchmark requires --output"))?;
+    let geocoders = args
+        .geocoders
+        .iter()
+        .map(|g| crate::adapters::GeocoderSpec::parse(g))
+        .collect::<Result<Vec<_>>>()?;
+    let rates = args
+        .rates
+        .iter()
+        .map(|r| {
+            let (label, n) = r
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("bad --rate {r:?}: expected label=N"))?;
+            let n: f64 = n
+                .parse()
+                .map_err(|_| anyhow::anyhow!("bad --rate {r:?}: N must be a number"))?;
+            Ok((label.to_string(), n))
+        })
+        .collect::<Result<_>>()?;
+    let work_dir = output
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join(".bench-work");
+    let config = crate::benchmark::BenchmarkConfig {
+        geocoders,
+        build: crate::adapters::BuildOptions {
+            timeout: std::time::Duration::from_secs(30),
+            cache_dir: (!args.no_bench_cache).then(|| args.bench_cache.clone()),
+            rate: None,
+            work_dir,
+        },
+        rates,
+        limit: 10,
+        parallel: args.parallel,
+        points_from: args.with_points.then(|| args.service.clone()),
+        output: output.clone(),
+        output_md: args.output_md.clone(),
+    };
+    let queries = load_and_flatten(&args.eval_sets)?;
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(crate::benchmark::run(&config, queries))?;
+    Ok(())
 }
 
 fn run_diff(args: &Args) -> Result<()> {

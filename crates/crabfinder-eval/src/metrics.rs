@@ -29,6 +29,24 @@ pub struct MetricBucket {
     pub match_levels: Vec<String>,
 }
 
+/// Distance from the top-1 point to the query's reference point (v3
+/// Phase 11.1): what every geocoder can be scored on, BeSt ids or not.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct DistanceBucket {
+    /// Queries with a reference point.
+    pub n: usize,
+    /// Share of them answered with a point.
+    pub found_rate: f64,
+    /// Share of `n` whose top-1 lies within 25 / 100 / 250 m (no answer
+    /// counts as a miss).
+    pub within_25m: f64,
+    pub within_100m: f64,
+    pub within_250m: f64,
+    /// Over the answered ones.
+    pub median_error_m: Option<f64>,
+    pub p90_error_m: Option<f64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LatencyBucket {
     pub n: usize,
@@ -63,6 +81,18 @@ pub struct Metrics {
     pub by_variant: HashMap<String, MetricBucket>,
     pub by_language: HashMap<String, MetricBucket>,
     pub by_adversarial_category: HashMap<String, MetricBucket>,
+    /// Real-world queries by dataset (v3 Phase 11.1).
+    #[serde(default)]
+    pub by_realworld_source: HashMap<String, MetricBucket>,
+    /// Top-1 distance to the reference point, over every query that has
+    /// one (v3 Phase 11.1).
+    #[serde(default)]
+    pub distance: DistanceBucket,
+    /// The same by set (`synthetic`, `adversarial`, `realworld`), by
+    /// real-world dataset (`realworld:<source>`) and by region
+    /// (`region:<region>`).
+    #[serde(default)]
+    pub distance_by: HashMap<String, DistanceBucket>,
     /// Phase 6.5a partial Tier B — file 14 §1 metric #9.
     pub cross_language_recall_at_1: f64,
     pub cross_language_n: usize,
@@ -85,6 +115,9 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
     let mut by_variant: HashMap<String, Acc> = HashMap::new();
     let mut by_language: HashMap<String, Acc> = HashMap::new();
     let mut by_adv: HashMap<String, Acc> = HashMap::new();
+    let mut by_rw: HashMap<String, Acc> = HashMap::new();
+    let mut distances: Vec<Option<f64>> = Vec::new();
+    let mut distances_by: HashMap<String, Vec<Option<f64>>> = HashMap::new();
 
     let mut cl_acc = Acc::default();
     let mut cl_boost_acc = Acc::default();
@@ -134,6 +167,20 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
         }
 
         m.aggregated_query_count += 1;
+        if r.query.reference_point.is_some() {
+            let d = top1_error_m(r);
+            distances.push(d);
+            let mut keys = vec![r.query.source.set_kind().to_string()];
+            if let EvalQuerySource::RealWorld { source, .. } = &r.query.source {
+                keys.push(format!("realworld:{source}"));
+            }
+            if let Some(region) = r.query.source.region() {
+                keys.push(format!("region:{region}"));
+            }
+            for k in keys {
+                distances_by.entry(k).or_default().push(d);
+            }
+        }
         let (rank, bid_rank) = level_ranks(r);
         let strict = r.top_match_type == "strict";
         overall_acc.add(rank, bid_rank, strict);
@@ -174,6 +221,11 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
                     cl_acc.add(rank, bid_rank, strict);
                 }
             }
+            EvalQuerySource::RealWorld { source, .. } => {
+                let acc = by_rw.entry(source.clone()).or_default();
+                acc.add(rank, bid_rank, strict);
+                acc.levels.insert(r.query.match_level.as_str());
+            }
         }
     }
 
@@ -194,6 +246,15 @@ pub fn compute(results: &[QueryResult]) -> Metrics {
     m.by_adversarial_category = by_adv
         .into_iter()
         .map(|(k, v)| (k, v.into_bucket()))
+        .collect();
+    m.by_realworld_source = by_rw
+        .into_iter()
+        .map(|(k, v)| (k, v.into_bucket()))
+        .collect();
+    m.distance = distance_bucket(&distances);
+    m.distance_by = distances_by
+        .into_iter()
+        .map(|(k, v)| (k, distance_bucket(&v)))
         .collect();
     m.cross_language_recall_at_1 = if cl_acc.n > 0 {
         cl_acc.recall_at_1 as f64 / cl_acc.n as f64
@@ -232,6 +293,42 @@ pub fn level_ranks(r: &QueryResult) -> (usize, usize) {
     }
 }
 
+/// Metres from the top-1 point to the query's reference point; `None`
+/// without either.
+pub fn top1_error_m(r: &QueryResult) -> Option<f64> {
+    let reference = r.query.reference_point?;
+    let top = r.points.first().copied().flatten()?;
+    Some(haversine_m(reference, top))
+}
+
+/// Aggregate per-query top-1 errors (`None` = no answer).
+pub fn distance_bucket(errors: &[Option<f64>]) -> DistanceBucket {
+    let n = errors.len();
+    if n == 0 {
+        return DistanceBucket::default();
+    }
+    let mut found: Vec<f64> = errors.iter().flatten().copied().collect();
+    found.sort_by(f64::total_cmp);
+    let share = |max: f64| found.iter().filter(|d| **d <= max).count() as f64 / n as f64;
+    let pick = |q: f64| {
+        (!found.is_empty()).then(|| {
+            let idx = ((q * found.len() as f64).ceil() as usize)
+                .saturating_sub(1)
+                .min(found.len() - 1);
+            found[idx]
+        })
+    };
+    DistanceBucket {
+        n,
+        found_rate: found.len() as f64 / n as f64,
+        within_25m: share(25.0),
+        within_100m: share(100.0),
+        within_250m: share(250.0),
+        median_error_m: pick(0.5),
+        p90_error_m: pick(0.9),
+    }
+}
+
 /// 1-based rank of the first point within `within_m` of `p`; 0 when none.
 fn within_rank(p: (f64, f64), within_m: f64, points: &[Option<(f64, f64)>]) -> usize {
     points
@@ -241,7 +338,7 @@ fn within_rank(p: (f64, f64), within_m: f64, points: &[Option<(f64, f64)>]) -> u
 }
 
 /// Great-circle distance in metres between two `(lat, lon)` points.
-fn haversine_m(a: (f64, f64), b: (f64, f64)) -> f64 {
+pub fn haversine_m(a: (f64, f64), b: (f64, f64)) -> f64 {
     let (la1, lo1, la2, lo2) = (
         a.0.to_radians(),
         a.1.to_radians(),
@@ -395,6 +492,8 @@ mod tests {
             expected_to_fail: false,
             match_level: MatchLevel::Address,
             expected_point: None,
+            reference_point: None,
+            structured: None,
             source: EvalQuerySource::Synthetic {
                 variant_type: VariantType::Canonical,
                 region: region.into(),
@@ -535,6 +634,8 @@ mod tests {
             expected_to_fail: false,
             match_level: level,
             expected_point: None,
+            reference_point: None,
+            structured: None,
             source: EvalQuerySource::Adversarial {
                 category: crate::eval_set::AdversarialCategory::Facilites,
                 subcategory: "s".into(),
@@ -588,6 +689,62 @@ mod tests {
             0
         );
         assert_eq!(street_of("nopipe"), "nopipe");
+    }
+
+    #[test]
+    fn distance_metrics_over_reference_points() {
+        // Four queries with a reference point at (50.0, 4.0): answers at
+        // ~0, ~55, ~222 m and none; one more without a reference point.
+        let mut results = Vec::new();
+        for (i, lat) in [Some(50.0), Some(50.0005), Some(50.002), None]
+            .into_iter()
+            .enumerate()
+        {
+            let mut q = synth_q(&format!("d{i}"), "b", "x", "brussels");
+            q.reference_point = Some((50.0, 4.0));
+            let mut r = result_with_top(q, "b", "x", "strict", 1.0);
+            r.points = vec![lat.map(|lat| (lat, 4.0))];
+            results.push(r);
+        }
+        results.push(result_with_top(
+            synth_q("none", "b", "x", "brussels"),
+            "b",
+            "x",
+            "strict",
+            1.0,
+        ));
+        let m = compute(&results);
+        let d = &m.distance;
+        assert_eq!(d.n, 4);
+        assert!((d.found_rate - 0.75).abs() < 1e-9);
+        assert!((d.within_25m - 0.25).abs() < 1e-9);
+        assert!((d.within_100m - 0.5).abs() < 1e-9);
+        assert!((d.within_250m - 0.75).abs() < 1e-9);
+        assert!((d.median_error_m.unwrap() - 55.6).abs() < 1.0, "{d:?}");
+        assert!((d.p90_error_m.unwrap() - 222.4).abs() < 1.0, "{d:?}");
+        assert_eq!(m.distance_by["synthetic"], *d);
+        assert_eq!(m.distance_by["region:brussels"].n, 4);
+        assert_eq!(distance_bucket(&[]), DistanceBucket::default());
+        let none = distance_bucket(&[None]);
+        assert_eq!((none.found_rate, none.median_error_m), (0.0, None));
+    }
+
+    #[test]
+    fn realworld_queries_get_their_own_buckets() {
+        let mut q = adv_q("rw", MatchLevel::Locality, "ns|1|5", None);
+        q.source = EvalQuerySource::RealWorld {
+            source: "brussels-schools".into(),
+            region: "brussels".into(),
+        };
+        q.expected_point = Some(((50.0, 4.0), 100.0));
+        q.reference_point = Some((50.0, 4.0));
+        let m = compute(&[result_with_top(q, "ns|9|1", "x", "strict", 1.0)]);
+        let b = &m.by_realworld_source["brussels-schools"];
+        assert_eq!((b.n, b.recall_at_1), (1, 1.0));
+        assert_eq!(b.match_levels, ["locality"]);
+        assert_eq!(m.distance_by["realworld:brussels-schools"].within_25m, 1.0);
+        assert_eq!(m.distance_by["realworld"].n, 1);
+        assert!(m.by_region.is_empty(), "real-world regions stay apart");
     }
 
     #[test]

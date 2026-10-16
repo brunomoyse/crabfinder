@@ -1,0 +1,2676 @@
+{
+  "report_version": "bench-1",
+  "query_count": 4368,
+  "with_reference_point": 4350,
+  "geocoders": [
+    {
+      "name": "crabfinder",
+      "kind": "crabfinder",
+      "covered": 4368,
+      "errors": 0,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 4368,
+        "aggregated_query_count": 4365,
+        "error_count": 0,
+        "overall": {
+          "n": 4365,
+          "recall_at_1": 0.9644902634593356,
+          "recall_at_5": 0.9798396334478808,
+          "recall_at_10": 0.9837342497136311,
+          "mrr": 0.9711201112747506,
+          "building_group_recall_at_1": 0.9644902634593356,
+          "strict_match_rate": 0.8824742268041237
+        },
+        "latency": {
+          "n": 4368,
+          "p50_ms": 2.403583,
+          "p95_ms": 14.096333000000001,
+          "p99_ms": 31.658792,
+          "mean_ms": 4.7096904578754595,
+          "max_ms": 479.84329199999996
+        },
+        "by_region": {
+          "BE-WAL": {
+            "n": 1204,
+            "recall_at_1": 0.9692691029900332,
+            "recall_at_5": 0.9883720930232558,
+            "recall_at_10": 0.9925249169435216,
+            "mrr": 0.9774208326741549,
+            "building_group_recall_at_1": 0.9692691029900332,
+            "strict_match_rate": 0.8853820598006644
+          },
+          "BE-BRU": {
+            "n": 863,
+            "recall_at_1": 0.9884125144843569,
+            "recall_at_5": 0.9942062572421785,
+            "recall_at_10": 0.9942062572421785,
+            "mrr": 0.9906334492081884,
+            "building_group_recall_at_1": 0.9884125144843569,
+            "strict_match_rate": 0.8794901506373117
+          },
+          "BE-VLG": {
+            "n": 2177,
+            "recall_at_1": 0.9614147909967846,
+            "recall_at_5": 0.979329352319706,
+            "recall_at_10": 0.9848415250344511,
+            "mrr": 0.9693192175047939,
+            "building_group_recall_at_1": 0.9614147909967846,
+            "strict_match_rate": 0.8851630684428112
+          }
+        },
+        "by_variant": {
+          "abbreviated": {
+            "n": 289,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9896193771626297
+          },
+          "messy_punctuation": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.958,
+            "recall_at_5": 0.966,
+            "recall_at_10": 0.966,
+            "mrr": 0.962,
+            "building_group_recall_at_1": 0.958,
+            "strict_match_rate": 1.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "cross_language": {
+            "n": 306,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "casing": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "canonical": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "minimal": {
+            "n": 500,
+            "recall_at_1": 0.792,
+            "recall_at_5": 0.912,
+            "recall_at_10": 0.946,
+            "mrr": 0.8437119047619047,
+            "building_group_recall_at_1": 0.792,
+            "strict_match_rate": 1.0
+          },
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.9876796714579056,
+            "recall_at_5": 0.9938398357289527,
+            "recall_at_10": 0.9938398357289527,
+            "mrr": 0.9899041752224503,
+            "building_group_recall_at_1": 0.9876796714579056,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9672131147540983
+          }
+        },
+        "by_language": {
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.9701754385964912,
+            "recall_at_5": 0.9885964912280701,
+            "recall_at_10": 0.9921052631578947,
+            "mrr": 0.9780454608744082,
+            "building_group_recall_at_1": 0.9701754385964912,
+            "strict_match_rate": 0.8850877192982456
+          },
+          "nl": {
+            "n": 3080,
+            "recall_at_1": 0.9685064935064935,
+            "recall_at_5": 0.9834415584415584,
+            "recall_at_10": 0.9876623376623377,
+            "mrr": 0.9749894351680066,
+            "building_group_recall_at_1": 0.9685064935064935,
+            "strict_match_rate": 0.8834415584415585
+          },
+          "de": {
+            "n": 24,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9166666666666666
+          }
+        },
+        "by_adversarial_category": {
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 0.8333333333333334,
+            "recall_at_5": 0.8333333333333334,
+            "recall_at_10": 0.8333333333333334,
+            "mrr": 0.8333333333333334,
+            "building_group_recall_at_1": 0.8333333333333334,
+            "strict_match_rate": 0.9333333333333333,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "cross_language": {
+            "n": 10,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "street"
+            ]
+          },
+          "notability": {
+            "n": 30,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 0.2692307692307692,
+            "recall_at_5": 0.2692307692307692,
+            "recall_at_10": 0.2692307692307692,
+            "mrr": 0.2692307692307692,
+            "building_group_recall_at_1": 0.2692307692307692,
+            "strict_match_rate": 0.3076923076923077,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "special_chars": {
+            "n": 10,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 4350,
+          "found_rate": 0.9983908045977011,
+          "within_25m": 0.9519540229885057,
+          "within_100m": 0.9558620689655173,
+          "within_250m": 0.9611494252873564,
+          "median_error_m": 0.0,
+          "p90_error_m": 0.0
+        },
+        "distance_by": {
+          "region:wallonia": {
+            "n": 1204,
+            "found_rate": 1.0,
+            "within_25m": 0.9700996677740864,
+            "within_100m": 0.9700996677740864,
+            "within_250m": 0.9700996677740864,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 1.0,
+            "within_25m": 0.9884125144843569,
+            "within_100m": 0.9895712630359212,
+            "within_250m": 0.9895712630359212,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "synthetic": {
+            "n": 4244,
+            "found_rate": 1.0,
+            "within_25m": 0.969368520263902,
+            "within_100m": 0.9698397737983034,
+            "within_250m": 0.9698397737983034,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "adversarial": {
+            "n": 106,
+            "found_rate": 0.9339622641509434,
+            "within_25m": 0.25471698113207547,
+            "within_100m": 0.39622641509433965,
+            "within_250m": 0.6132075471698113,
+            "median_error_m": 127.89475127471108,
+            "p90_error_m": 2012.5554374514243
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 1.0,
+            "within_25m": 0.9614147909967846,
+            "within_100m": 0.9618741387230133,
+            "within_250m": 0.9618741387230133,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          }
+        },
+        "cross_language_recall_at_1": 1.0,
+        "cross_language_n": 116,
+        "cross_language_recall_at_1_boosted": 1.0,
+        "cross_language_boosted_n": 200,
+        "known_failure_tracking": [
+          {
+            "id": "adv-known-001",
+            "subcategory": "rue-de-la-gare-brussels",
+            "state": "still_failing",
+            "current_top1_bgid": "geodata.wallonie.be/id/Streetname|7706419|1",
+            "current_top1_match_type": "strict"
+          },
+          {
+            "id": "adv-known-002",
+            "subcategory": "place-de-l-eglise-ambiguous",
+            "state": "still_failing",
+            "current_top1_bgid": "geodata.wallonie.be/id/Streetname|7736393|1",
+            "current_top1_match_type": "strict"
+          },
+          {
+            "id": "adv-known-003",
+            "subcategory": "anvers-grand-place-cross-region",
+            "state": "still_failing",
+            "current_top1_bgid": "https://databrussels.be/id/streetname|3281|2",
+            "current_top1_match_type": "fuzzy"
+          }
+        ]
+      }
+    },
+    {
+      "name": "crabfinder-osm",
+      "kind": "crabfinder",
+      "covered": 4368,
+      "errors": 0,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 4368,
+        "aggregated_query_count": 4365,
+        "error_count": 0,
+        "overall": {
+          "n": 4365,
+          "recall_at_1": 0.9699885452462772,
+          "recall_at_5": 0.9853379152348225,
+          "recall_at_10": 0.9892325315005728,
+          "mrr": 0.9766183930616922,
+          "building_group_recall_at_1": 0.9699885452462772,
+          "strict_match_rate": 0.8742268041237113
+        },
+        "latency": {
+          "n": 4368,
+          "p50_ms": 2.597917,
+          "p95_ms": 14.331209,
+          "p99_ms": 43.373667,
+          "mean_ms": 5.019424585393774,
+          "max_ms": 446.80079099999995
+        },
+        "by_region": {
+          "BE-VLG": {
+            "n": 2177,
+            "recall_at_1": 0.9614147909967846,
+            "recall_at_5": 0.979329352319706,
+            "recall_at_10": 0.9848415250344511,
+            "mrr": 0.9693192175047939,
+            "building_group_recall_at_1": 0.9614147909967846,
+            "strict_match_rate": 0.8851630684428112
+          },
+          "BE-BRU": {
+            "n": 863,
+            "recall_at_1": 0.9884125144843569,
+            "recall_at_5": 0.9942062572421785,
+            "recall_at_10": 0.9942062572421785,
+            "mrr": 0.9906334492081884,
+            "building_group_recall_at_1": 0.9884125144843569,
+            "strict_match_rate": 0.8794901506373117
+          },
+          "BE-WAL": {
+            "n": 1204,
+            "recall_at_1": 0.9692691029900332,
+            "recall_at_5": 0.9883720930232558,
+            "recall_at_10": 0.9925249169435216,
+            "mrr": 0.9774208326741549,
+            "building_group_recall_at_1": 0.9692691029900332,
+            "strict_match_rate": 0.8853820598006644
+          }
+        },
+        "by_variant": {
+          "casing": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "cross_language": {
+            "n": 306,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "messy_punctuation": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "abbreviated": {
+            "n": 289,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9896193771626297
+          },
+          "minimal": {
+            "n": 500,
+            "recall_at_1": 0.792,
+            "recall_at_5": 0.912,
+            "recall_at_10": 0.946,
+            "mrr": 0.8437119047619047,
+            "building_group_recall_at_1": 0.792,
+            "strict_match_rate": 1.0
+          },
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.9876796714579056,
+            "recall_at_5": 0.9938398357289527,
+            "recall_at_10": 0.9938398357289527,
+            "mrr": 0.9899041752224503,
+            "building_group_recall_at_1": 0.9876796714579056,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "canonical": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.958,
+            "recall_at_5": 0.966,
+            "recall_at_10": 0.966,
+            "mrr": 0.962,
+            "building_group_recall_at_1": 0.958,
+            "strict_match_rate": 1.0
+          },
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9672131147540983
+          }
+        },
+        "by_language": {
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.9701754385964912,
+            "recall_at_5": 0.9885964912280701,
+            "recall_at_10": 0.9921052631578947,
+            "mrr": 0.9780454608744082,
+            "building_group_recall_at_1": 0.9701754385964912,
+            "strict_match_rate": 0.8850877192982456
+          },
+          "nl": {
+            "n": 3080,
+            "recall_at_1": 0.9685064935064935,
+            "recall_at_5": 0.9834415584415584,
+            "recall_at_10": 0.9876623376623377,
+            "mrr": 0.9749894351680066,
+            "building_group_recall_at_1": 0.9685064935064935,
+            "strict_match_rate": 0.8834415584415585
+          },
+          "de": {
+            "n": 24,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9166666666666666
+          }
+        },
+        "by_adversarial_category": {
+          "special_chars": {
+            "n": 10,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "cross_language": {
+            "n": 10,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.038461538461538464,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "street"
+            ]
+          },
+          "notability": {
+            "n": 30,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.8888888888888888,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 4350,
+          "found_rate": 1.0,
+          "within_25m": 0.9581609195402299,
+          "within_100m": 0.9645977011494253,
+          "within_250m": 0.9691954022988506,
+          "median_error_m": 0.0,
+          "p90_error_m": 0.0
+        },
+        "distance_by": {
+          "synthetic": {
+            "n": 4244,
+            "found_rate": 1.0,
+            "within_25m": 0.969368520263902,
+            "within_100m": 0.9698397737983034,
+            "within_250m": 0.9698397737983034,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "adversarial": {
+            "n": 106,
+            "found_rate": 1.0,
+            "within_25m": 0.5094339622641509,
+            "within_100m": 0.7547169811320755,
+            "within_250m": 0.9433962264150944,
+            "median_error_m": 24.738711227055425,
+            "p90_error_m": 190.2844758016138
+          },
+          "region:wallonia": {
+            "n": 1204,
+            "found_rate": 1.0,
+            "within_25m": 0.9700996677740864,
+            "within_100m": 0.9700996677740864,
+            "within_250m": 0.9700996677740864,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 1.0,
+            "within_25m": 0.9884125144843569,
+            "within_100m": 0.9895712630359212,
+            "within_250m": 0.9895712630359212,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 1.0,
+            "within_25m": 0.9614147909967846,
+            "within_100m": 0.9618741387230133,
+            "within_250m": 0.9618741387230133,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          }
+        },
+        "cross_language_recall_at_1": 1.0,
+        "cross_language_n": 116,
+        "cross_language_recall_at_1_boosted": 1.0,
+        "cross_language_boosted_n": 200,
+        "known_failure_tracking": [
+          {
+            "id": "adv-known-001",
+            "subcategory": "rue-de-la-gare-brussels",
+            "state": "still_failing",
+            "current_top1_bgid": "geodata.wallonie.be/id/Streetname|7706419|1",
+            "current_top1_match_type": "strict"
+          },
+          {
+            "id": "adv-known-002",
+            "subcategory": "place-de-l-eglise-ambiguous",
+            "state": "still_failing",
+            "current_top1_bgid": "geodata.wallonie.be/id/Streetname|7736393|1",
+            "current_top1_match_type": "strict"
+          },
+          {
+            "id": "adv-known-003",
+            "subcategory": "anvers-grand-place-cross-region",
+            "state": "still_failing",
+            "current_top1_bgid": "https://databrussels.be/id/streetname|3281|2",
+            "current_top1_match_type": "fuzzy"
+          }
+        ]
+      }
+    },
+    {
+      "name": "brussels",
+      "kind": "brussels",
+      "covered": 885,
+      "errors": 11,
+      "returns_best_ids": true,
+      "metrics": {
+        "query_count": 885,
+        "aggregated_query_count": 874,
+        "error_count": 11,
+        "overall": {
+          "n": 874,
+          "recall_at_1": 0.959954233409611,
+          "recall_at_5": 0.959954233409611,
+          "recall_at_10": 0.959954233409611,
+          "mrr": 0.959954233409611,
+          "building_group_recall_at_1": 0.959954233409611,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 874,
+          "p50_ms": 107.533875,
+          "p95_ms": 1202.163333,
+          "p99_ms": 1992.4241660000002,
+          "mean_ms": 270.77317816361557,
+          "max_ms": 2383.136792
+        },
+        "by_region": {
+          "BE-BRU": {
+            "n": 854,
+            "recall_at_1": 0.9754098360655737,
+            "recall_at_5": 0.9754098360655737,
+            "recall_at_10": 0.9754098360655737,
+            "mrr": 0.9754098360655737,
+            "building_group_recall_at_1": 0.9754098360655737,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_variant": {
+          "with_postal": {
+            "n": 100,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "high_house_number": {
+            "n": 37,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 34,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 100,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 97,
+            "recall_at_1": 0.9587628865979382,
+            "recall_at_5": 0.9587628865979382,
+            "recall_at_10": 0.9587628865979382,
+            "mrr": 0.9587628865979382,
+            "building_group_recall_at_1": 0.9587628865979382,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 96,
+            "recall_at_1": 0.9479166666666666,
+            "recall_at_5": 0.9479166666666666,
+            "recall_at_10": 0.9479166666666666,
+            "mrr": 0.9479166666666666,
+            "building_group_recall_at_1": 0.9479166666666666,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 100,
+            "recall_at_1": 0.99,
+            "recall_at_5": 0.99,
+            "recall_at_10": 0.99,
+            "mrr": 0.99,
+            "building_group_recall_at_1": 0.99,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 90,
+            "recall_at_1": 0.8888888888888888,
+            "recall_at_5": 0.8888888888888888,
+            "recall_at_10": 0.8888888888888888,
+            "mrr": 0.8888888888888888,
+            "building_group_recall_at_1": 0.8888888888888888,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 100,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "casing": {
+            "n": 100,
+            "recall_at_1": 0.99,
+            "recall_at_5": 0.99,
+            "recall_at_10": 0.99,
+            "mrr": 0.99,
+            "building_group_recall_at_1": 0.99,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_language": {
+          "nl": {
+            "n": 854,
+            "recall_at_1": 0.9754098360655737,
+            "recall_at_5": 0.9754098360655737,
+            "recall_at_10": 0.9754098360655737,
+            "mrr": 0.9754098360655737,
+            "building_group_recall_at_1": 0.9754098360655737,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_adversarial_category": {
+          "notability": {
+            "n": 14,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "special_chars": {
+            "n": 6,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 874,
+          "found_rate": 0.977116704805492,
+          "within_25m": 0.959954233409611,
+          "within_100m": 0.959954233409611,
+          "within_250m": 0.9633867276887872,
+          "median_error_m": 0.0,
+          "p90_error_m": 0.0
+        },
+        "distance_by": {
+          "region:brussels": {
+            "n": 854,
+            "found_rate": 0.9929742388758782,
+            "within_25m": 0.9754098360655737,
+            "within_100m": 0.9754098360655737,
+            "within_250m": 0.9789227166276346,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "synthetic": {
+            "n": 854,
+            "found_rate": 0.9929742388758782,
+            "within_25m": 0.9754098360655737,
+            "within_100m": 0.9754098360655737,
+            "within_250m": 0.9789227166276346,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "adversarial": {
+            "n": 20,
+            "found_rate": 0.3,
+            "within_25m": 0.3,
+            "within_100m": 0.3,
+            "within_250m": 0.3,
+            "median_error_m": 0.0,
+            "p90_error_m": 7.073240659849489e-10
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 0,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 0,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "vlaanderen",
+      "kind": "vlaanderen",
+      "covered": 3079,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 3079,
+        "aggregated_query_count": 3079,
+        "error_count": 0,
+        "overall": {
+          "n": 3079,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "mrr": 0.0,
+          "building_group_recall_at_1": 0.0,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 3079,
+          "p50_ms": 75.90125,
+          "p95_ms": 227.79929199999998,
+          "p99_ms": 342.665875,
+          "mean_ms": 101.99386201851259,
+          "max_ms": 1164.8924160000001
+        },
+        "by_region": {
+          "BE-VLG": {
+            "n": 2177,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "BE-BRU": {
+            "n": 863,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_variant": {
+          "casing": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 263,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 349,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 53,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "high_house_number": {
+            "n": 84,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 191,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_language": {
+          "nl": {
+            "n": 3040,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_adversarial_category": {
+          "notability": {
+            "n": 25,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "special_chars": {
+            "n": 6,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "street"
+            ]
+          },
+          "cross_language": {
+            "n": 2,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 3073,
+          "found_rate": 0.5278229742922226,
+          "within_25m": 0.4728278555157826,
+          "within_100m": 0.4770582492678165,
+          "within_250m": 0.47966156849983727,
+          "median_error_m": 0.010662882369722682,
+          "p90_error_m": 56.28626001765981
+        },
+        "distance_by": {
+          "adversarial": {
+            "n": 33,
+            "found_rate": 0.9696969696969697,
+            "within_25m": 0.09090909090909091,
+            "within_100m": 0.45454545454545453,
+            "within_250m": 0.5757575757575758,
+            "median_error_m": 109.48728526019516,
+            "p90_error_m": 20995.829593154056
+          },
+          "synthetic": {
+            "n": 3040,
+            "found_rate": 0.5230263157894737,
+            "within_25m": 0.4769736842105263,
+            "within_100m": 0.47730263157894737,
+            "within_250m": 0.4786184210526316,
+            "median_error_m": 0.01065625185719777,
+            "p90_error_m": 0.13370958795414134
+          },
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 0.5724217844727694,
+            "within_25m": 0.52954808806489,
+            "within_100m": 0.52954808806489,
+            "within_250m": 0.5330243337195828,
+            "median_error_m": 0.07738219762155418,
+            "p90_error_m": 0.13990628988340437
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 0.5034451079467157,
+            "within_25m": 0.4561322921451539,
+            "within_100m": 0.4565916398713826,
+            "within_250m": 0.45705098759761137,
+            "median_error_m": 0.010514082594573863,
+            "p90_error_m": 0.014998903279585486
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 71,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 122,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "wallonie",
+      "kind": "wallonie",
+      "covered": 1260,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 1260,
+        "aggregated_query_count": 1260,
+        "error_count": 0,
+        "overall": {
+          "n": 1260,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "mrr": 0.0,
+          "building_group_recall_at_1": 0.0,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 1260,
+          "p50_ms": 99.346708,
+          "p95_ms": 2120.465916,
+          "p99_ms": 7413.839667,
+          "mean_ms": 460.6977166603177,
+          "max_ms": 17270.837541999997
+        },
+        "by_region": {
+          "BE-WAL": {
+            "n": 1204,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_variant": {
+          "high_house_number": {
+            "n": 17,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 138,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 115,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 8,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 26,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "casing": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_language": {
+          "de": {
+            "n": 24,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "nl": {
+            "n": 40,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_adversarial_category": {
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "special_chars": {
+            "n": 4,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "cross_language": {
+            "n": 8,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "notability": {
+            "n": 5,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 1251,
+          "found_rate": 0.7633892885691447,
+          "within_25m": 0.5003996802557954,
+          "within_100m": 0.5139888089528377,
+          "within_250m": 0.5203836930455635,
+          "median_error_m": 0.0,
+          "p90_error_m": 8732.355269968892
+        },
+        "distance_by": {
+          "synthetic": {
+            "n": 1204,
+            "found_rate": 0.7774086378737541,
+            "within_25m": 0.5099667774086378,
+            "within_100m": 0.521594684385382,
+            "within_250m": 0.5282392026578073,
+            "median_error_m": 0.0,
+            "p90_error_m": 9171.851099598818
+          },
+          "adversarial": {
+            "n": 47,
+            "found_rate": 0.40425531914893614,
+            "within_25m": 0.2553191489361702,
+            "within_100m": 0.3191489361702128,
+            "within_250m": 0.3191489361702128,
+            "median_error_m": 0.0,
+            "p90_error_m": 4359.619072243355
+          },
+          "region:wallonia": {
+            "n": 1204,
+            "found_rate": 0.7774086378737541,
+            "within_25m": 0.5099667774086378,
+            "within_100m": 0.521594684385382,
+            "within_250m": 0.5282392026578073,
+            "median_error_m": 0.0,
+            "p90_error_m": 9171.851099598818
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 45,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 78,
+        "known_failure_tracking": []
+      }
+    },
+    {
+      "name": "phacochr",
+      "kind": "phacochr",
+      "covered": 4368,
+      "errors": 0,
+      "returns_best_ids": false,
+      "metrics": {
+        "query_count": 4368,
+        "aggregated_query_count": 4365,
+        "error_count": 0,
+        "overall": {
+          "n": 4365,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "mrr": 0.0,
+          "building_group_recall_at_1": 0.0,
+          "strict_match_rate": 0.0
+        },
+        "latency": {
+          "n": 4368,
+          "p50_ms": 9.508012076465201,
+          "p95_ms": 9.508012076465201,
+          "p99_ms": 9.508012076465201,
+          "mean_ms": 9.508012076465864,
+          "max_ms": 9.508012076465201
+        },
+        "by_region": {
+          "BE-VLG": {
+            "n": 2177,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "BE-WAL": {
+            "n": 1204,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "BE-BRU": {
+            "n": 863,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_variant": {
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 289,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "casing": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 306,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_language": {
+          "de": {
+            "n": 24,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "nl": {
+            "n": 3080,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          }
+        },
+        "by_adversarial_category": {
+          "special_chars": {
+            "n": 10,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "street"
+            ]
+          },
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "notability": {
+            "n": 30,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "building"
+            ]
+          },
+          "cross_language": {
+            "n": 10,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          }
+        },
+        "by_realworld_source": {},
+        "distance": {
+          "n": 4350,
+          "found_rate": 0.6696551724137931,
+          "within_25m": 0.6029885057471265,
+          "within_100m": 0.6331034482758621,
+          "within_250m": 0.64,
+          "median_error_m": 0.44384628487718236,
+          "p90_error_m": 24.959980553987428
+        },
+        "distance_by": {
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 0.7578215527230591,
+            "within_25m": 0.7114716106604867,
+            "within_100m": 0.7334878331402086,
+            "within_250m": 0.7427578215527231,
+            "median_error_m": 0.4351238805670165,
+            "p90_error_m": 4.240780400268059
+          },
+          "adversarial": {
+            "n": 106,
+            "found_rate": 0.1792452830188679,
+            "within_25m": 0.1792452830188679,
+            "within_100m": 0.1792452830188679,
+            "within_250m": 0.1792452830188679,
+            "median_error_m": 0.4564277634957736,
+            "p90_error_m": 3.589785874946058
+          },
+          "region:wallonia": {
+            "n": 1204,
+            "found_rate": 0.643687707641196,
+            "within_25m": 0.5556478405315615,
+            "within_100m": 0.5996677740863787,
+            "within_250m": 0.6121262458471761,
+            "median_error_m": 0.4546783627774371,
+            "p90_error_m": 53.64310510895561
+          },
+          "synthetic": {
+            "n": 4244,
+            "found_rate": 0.6819038642789821,
+            "within_25m": 0.6135721017907634,
+            "within_100m": 0.6444392082940622,
+            "within_250m": 0.6515080113100848,
+            "median_error_m": 0.44384628487718236,
+            "p90_error_m": 25.005678104154
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 0.6729444189251264,
+            "within_25m": 0.6067983463481855,
+            "within_100m": 0.6338998621956822,
+            "within_250m": 0.6371152962792834,
+            "median_error_m": 0.4344643852766008,
+            "p90_error_m": 24.959980553987428
+          }
+        },
+        "cross_language_recall_at_1": 0.0,
+        "cross_language_n": 116,
+        "cross_language_recall_at_1_boosted": 0.0,
+        "cross_language_boosted_n": 200,
+        "known_failure_tracking": [
+          {
+            "id": "adv-known-001",
+            "subcategory": "rue-de-la-gare-brussels",
+            "state": "still_failing",
+            "current_top1_bgid": "",
+            "current_top1_match_type": ""
+          },
+          {
+            "id": "adv-known-002",
+            "subcategory": "place-de-l-eglise-ambiguous",
+            "state": "still_failing",
+            "current_top1_bgid": "",
+            "current_top1_match_type": ""
+          },
+          {
+            "id": "adv-known-003",
+            "subcategory": "anvers-grand-place-cross-region",
+            "state": "still_failing",
+            "current_top1_bgid": "",
+            "current_top1_match_type": ""
+          }
+        ]
+      }
+    }
+  ],
+  "reference": "crabfinder",
+  "head_to_head": [
+    {
+      "other": "crabfinder-osm",
+      "common": 4350,
+      "both": 4157,
+      "crabfinder_only": 1,
+      "other_only": 39,
+      "neither": 153
+    },
+    {
+      "other": "brussels",
+      "common": 884,
+      "both": 832,
+      "crabfinder_only": 32,
+      "other_only": 7,
+      "neither": 13
+    },
+    {
+      "other": "vlaanderen",
+      "common": 3073,
+      "both": 1449,
+      "crabfinder_only": 1515,
+      "other_only": 17,
+      "neither": 92
+    },
+    {
+      "other": "wallonie",
+      "common": 1251,
+      "both": 641,
+      "crabfinder_only": 551,
+      "other_only": 2,
+      "neither": 57
+    },
+    {
+      "other": "phacochr",
+      "common": 4350,
+      "both": 2746,
+      "crabfinder_only": 1412,
+      "other_only": 8,
+      "neither": 184
+    }
+  ],
+  "losses": [
+    {
+      "id": "adv-hamlet-002",
+      "query": "beausaint la roche",
+      "crabfinder_error_m": 2320.0407245353827,
+      "winners": [
+        [
+          "crabfinder-osm",
+          20.60229467918946
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-003",
+      "query": "maredsous",
+      "crabfinder_error_m": 4903.771242147604,
+      "winners": [
+        [
+          "crabfinder-osm",
+          43.8054418306633
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-004",
+      "query": "han sur lesse 5580",
+      "crabfinder_error_m": 227.01518643010522,
+      "winners": [
+        [
+          "crabfinder-osm",
+          30.54700912462232
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-005",
+      "query": "spontin yvoir",
+      "crabfinder_error_m": 436.2200113155625,
+      "winners": [
+        [
+          "crabfinder-osm",
+          33.782014232167796
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-008",
+      "query": "falaën",
+      "crabfinder_error_m": 306.9922393673794,
+      "winners": [
+        [
+          "crabfinder-osm",
+          28.938546531558416
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-010",
+      "query": "soulme",
+      "crabfinder_error_m": 157.69712298892722,
+      "winners": [
+        [
+          "crabfinder-osm",
+          17.63663007568506
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-012",
+      "query": "chassepierre",
+      "crabfinder_error_m": 516.1909258770445,
+      "winners": [
+        [
+          "crabfinder-osm",
+          11.806469242916847
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-013",
+      "query": "torgny",
+      "crabfinder_error_m": 135.28558731978072,
+      "winners": [
+        [
+          "crabfinder-osm",
+          18.1622092947802
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-015",
+      "query": "wéris",
+      "crabfinder_error_m": 559.1342142730236,
+      "winners": [
+        [
+          "crabfinder-osm",
+          20.988531212500867
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-016",
+      "query": "olloy-sur-viroin",
+      "crabfinder_error_m": 255.04369586853016,
+      "winners": [
+        [
+          "crabfinder-osm",
+          10.013021644103567
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-017",
+      "query": "vierves-sur-viroin",
+      "crabfinder_error_m": 107.24773889908853,
+      "winners": [
+        [
+          "crabfinder-osm",
+          17.3869968532884
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-018",
+      "query": "treignes",
+      "crabfinder_error_m": 185.0795957691885,
+      "winners": [
+        [
+          "crabfinder-osm",
+          17.03738011735684
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-019",
+      "query": "roly philippeville",
+      "crabfinder_error_m": 2055.0061605692404,
+      "winners": [
+        [
+          "crabfinder-osm",
+          18.1324866724712
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-020",
+      "query": "bellevaux bouillon",
+      "crabfinder_error_m": 155.87500188218618,
+      "winners": [
+        [
+          "crabfinder-osm",
+          7.3447005875194655
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-021",
+      "query": "frahan",
+      "crabfinder_error_m": 365.8671786050312,
+      "winners": [
+        [
+          "crabfinder-osm",
+          11.471941018098848
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-022",
+      "query": "wibrin",
+      "crabfinder_error_m": 990.9456273001564,
+      "winners": [
+        [
+          "crabfinder-osm",
+          50.90921515159287
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-023",
+      "query": "lompret",
+      "crabfinder_error_m": 627.1303023594251,
+      "winners": [
+        [
+          "crabfinder-osm",
+          31.59310002284785
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-024",
+      "query": "aubechies",
+      "crabfinder_error_m": 245.45907467635462,
+      "winners": [
+        [
+          "crabfinder-osm",
+          42.69465845158893
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-026",
+      "query": "ave namur",
+      "crabfinder_error_m": 44254.491108293536,
+      "winners": [
+        [
+          "crabfinder-osm",
+          11.605407810715716
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-027",
+      "query": "celles houyet",
+      "crabfinder_error_m": 1080.7270510537915,
+      "winners": [
+        [
+          "crabfinder-osm",
+          24.597144931964305
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-028",
+      "query": "furfooz",
+      "crabfinder_error_m": 124.67929278323294,
+      "winners": [
+        [
+          "crabfinder-osm",
+          13.882134069034452
+        ]
+      ]
+    },
+    {
+      "id": "adv-hamlet-029",
+      "query": "dolhain limbourg",
+      "crabfinder_error_m": 1722.1076131027023,
+      "winners": [
+        [
+          "crabfinder-osm",
+          24.65938822143443
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-001",
+      "query": "Manneken Pis",
+      "crabfinder_error_m": null,
+      "winners": [
+        [
+          "crabfinder-osm",
+          3.1960036838498853
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-005",
+      "query": "Brussel-Centraal",
+      "crabfinder_error_m": 399.21116184235626,
+      "winners": [
+        [
+          "crabfinder-osm",
+          16.375595959460952
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-006",
+      "query": "Gare Centrale",
+      "crabfinder_error_m": 44122.259222724344,
+      "winners": [
+        [
+          "crabfinder-osm",
+          19.933066631034446
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-007",
+      "query": "Antwerpen-Centraal",
+      "crabfinder_error_m": 1582.602039338849,
+      "winners": [
+        [
+          "crabfinder-osm",
+          33.389494274728214
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-008",
+      "query": "Butte du Lion",
+      "crabfinder_error_m": 1639.0415647712523,
+      "winners": [
+        [
+          "crabfinder-osm",
+          99.16762543903081
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-009",
+      "query": "Leeuwenheuvel",
+      "crabfinder_error_m": null,
+      "winners": [
+        [
+          "crabfinder-osm",
+          99.16762543903081
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-010",
+      "query": "Palais Royal",
+      "crabfinder_error_m": 716.7160151226477,
+      "winners": [
+        [
+          "crabfinder-osm",
+          12.09164565192495
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-011",
+      "query": "Koninklijk Paleis",
+      "crabfinder_error_m": 5335.252398859749,
+      "winners": [
+        [
+          "crabfinder-osm",
+          12.09164565192495
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-012",
+      "query": "Cathédrale Saints-Michel-et-Gudule",
+      "crabfinder_error_m": 88298.32013120093,
+      "winners": [
+        [
+          "crabfinder-osm",
+          49.16331293858007
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-013",
+      "query": "Basilique du Sacré-Coeur",
+      "crabfinder_error_m": 2012.5554374514243,
+      "winners": [
+        [
+          "crabfinder-osm",
+          68.66800196990124
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-015",
+      "query": "Zoo Antwerpen",
+      "crabfinder_error_m": 1736.6995256597404,
+      "winners": [
+        [
+          "crabfinder-osm",
+          11.667802796579844
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-018",
+      "query": "Citadelle de Liège",
+      "crabfinder_error_m": 852.2534930099134,
+      "winners": [
+        [
+          "crabfinder-osm",
+          92.56100362993715
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-019",
+      "query": "Stadhuis Gent",
+      "crabfinder_error_m": 309.90783440094776,
+      "winners": [
+        [
+          "crabfinder-osm",
+          26.875780209611147
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-020",
+      "query": "Manneken Pis Bruxelles",
+      "crabfinder_error_m": 274.835206145934,
+      "winners": [
+        [
+          "crabfinder-osm",
+          3.1960036838498853
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-021",
+      "query": "Gravensteen",
+      "crabfinder_error_m": 50466.34540238731,
+      "winners": [
+        [
+          "crabfinder-osm",
+          37.71150653661013
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-022",
+      "query": "Gravensteen Gent",
+      "crabfinder_error_m": 298.87326479386417,
+      "winners": [
+        [
+          "crabfinder-osm",
+          37.71150653661013
+        ]
+      ]
+    },
+    {
+      "id": "adv-landmark-026",
+      "query": "Mini-Europe",
+      "crabfinder_error_m": 53587.23566309466,
+      "winners": [
+        [
+          "crabfinder-osm",
+          82.34610504284348
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-001",
+      "query": "Grand-Place",
+      "crabfinder_error_m": 125.74641893295778,
+      "winners": [
+        [
+          "vlaanderen",
+          65.19893993882333
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-012",
+      "query": "Place de Brouckère",
+      "crabfinder_error_m": 104.00603685891512,
+      "winners": [
+        [
+          "vlaanderen",
+          55.46442355177328
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-014",
+      "query": "Place du Jeu de Balle",
+      "crabfinder_error_m": 124.75838399250146,
+      "winners": [
+        [
+          "vlaanderen",
+          72.63450216284
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-016",
+      "query": "Groenplaats",
+      "crabfinder_error_m": 138.92416238090334,
+      "winners": [
+        [
+          "vlaanderen",
+          96.79121383872234
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-022",
+      "query": "Place Poelaert",
+      "crabfinder_error_m": 141.11943464951457,
+      "winners": [
+        [
+          "vlaanderen",
+          61.390289694629345
+        ]
+      ]
+    },
+    {
+      "id": "adv-notability-030",
+      "query": "Grand Sablon",
+      "crabfinder_error_m": 127.89475127471108,
+      "winners": [
+        [
+          "vlaanderen",
+          56.28626001765981
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000016",
+      "query": "Wielewaalstraat 30",
+      "crabfinder_error_m": 58464.02281895962,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000321",
+      "query": "Edelweisslaan 7",
+      "crabfinder_error_m": 18768.296772556503,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000403",
+      "query": "Predikherenstraat 10",
+      "crabfinder_error_m": 24321.397852488433,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000480",
+      "query": "Hovenierstraat 41",
+      "crabfinder_error_m": 36104.58526929943,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000536",
+      "query": "Koninginnelaan 13",
+      "crabfinder_error_m": 114063.47930740916,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-000591",
+      "query": "Juliaan 21, 1200 Sint-Lambrechts-Woluwe",
+      "crabfinder_error_m": 774.3137326607997,
+      "winners": [
+        [
+          "phacochr",
+          0.21573724100911387
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001131",
+      "query": "St. Jansstraat 20",
+      "crabfinder_error_m": 132483.07836928434,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0007845773077118747
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001152",
+      "query": "Neerveldstraat 4",
+      "crabfinder_error_m": 14639.548135087416,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0008375698086196734
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001227",
+      "query": "Grensstraat 142",
+      "crabfinder_error_m": 62752.57815564663,
+      "winners": [
+        [
+          "vlaanderen",
+          0.014956096844872762
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001255",
+      "query": "Klaproosstraat 27",
+      "crabfinder_error_m": 93677.19981149012,
+      "winners": [
+        [
+          "vlaanderen",
+          0.010687257938087063
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001843",
+      "query": "Stationstraat 49, 9400 Ninove",
+      "crabfinder_error_m": 1174.218232651827,
+      "winners": [
+        [
+          "phacochr",
+          0.6645803609074044
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-001963",
+      "query": "Pinguïnstraat 23",
+      "crabfinder_error_m": 53440.29979258285,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0008554625125127571
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002036",
+      "query": "Truwelstraat 100, 9100 Sint-Niklaas",
+      "crabfinder_error_m": 1800.2894182598932,
+      "winners": [
+        [
+          "phacochr",
+          0.0629711151615091
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002137",
+      "query": "Dwarsstraat 2",
+      "crabfinder_error_m": 51454.47682235085,
+      "winners": [
+        [
+          "vlaanderen",
+          0.01053203019688293
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002166",
+      "query": "Winkelstraat 20",
+      "crabfinder_error_m": 21684.460794517883,
+      "winners": [
+        [
+          "vlaanderen",
+          0.010523239999078782
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002240",
+      "query": "Gnzeplas 13, 9880 Aalter",
+      "crabfinder_error_m": 548.1287928556972,
+      "winners": [
+        [
+          "phacochr",
+          54.70416778080286
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002243",
+      "query": "Julia Tulkenslaan 1",
+      "crabfinder_error_m": 76115.8617819846,
+      "winners": [
+        [
+          "vlaanderen",
+          0.010702930202589073
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002363",
+      "query": "Lochtstraat 9",
+      "crabfinder_error_m": 65001.16887809412,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0008646624304919616
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002384",
+      "query": "Rijkenhoek 60",
+      "crabfinder_error_m": 21109.772788740444,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0008493416286435132
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002468",
+      "query": "Moutstraat 18",
+      "crabfinder_error_m": 44570.046000928385,
+      "winners": [
+        [
+          "vlaanderen",
+          0.0008483034999275406
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002516",
+      "query": "Rue de Warisoulo 3, 5080 La Bruyère",
+      "crabfinder_error_m": 556.5150500516662,
+      "winners": [
+        [
+          "phacochr",
+          22.84880203695193
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-002610",
+      "query": "Avenue des Muguet 73, 5190 Jemeppe-sur-Sambre",
+      "crabfinder_error_m": 1387.306537771302,
+      "winners": [
+        [
+          "wallonie",
+          0.0
+        ],
+        [
+          "phacochr",
+          0.2143906113166505
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-003771",
+      "query": "Romeinsesteenweg 445 1853",
+      "crabfinder_error_m": 399.1928531659009,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-003827",
+      "query": "Sterstraat 11 1620",
+      "crabfinder_error_m": 897.2017013159095,
+      "winners": [
+        [
+          "brussels",
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-004163",
+      "query": "Rue d'Harchies 29 7321",
+      "crabfinder_error_m": 2878.3812555844734,
+      "winners": [
+        [
+          "phacochr",
+          0.33819875152174933
+        ]
+      ]
+    },
+    {
+      "id": "mvp-v1-004210",
+      "query": "Grand'Place 8 6000",
+      "crabfinder_error_m": 1370.4920498430563,
+      "winners": [
+        [
+          "wallonie",
+          0.0
+        ],
+        [
+          "phacochr",
+          0.5739247152003011
+        ]
+      ]
+    }
+  ]
+}

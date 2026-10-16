@@ -23,6 +23,7 @@ pub mod query_builder;
 pub mod resolver;
 pub mod spatial;
 pub mod state;
+pub mod suggest;
 pub mod telemetry;
 pub mod validate;
 

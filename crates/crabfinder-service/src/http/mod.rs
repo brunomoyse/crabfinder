@@ -4,6 +4,7 @@
 //! handlers through `router()` with `tower::ServiceExt::oneshot`, and the
 //! binary stays a thin `Args` → `AppState::load` → `serve` wrapper.
 
+pub mod autocomplete;
 pub mod building;
 pub mod error;
 pub mod feature;
@@ -90,6 +91,7 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
         .route("/reverse", get(reverse::reverse))
         .route("/lookup", get(lookup::lookup))
         .route("/validate", get(validate::validate))
+        .route("/autocomplete", get(autocomplete::autocomplete))
         .route_layer(middleware::from_fn_with_state(
             guard_for(opts.request_timeout),
             guard,

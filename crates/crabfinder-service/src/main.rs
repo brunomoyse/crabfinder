@@ -75,6 +75,11 @@ struct Args {
     /// Don't serve Prometheus metrics at `/metrics`.
     #[arg(long, env = "CRABFINDER_NO_METRICS")]
     no_metrics: bool,
+
+    /// Don't build the `/autocomplete` name index (saves ~1 s and its
+    /// memory at startup; `/autocomplete` then answers 503).
+    #[arg(long, env = "CRABFINDER_NO_AUTOCOMPLETE")]
+    no_autocomplete: bool,
 }
 
 #[tokio::main]
@@ -93,6 +98,7 @@ async fn main() -> Result<()> {
     opts.abbreviation_dict = args.abbreviation_dict;
     opts.pois = args.pois;
     opts.notability_enabled = !args.no_notability_boost;
+    opts.autocomplete = !args.no_autocomplete;
     // Bind only after the state (incl. the R-tree) is fully built, so the
     // first request always sees a ready index.
     let state = AppState::load(&opts)?;

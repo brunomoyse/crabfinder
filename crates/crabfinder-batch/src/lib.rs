@@ -160,6 +160,7 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
     opts.abbreviation_dict = args.abbreviation_dict.clone();
     opts.pois = args.pois.clone();
     opts.spatial = false;
+    opts.autocomplete = false;
     let state = AppState::load(&opts)?;
 
     let mut raw = Vec::new();

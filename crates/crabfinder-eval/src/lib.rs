@@ -4,6 +4,7 @@
 //! Step 1 ships empty module stubs; later steps fill them in.
 
 pub mod adapters;
+pub mod autocomplete;
 pub mod batch_mode;
 pub mod benchmark;
 pub mod cli;

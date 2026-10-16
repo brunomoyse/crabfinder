@@ -243,6 +243,31 @@ Courtesy and reproducibility:
 Nothing a competitor returns is ever used by crabfinder; it is only
 compared.
 
+## Autocomplete eval
+
+```bash
+./target/release/crabfinder-eval --autocomplete-mode \
+  --eval-set eval/belgium-2026-10-15-v3.json \
+  --service http://127.0.0.1:8080 --parallel 8 \
+  --output reports/autocomplete.json --output-md reports/autocomplete.md
+```
+
+`--autocomplete-mode` (v3 Phase 11.5) takes one synthetic set. Each
+`canonical` query becomes "street municipality" (house number and postal
+code dropped), sent to `/autocomplete?limit=10` as its first 2, 4, 6 and
+8 characters, then whole. A request scores when the expected street (the
+street part of the expected `building_group_id`) is among the street
+suggestions: recall@1 and recall@10, with p50/p95/p99 latency, by
+characters typed and by region.
+
+Every text is sent twice: bare, then with `focus_point` at the
+municipality (the point `/geocode?q=<municipality>` answers, as a client
+would use the map centre). The report has a section for each. The
+`-detail.json` file holds one row per request (`length` 0 = whole text,
+`focus`, `rank`). The v5 edge-ngram numbers it replaces are in
+`reports/archive/phase7a-removed/`; the current ones in
+`reports/phase11-5-autocomplete.md`.
+
 ## Diffing two reports
 
 ```bash

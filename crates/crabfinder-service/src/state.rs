@@ -25,6 +25,7 @@ use crate::localities::{LocalityIndex, SharedLocalityIndex};
 use crate::mid_street::MidStreetIndex;
 use crate::resolver::ResolverContext;
 use crate::spatial::{SharedSpatialIndex, SpatialIndex};
+use crate::suggest::{SharedSuggestIndex, SuggestBuilder, SuggestIndex};
 
 /// Inputs to `AppState::load`.
 #[derive(Debug, Clone)]
@@ -44,6 +45,9 @@ pub struct LoadOptions {
     /// `false` → skip the R-tree build. Only `/reverse` needs it; the batch
     /// CLI and eval batch mode save the startup cost.
     pub spatial: bool,
+    /// `false` → no `/autocomplete` name index (`--no-autocomplete`; the
+    /// batch CLI and eval batch mode don't need it).
+    pub autocomplete: bool,
 }
 
 impl LoadOptions {
@@ -57,6 +61,7 @@ impl LoadOptions {
             notability_enabled: true,
             mid_street: true,
             spatial: true,
+            autocomplete: true,
         }
     }
 
@@ -102,6 +107,8 @@ pub struct AppState {
     pub localities: SharedLocalityIndex,
     /// OSM landmarks from `--pois`; empty when not supplied.
     pub landmarks: SharedLandmarkIndex,
+    /// `/autocomplete` names (v3 Phase 11.5); empty when disabled.
+    pub suggest: SharedSuggestIndex,
     /// Schema-v12 retired / reserved / rejected addresses
     /// (`history-v1.json.gz`); empty when absent.
     pub history: SharedHistoryIndex,
@@ -155,8 +162,15 @@ impl AppState {
         };
 
         let t_ac = std::time::Instant::now();
-        let addr_counts =
-            AddressCountIndex::build(&reader, &schema).context("building AddressCountIndex")?;
+        let mut suggest = opts
+            .autocomplete
+            .then(|| SuggestBuilder::new(&reader.searcher()));
+        let addr_counts = AddressCountIndex::build_visiting(&reader, &schema, |doc, addr| {
+            if let Some(b) = suggest.as_mut() {
+                b.visit(&schema, doc, addr);
+            }
+        })
+        .context("building AddressCountIndex")?;
         info!(
             elapsed_ms = t_ac.elapsed().as_millis(),
             n_docs = addr_counts.n_docs,
@@ -184,6 +198,24 @@ impl AppState {
             None => LandmarkIndex::empty(),
         };
 
+        let suggest = match suggest {
+            Some(b) => {
+                let t0 = std::time::Instant::now();
+                let localities = crabfinder_indexer::localities::read_localities(&opts.index)?;
+                let s = b.finish(&index, &mid_street, &localities, &landmarks, &spatial);
+                info!(
+                    entries = s.len(),
+                    streets = s.n_streets(),
+                    keys = s.n_keys(),
+                    common_prefixes = s.n_common(),
+                    elapsed_ms = t0.elapsed().as_millis(),
+                    "autocomplete index built"
+                );
+                s
+            }
+            None => SuggestIndex::empty(),
+        };
+
         let history = HistoryIndex::load(&opts.index)?;
         info!(records = history.len(), "address history loaded");
 
@@ -205,6 +237,7 @@ impl AppState {
             mid_street: Arc::new(mid_street),
             localities: Arc::new(localities),
             landmarks: Arc::new(landmarks),
+            suggest: Arc::new(suggest),
             history: Arc::new(history),
         })
     }

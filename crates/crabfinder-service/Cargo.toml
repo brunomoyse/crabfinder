@@ -17,6 +17,9 @@ crabfinder-parser  = { workspace = true }   # query parser
 
 tantivy            = { workspace = true }
 
+# Autocomplete name index (v3 Phase 11.5)
+fst                = "0.4"
+
 # Spatial index (Phase 4)
 rstar              = { workspace = true }
 # Great-circle distance (Haversine). Pure-Rust, no system deps. See

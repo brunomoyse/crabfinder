@@ -28,7 +28,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tantivy::index::SegmentId;
 use tantivy::schema::Value;
-use tantivy::{IndexReader, SegmentReader, TantivyDocument};
+use tantivy::{DocAddress, IndexReader, SegmentReader, TantivyDocument};
 
 use crabfinder_indexer::index::CrabSchema;
 
@@ -46,16 +46,31 @@ pub type SharedAddressCountIndex = Arc<AddressCountIndex>;
 
 impl AddressCountIndex {
     pub fn build(reader: &IndexReader, schema: &CrabSchema) -> Result<Self> {
+        Self::build_visiting(reader, schema, |_, _| {})
+    }
+
+    /// `build`, handing every stored document of Pass 1 to `visit` too, so
+    /// another startup structure (autocomplete, v3 Phase 11.5) needs no
+    /// second walk of the doc store.
+    pub fn build_visiting(
+        reader: &IndexReader,
+        schema: &CrabSchema,
+        mut visit: impl FnMut(&TantivyDocument, DocAddress),
+    ) -> Result<Self> {
         let searcher = reader.searcher();
 
         let mut street_counts: HashMap<String, u32> = HashMap::new();
         let mut total_docs: u64 = 0;
-        for seg in searcher.segment_readers() {
+        for (seg_ord, seg) in searcher.segment_readers().iter().enumerate() {
             let store = seg
                 .get_store_reader(10)
                 .context("opening store reader (Pass 1)")?;
-            for doc_res in store.iter::<TantivyDocument>(seg.alive_bitset()) {
+            for (doc_id, doc_res) in store
+                .iter::<TantivyDocument>(seg.alive_bitset())
+                .enumerate()
+            {
                 let doc = doc_res.context("reading doc (Pass 1)")?;
+                visit(&doc, DocAddress::new(seg_ord as u32, doc_id as u32));
                 if let Some(bgid) = doc
                     .get_first(schema.building_group_id)
                     .and_then(|v| v.as_str())

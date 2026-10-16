@@ -153,6 +153,14 @@ impl LandmarkIndex {
             .map_or(&[], Vec::as_slice)
     }
 
+    /// Every landmark once (a landmark sits under each of its names).
+    pub fn all(&self) -> Vec<&Landmark> {
+        let mut out: Vec<&Landmark> = self.by_name.values().flatten().collect();
+        out.sort_by(|a, b| a.osm.cmp(&b.osm));
+        out.dedup_by(|a, b| a.osm == b.osm);
+        out
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }

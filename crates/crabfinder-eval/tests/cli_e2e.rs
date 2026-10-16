@@ -580,3 +580,66 @@ async fn empty_answers_are_misses_not_errors() {
     sorted.sort();
     assert_eq!(ids, sorted);
 }
+
+/// `--autocomplete-mode` (v3 Phase 11.5): every canonical street typed in
+/// prefixes against a live `/autocomplete`, bare then with `focus_point`.
+#[test]
+fn autocomplete_mode_types_the_streets() {
+    let ti = TestIndex::build_with_mid_street(&corpus());
+    let tmp = TempDir::new().unwrap();
+    let set = tmp.path().join("set.json");
+    generate(&ti, &set, "4");
+    let url = serve_index(&ti);
+    let out = tmp.path().join("ac.json");
+    let md = tmp.path().join("ac.md");
+    run_with(&args(&[
+        "--autocomplete-mode",
+        "--eval-set",
+        s(&set),
+        "--service",
+        &url,
+        "--output",
+        s(&out),
+        "--output-md",
+        s(&md),
+    ]))
+    .expect("autocomplete mode");
+    let sum: crabfinder_eval::autocomplete::Summary =
+        serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert!(sum.cases > 0);
+    assert_eq!(sum.errors, 0);
+    let full = sum.by_length.iter().find(|r| r.label == "full").unwrap();
+    assert_eq!(full.n, sum.cases);
+    assert!(full.recall_at_10 >= 0.9, "{full:?}");
+    // The focused pass sends the same texts.
+    assert_eq!(sum.focus_overall.n, sum.overall.n);
+    let detail: Vec<crabfinder_eval::autocomplete::Outcome> =
+        serde_json::from_str(&fs::read_to_string(out.with_extension("detail.json")).unwrap())
+            .unwrap();
+    assert_eq!(detail.len(), 2 * sum.overall.n);
+    let report = fs::read_to_string(&md).unwrap();
+    assert!(report.contains("## By characters typed"), "{report}");
+    assert!(report.contains("With focus_point at the municipality"));
+
+    for (argv, want) in [
+        (
+            vec!["--autocomplete-mode", "--eval-set", s(&set)],
+            "requires --output",
+        ),
+        (
+            vec![
+                "--autocomplete-mode",
+                "--eval-set",
+                s(&set),
+                "--eval-set",
+                s(&set),
+                "--output",
+                s(&out),
+            ],
+            "one synthetic --eval-set",
+        ),
+    ] {
+        let err = format!("{:#}", run_with(&args(&argv)).unwrap_err());
+        assert!(err.contains(want), "{argv:?}: {err}");
+    }
+}

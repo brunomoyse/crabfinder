@@ -148,6 +148,13 @@ pub struct Args {
     #[arg(long)]
     pub with_points: bool,
 
+    // --- Autocomplete mode (v3 Phase 11.5) ------------------------------------
+    /// Type the canonical queries of the synthetic --eval-set into
+    /// `/autocomplete` on --service, 2/4/6/8 characters then whole, and
+    /// report street recall@1/@10 and latency (--output, --output-md).
+    #[arg(long)]
+    pub autocomplete_mode: bool,
+
     // --- Diff mode (Step 8) -------------------------------------------------
     /// Path to the baseline report.json for --diff.
     #[arg(long)]
@@ -184,12 +191,15 @@ pub fn run_with(args: &Args) -> Result<()> {
     if args.benchmark {
         return run_benchmark(args);
     }
+    if args.autocomplete_mode {
+        return run_autocomplete(args);
+    }
     if !args.eval_sets.is_empty() {
         return run_eval(args);
     }
     anyhow::bail!(
         "no mode selected — pass one of: --generate-eval-set, --validate-eval-set, \
-         --batch-mode, --benchmark, --baseline+--current, or --eval-set"
+         --batch-mode, --benchmark, --autocomplete-mode, --baseline+--current, or --eval-set"
     )
 }
 
@@ -270,6 +280,31 @@ fn run_batch_mode(args: &Args) -> Result<()> {
         notability_enabled: !args.no_notability_boost,
     };
     crate::batch_mode::run(&config, queries, &args.eval_sets)
+}
+
+fn run_autocomplete(args: &Args) -> Result<()> {
+    let [set] = args.eval_sets.as_slice() else {
+        anyhow::bail!("--autocomplete-mode takes one synthetic --eval-set");
+    };
+    let output = args
+        .output
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("--autocomplete-mode requires --output"))?;
+    let rt = tokio::runtime::Runtime::new()?;
+    let s = rt.block_on(crate::autocomplete::run_mode(
+        &args.service,
+        set,
+        args.parallel,
+        output,
+        args.output_md.as_deref(),
+    ))?;
+    for r in &s.by_length {
+        println!(
+            "typed {:>4}: n={:<5} recall@1={:.3} recall@10={:.3} p99={:.1} ms",
+            r.label, r.n, r.recall_at_1, r.recall_at_10, r.p99_ms
+        );
+    }
+    Ok(())
 }
 
 fn run_benchmark(args: &Args) -> Result<()> {

@@ -205,6 +205,7 @@ Markt.
 | `interpolate` | `/reverse?interpolate=true` house-number estimate (pure geometry) |
 | `telemetry` | Prometheus series for `/metrics` |
 | `validate` | `/validate` and the batch `corrections` columns: input vs. the resolved BeSt address, field by field (v3 Phase 11.2) |
+| `suggest` | `/autocomplete` (v3 Phase 11.5): the in-memory name index built at startup, and the prefix lookup |
 | `http` | Router, guard (deadline, concurrency), CORS and the handlers |
 | `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, `POST /batch/geocode` |
 
@@ -310,6 +311,41 @@ without changing the decision.
   served at `/metrics`. The `metrics` macros are no-ops in the CLIs.
 - `TraceLayer` request spans; CORS (`--cors-origin`, default any).
 
+## Autocomplete (`suggest.rs`, v3 Phase 11.5)
+
+An in-memory name index, built at startup from the stored documents and
+not part of the Tantivy index: no schema change, and `/geocode` never
+reads it. The v5 edge-ngram field it replaces is still banned (see
+below).
+
+- **Entries.** One per BeSt street and postal code (fed by the
+  address-count pass, so the store is read once): its FR/NL/DE names,
+  the place words of its municipality, postal area and part of
+  municipality, its building count, notability and the median-number
+  point (`mid-street-v1.bin`). Then one per BeSt locality
+  (`localities-v1.json`) and, only with `--places` / `--pois`, the OSM
+  places and landmarks, which lead to the nearest BeSt address (R-tree).
+- **Keys.** The analyzed name (`query_builder::analyze`) from each of its
+  first 4 words, so "loi" finds "rue de la loi", in an `fst::Map` whose
+  values index posting lists (entry, whole-name flag, language of the
+  name).
+- **Lookup.** Earlier words are expanded by the abbreviation map; the
+  last one is a prefix unless followed by a space. The exact key is
+  always read, then the fst is streamed from the prefix. The 63 prefixes
+  shared by more than 2,000 keys ("r", "rue ", "st", …) have precomputed
+  best lists instead: the top 64 overall and the top 32 per 0.2° × 0.3°
+  cell, of which the 3 × 3 cells around `focus_point` are read. Place
+  words or a postal code switch back to streaming, since they filter.
+- **Score.** Building count (`0.5 ln(1 + n)`), notability, whole name
+  from its first word (+3), whole name typed (+2), each place word
+  matched (+1.5), and `focus_point` (+4 `exp(-d / 25 km)`).
+- **Numbers.** After a street name a number lists that street's buildings
+  (a `building_group_id` range query, one unit per building). A number
+  inside a name ("Rue du 11 Novembre") is read as a street word when no
+  street name ends before it.
+- **Cost on the full index.** 149,054 entries, 166,123 keys, about 0.8 s
+  and about 80 MB at startup (`--no-autocomplete` skips both).
+
 ## Spatial index (`/reverse`)
 
 At startup `SpatialIndex` walks every doc's `lat`/`lon` FAST columns
@@ -335,7 +371,8 @@ index directly (mmap read-sharing makes it safe next to a live service).
 ## What the index does *not* contain
 
 - Per-language searchable fields (removed in v3).
-- A prefix / autocomplete field (v5 attempt removed, see
-  `reports/archive/phase7a-removed/`).
+- A prefix / autocomplete field (v5 edge-ngram attempt removed, see
+  `reports/archive/phase7a-removed/`). `/autocomplete` uses the
+  in-memory `suggest` index instead.
 - Anything from OSM in `searchable` or in the payload.
 - A persisted R-tree: it is rebuilt at every startup.

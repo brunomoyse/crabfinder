@@ -100,6 +100,7 @@ pub fn run(
     opts.abbreviation_dict = config.abbreviation_dict.clone();
     opts.notability_enabled = config.notability_enabled;
     opts.spatial = false;
+    opts.autocomplete = false;
     let state = AppState::load(&opts)?;
     info!(
         index = %config.index.display(),

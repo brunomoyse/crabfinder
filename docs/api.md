@@ -24,6 +24,7 @@ is set (any method, any header).
 | `GET /building/{building_group_id}/units` | Every BeSt row of one building |
 | `GET /lookup?id=…` | Addresses by BeSt id, with each id's status (current, outdated, retired…) |
 | `GET /validate` | Is the input a real BeSt address, and what differs |
+| `GET /autocomplete?q=…` | Suggestions while typing: streets, localities, then the street's buildings |
 | `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row |
 | `GET /metrics` | Prometheus text exposition (unless `--no-metrics`) |
 
@@ -37,6 +38,7 @@ is set (any method, any header).
 | `--abbreviation-dict` | `CRABFINDER_ABBREVIATION_DICT` | n/a | `data/street-type-abbreviations-v1.yaml`; without it, no `av` → `avenue` expansion |
 | `--pois` | `CRABFINDER_POIS` | off | Optional OSM helper: `data/osm-pois-be-v1.csv` (landmarks, `scripts/build_osm_pois.py`) to understand queries naming a landmark; answers stay BeSt addresses. Without it, landmark names aren't recognised |
 | `--no-notability-boost` | `CRABFINDER_NO_NOTABILITY_BOOST` | off | Plain BM25 (A/B the boost on the same index) |
+| `--no-autocomplete` | `CRABFINDER_NO_AUTOCOMPLETE` | off | Don't build the `/autocomplete` name index (saves ~0.8 s at startup and ~80 MB); the route answers 503 |
 | `--request-timeout-ms` | `CRABFINDER_REQUEST_TIMEOUT_MS` | `10000` | Deadline per request, queueing included → 503 |
 | `--batch-timeout-secs` | `CRABFINDER_BATCH_TIMEOUT_SECS` | `600` | Deadline of `/batch/geocode` until its response starts streaming |
 | `--max-concurrency` | `CRABFINDER_MAX_CONCURRENCY` | `256` | Requests served at once (all routes); the rest wait for a slot |
@@ -48,8 +50,8 @@ stderr at `info`; set `RUST_LOG` to change the level.
 
 ## Errors
 
-Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`, `/building` and `/health` is
-JSON:
+Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`,
+`/autocomplete`, `/building` and `/health` is JSON:
 
 ```json
 {"error":"q cannot be combined with street, housenumber, box, postcode or city"}
@@ -58,7 +60,7 @@ JSON:
 | Status | When |
 |---|---|
 | `400` | Missing / malformed parameter (`unknown lang 'en' (expected fr, nl or de)`, `lat out of range [-90, 90]: 99`, `postcode must be 4 digits, got '105'`, …) |
-| `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included |
+| `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included; `/autocomplete` with `--no-autocomplete` |
 | `500` | Internal error (Tantivy failure) |
 
 `/batch/geocode` errors are `text/plain` (`csv: csv header has neither a
@@ -380,6 +382,76 @@ code for the others. Completions don't turn `valid` into `corrected`.
 Every official value is BeSt's.
 
 The batch gives the same verdict per row with the `corrections` option.
+
+## `GET /autocomplete`
+
+Suggestions while the user types (v3 Phase 11.5): streets by any prefix
+of their name or of a later word ("loi" finds Rue de la Loi), BeSt
+localities, and, once a house number follows a street name, that
+street's buildings. It reads an in-memory name index built at startup
+from the index (`suggest.rs`); `/geocode` doesn't use it.
+
+| Param | Default | Notes |
+|---|---|---|
+| `q` | required | What has been typed so far. Without a trailing space the last word is a prefix |
+| `limit` | `10` | `1..=20` |
+| `lang` | the typed one | `fr` / `nl` / `de`: language of the labels. Without it, a suggestion is labelled in the language of the name that matched |
+| `focus_point` | n/a | `lat,lng`: nearer streets first (needed for short prefixes, see below) |
+| `postal_code` | n/a | 4 digits, hard filter |
+
+How `q` is read: `[postal code] street words [house number] [postal code
+| place words]`. Place words after the street (`rue de la station
+charl`) keep the streets whose municipality, postal area or part of
+municipality starts with them; a postal code typed in `q` filters like
+`postal_code`. A number inside a street name works (`Rue du 11
+Novembre`, `11 Novemberstraat`), and so does a house number after one
+(`Rue du 11 Novembre 5`).
+
+```
+GET /autocomplete?q=rue de la loi&limit=1
+```
+
+```json
+{"type": "FeatureCollection", "query": "rue de la loi", "count": 1,
+ "features": [
+  {"type": "Feature", "geometry": {"type": "Point", "coordinates": [4.36540, 50.84640]},
+   "properties": {"kind": "street", "label": "Rue de la Loi, 1000 Bruxelles", "score": 7.90,
+     "street": {"street_id": {"namespace": "https://databrussels.be/id/streetname", "object_identifier": "1679", "version_identifier": "1"},
+                "street_name": {"fr": "Rue de la Loi", "nl": "Wetstraat", "de": null},
+                "postal_code": "1000", "postal_name": {"fr": null, "nl": null, "de": null},
+                "municipality_id": {"…": "…"}, "municipality_name": {"fr": "Bruxelles", "nl": "Brussel", "de": null},
+                "region": "brussels", "address_count": 20,
+                "street_key": "https://databrussels.be/id/streetname|1679"}}}]}
+```
+
+`q=Rue du 11 Novembre 5` gives `address` suggestions instead: "Rue du
+11 Novembre 5, 6200 Châtelet", "…, 5640 Mettet", "…, 4680 Oupeye", each
+with its BeSt address payload in `address`.
+
+| `kind` | What it is | Fields |
+|---|---|---|
+| `street` | A street in one postal code | `street`: `street_id`, `street_name` (fr/nl/de), `postal_code`, `postal_name`, `municipality_id`, `municipality_name`, `region`, `address_count`, `street_key`. The point is the street's median-number BeSt address |
+| `address` | A building of the street, after a house number | `address`: the BeSt address payload (one unit per building, the one without box first) |
+| `locality` | A BeSt municipality, part of municipality or postal area | `locality`: `kind`, `name`, `postal_codes`, `address_count`; `address`: the BeSt address nearest to its centre |
+| `landmark` | Only with `--pois` | `address`: the BeSt address nearest to it; `osm_hint: true` |
+
+Every label, id and position is BeSt's. With the optional OSM helpers
+(`--places` at index time, `--pois` here), an OSM village, hamlet or
+landmark name can match too: the suggestion is then the BeSt address
+nearest to it, flagged `osm_hint: true`, with no OSM position or name in
+the output. Picking a street suggestion, a client lists its buildings
+with `GET /building/{street_key}|{number}/units` or keeps typing the
+number.
+
+Ranking: the whole name typed scores first, then names starting with
+what was typed, then names where it is a later word; within that, the
+number of buildings on the street, notability and, with `focus_point`,
+distance (a bonus decaying as exp(-d / 25 km)). A 2 to 4 character prefix shared by
+thousands of names ("rue", "st") is answered from precomputed best lists,
+overall and per 0.2° × 0.3° cell around the focus point, so it stays
+fast. Without a focus point, such short prefixes only offer the biggest
+streets of Belgium; see [`reports/phase11-5-autocomplete.md`](../reports/phase11-5-autocomplete.md)
+for recall by characters typed.
 
 ## `GET /reverse`
 

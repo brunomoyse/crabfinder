@@ -202,6 +202,7 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--cors-origin URL` | any (`*`) | Allowed browser origin. Repeat the flag (or separate with commas) for several. |
 | `--no-metrics` | off | Don't serve Prometheus metrics at `/metrics`. |
 | `--no-notability-boost` | off | Rank without the notability boost (A/B testing). |
+| `--no-autocomplete` | off | Don't build the `/autocomplete` suggestion index (saves about 0.8 s at startup and 80 MB); the route then answers `503`. |
 
 To stop: `Ctrl+C` in the running terminal.
 

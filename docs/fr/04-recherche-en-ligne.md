@@ -27,6 +27,7 @@ Le service écoute **en IPv4 uniquement** sur `127.0.0.1:8080` par défaut. Inte
 | `GET` | `/building/{id}/units` | Lister toutes les unités d'un bâtiment |
 | `GET` | `/lookup` | Adresses par identifiant BeSt |
 | `GET` | `/validate` | Vérifier une adresse : valide, corrigée (et comment), ambiguë, incomplète |
+| `GET` | `/autocomplete` | Suggestions pendant la frappe : rues, localités, puis les bâtiments de la rue |
 | `POST` | `/batch/geocode` | Voir [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Métriques Prometheus (sauf si démarré avec `--no-metrics`) |
 
@@ -509,6 +510,40 @@ Les corrections disent quel champ a changé et comment : un mot mal orthographi�
 
 Pour un fichier entier, le batch fait la même vérification : l'option `corrections` (voir [`03-batch.md`](03-batch.md#vérifier-des-adresses--corrections)).
 
+## `GET /autocomplete` : suggestions pendant la frappe
+
+Pour un champ de recherche : appelle-le à chaque frappe et affiche les suggestions. Une requête prend environ 1 ms sur l'index complet.
+
+```bash
+curl -G "http://127.0.0.1:8080/autocomplete" --data-urlencode "q=rue de la l" --data limit=3
+# → Rue de la Limite, 1210 Saint-Josse-ten-Noode
+#   Rue de la Loi, 1000 Bruxelles
+#   Rue de la Levure, 1050 Ixelles
+```
+
+Ce qu'on peut taper :
+
+- **Le début d'un nom de rue**, ou de l'un de ses premiers mots : `loi` et `la loi` trouvent la Rue de la Loi. En néerlandais ou en allemand aussi : `wetstr` donne « Wetstraat, 1000 Brussel », libellé dans la langue tapée sauf si `lang` en demande une autre.
+- **Un lieu après la rue** la restreint : `rue de la station charl` garde la Rue de la Station de Charleroi. Un code postal (`rue de la station 6000`, ou le paramètre `postal_code`) filtre de la même façon.
+- **Un numéro** après le nom de rue liste ses bâtiments, ceux dont le numéro commence par ce qui est tapé : `Avenue Louise 3` donne Avenue Louise 300, 301, 302… Un nombre qui fait partie du nom fonctionne : `Rue du 11 Novembre`, puis `Rue du 11 Novembre 5`.
+- **Une commune ou une section de commune** (des données BeSt) : `namu` propose Namur.
+
+| Paramètre | Usage |
+|---|---|
+| `q` | Ce que l'utilisateur a tapé. Sans espace final, le dernier mot est un préfixe. |
+| `limit` | Nombre de suggestions, de 1 à 20 (10 par défaut). |
+| `lang` | `fr`, `nl` ou `de` : langue des libellés. |
+| `focus_point` | `lat,lng`, par exemple le centre de la carte ou la position de l'utilisateur : les rues proches d'abord. |
+| `postal_code` | Seulement ce code postal. |
+
+Chaque suggestion a un `kind` : `street` (avec un objet `street` : noms, code postal, commune, `address_count`, `street_key`), `address` (l'adresse BeSt, une fois un numéro tapé), `locality` (une commune, section de commune ou zone postale BeSt) ou `landmark`. Tous les libellés, identifiants et positions viennent de BeSt Address. Avec les aides OSM facultatives (`--places` à l'indexation, `--pois` pour le service, désactivées par défaut), un nom de hameau ou de lieu connu correspond aussi : la suggestion est alors l'adresse BeSt la plus proche, marquée `osm_hint: true`.
+
+**Passe `focus_point` dès que possible.** Quelques lettres (« rue d », « kerk ») correspondent à des milliers de rues en Belgique ; sans position, les plus grandes passent d'abord. Sur le jeu d'évaluation, la rue attendue est dans les 10 suggestions après 4 caractères dans 42 % des cas sans `focus_point` et 76 % avec la commune comme focus ; après 8 caractères, 74 % et 95 %.
+
+Une fois la rue choisie, laisse l'utilisateur taper le numéro, ou liste ses bâtiments avec `/building/{street_key}|{numéro}/units`. Pour géocoder le texte final, appelle `/geocode` : `/autocomplete` ne le remplace pas.
+
+`--no-autocomplete` évite de construire l'index de suggestions au démarrage (environ 0,8 s et 80 Mo) ; `/autocomplete` répond alors `503`.
+
 ## Filtres et stratégies de désambiguïsation
 
 ### Quand utiliser `region`
@@ -572,9 +607,9 @@ Tout corps d'erreur est du JSON : `{"error": "<message>"}`.
 
 | Code | Cause |
 |---|---|
-| `400 Bad Request` | Paramètre manquant ou malformé : ni `q` ni champ structuré, `q` combiné avec des champs structurés, `postcode` qui n'a pas 4 chiffres, `region` ou `lang` inconnu, `lat`/`lng` hors bornes, `focus_point` ou `bbox` malformé, identifiants `/lookup` vides ou trop nombreux… |
+| `400 Bad Request` | Paramètre manquant ou malformé : ni `q` ni champ structuré, `q` combiné avec des champs structurés, `postcode` qui n'a pas 4 chiffres, `region` ou `lang` inconnu, `lat`/`lng` hors bornes, `focus_point` ou `bbox` malformé, identifiants `/lookup` vides ou trop nombreux, `limit` de `/autocomplete` hors de 1 à 20… |
 | `404 Not Found` | Chemin inconnu (corps vide). |
-| `503 Service Unavailable` | Délai dépassé (`request timed out after 10000 ms`). |
+| `503 Service Unavailable` | Délai dépassé (`request timed out after 10000 ms`), ou `/autocomplete` sur un service démarré avec `--no-autocomplete`. |
 
 Exemples :
 

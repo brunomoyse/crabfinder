@@ -202,6 +202,7 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--cors-origin URL` | toutes (`*`) | Origine navigateur autorisée. Répéter le flag (ou séparer par des virgules) pour en mettre plusieurs. |
 | `--no-metrics` | désactivé | Ne pas servir les métriques Prometheus sur `/metrics`. |
 | `--no-notability-boost` | désactivé | Classer sans le boost de notoriété (tests A/B). |
+| `--no-autocomplete` | désactivé | Ne pas construire l'index de suggestions de `/autocomplete` (environ 0,8 s de démarrage et 80 Mo en moins) ; la route répond alors `503`. |
 
 Pour arrêter le service : `Ctrl+C` dans le terminal où il tourne.
 

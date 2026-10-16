@@ -2,7 +2,7 @@
 
 > **Statut (2026-10-16)** : plan d'exécution d'origine, conservé pour l'historique. Les lots A à G sont livrés (v2), avec ces écarts de chemins par rapport au texte : la logique est dans une bibliothèque (`crates/crabfinder-service/src/lib.rs`, `main.rs` est un wrapper mince) ; les modules sont `resolver.rs`, `query_builder.rs`, `focus.rs`, `hydrate.rs`, `mid_street.rs`, `batch/{io,dedup,http,mod}.rs` ; les handlers HTTP sont dans `http/` ; le CLI est `crates/crabfinder-batch` ; le mode eval s'appelle `--batch-mode` (pas `--mode batch`) et vit dans `crates/crabfinder-eval/src/batch_mode.rs`. Le schéma d'index est aujourd'hui en **v12** (`meta.rs`), les « v6 / v7 » ci-dessous sont l'état d'alors. Tantivy est en 0.26, `rstar` en 0.13. Le multi-process read (§4.5) est validé : CLI et service partagent un index. Les seuils de confiance vivent côté eval (`crabfinder-eval/data/confidence-thresholds-v1.json`) ; `street_match_score` sort en BM25 brut.
 >
-> Pas encore fait : réponse `/batch/geocode` réellement streamée et délai batch corrigé (Phase 11.6), jobs batch asynchrones, Docker compose et clés d'API (Phase 11.7). L'autocomplete (Phase 11.5) est en cours, pas livré.
+> Pas encore fait : réponse `/batch/geocode` réellement streamée et délai batch corrigé (Phase 11.6), jobs batch asynchrones, Docker compose et clés d'API (Phase 11.7). L'autocomplete (Phase 11.5) est livré : `GET /autocomplete`, index de noms en mémoire (`suggest.rs`).
 
 Plan d'exécution concret pour la v1 batch décrite dans [`design-batch-geocoding.md`](./design-batch-geocoding.md) §5. Lecture des deux documents source supposée acquise. Toutes les décisions tranchées en §1–§4 du design sont *non négociables* dans ce plan ; les éléments restés ouverts sont rassemblés en §4.
 

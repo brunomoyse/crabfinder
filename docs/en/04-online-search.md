@@ -27,6 +27,7 @@ The service listens on **IPv4 only** on `127.0.0.1:8080` by default. Always quer
 | `GET` | `/building/{id}/units` | List all units in a building |
 | `GET` | `/lookup` | Addresses by BeSt id |
 | `GET` | `/validate` | Check an address: valid, corrected (and how), ambiguous, incomplete |
+| `GET` | `/autocomplete` | Suggestions while typing: streets, localities, then the street's buildings |
 | `POST` | `/batch/geocode` | See [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Prometheus metrics (unless started with `--no-metrics`) |
 
@@ -509,6 +510,40 @@ The corrections say which field changed and how: a misspelt word (`street_spelli
 
 For a whole file, the batch has the same check: the `corrections` option (see [`03-batch.md`](03-batch.md#checking-addresses-corrections)).
 
+## `GET /autocomplete`: suggestions while typing
+
+For a search box: call it on every keystroke and show the suggestions. A request takes about 1 ms on the full index.
+
+```bash
+curl -G "http://127.0.0.1:8080/autocomplete" --data-urlencode "q=rue de la l" --data limit=3
+# → Rue de la Limite, 1210 Saint-Josse-ten-Noode
+#   Rue de la Loi, 1000 Bruxelles
+#   Rue de la Levure, 1050 Ixelles
+```
+
+What can be typed:
+
+- **The start of a street name**, or of any of its first words: `loi` and `la loi` find Rue de la Loi. In Dutch or German too: `wetstr` gives "Wetstraat, 1000 Brussel", labelled in the language that was typed unless `lang` asks for another.
+- **A place after the street** narrows it: `rue de la station charl` keeps the Rue de la Station of Charleroi. A postal code (`rue de la station 6000`, or the `postal_code` parameter) filters the same way.
+- **A house number** after the street name lists its buildings, numbers starting with what was typed first: `Avenue Louise 3` gives Avenue Louise 300, 301, 302… A number that belongs to the name works: `Rue du 11 Novembre`, then `Rue du 11 Novembre 5`.
+- **A municipality or a part of one** (from the BeSt data): `namu` suggests Namur.
+
+| Parameter | Use |
+|---|---|
+| `q` | What the user has typed. Without a trailing space, the last word is a prefix. |
+| `limit` | Number of suggestions, 1 to 20 (default 10). |
+| `lang` | `fr`, `nl` or `de`: language of the labels. |
+| `focus_point` | `lat,lng`, e.g. the map centre or the user's position: nearer streets first. |
+| `postal_code` | Only that postal code. |
+
+Each suggestion has a `kind`: `street` (with a `street` object: names, postal code, municipality, `address_count`, `street_key`), `address` (the BeSt address, once a number is typed), `locality` (a BeSt municipality, part of municipality or postal area), or `landmark`. Every label, identifier and position comes from BeSt Address. With the optional OSM helpers (`--places` at index time, `--pois` for the service, both off by default), a hamlet or landmark name also matches: the suggestion is the nearest BeSt address, marked `osm_hint: true`.
+
+**Pass `focus_point` whenever you can.** A few letters ("rue d", "kerk") match thousands of streets across Belgium; without a position, the biggest ones come first. On the evaluation set, the expected street is in the 10 suggestions after 4 characters 42% of the time without `focus_point` and 76% of the time with the municipality as focus; after 8 characters, 74% and 95%.
+
+Once a street is picked, either let the user type the number, or list its buildings with `/building/{street_key}|{number}/units`. To geocode the final text, call `/geocode`: `/autocomplete` doesn't replace it.
+
+`--no-autocomplete` skips building the suggestion index at startup (about 0.8 s and 80 MB); `/autocomplete` then answers `503`.
+
 ## Filters and disambiguation strategies
 
 ### When to use `region`
@@ -572,9 +607,9 @@ Every error body is JSON: `{"error": "<message>"}`.
 
 | Code | Cause |
 |---|---|
-| `400 Bad Request` | Missing or malformed parameter: no `q` nor structured field, `q` combined with structured fields, `postcode` not 4 digits, unknown `region` or `lang`, out-of-range `lat`/`lng`, malformed `focus_point` or `bbox`, empty or too many `/lookup` ids… |
+| `400 Bad Request` | Missing or malformed parameter: no `q` nor structured field, `q` combined with structured fields, `postcode` not 4 digits, unknown `region` or `lang`, out-of-range `lat`/`lng`, malformed `focus_point` or `bbox`, empty or too many `/lookup` ids, `/autocomplete` `limit` outside 1 to 20… |
 | `404 Not Found` | Unknown path (empty body). |
-| `503 Service Unavailable` | Deadline exceeded (`request timed out after 10000 ms`). |
+| `503 Service Unavailable` | Deadline exceeded (`request timed out after 10000 ms`), or `/autocomplete` on a service started with `--no-autocomplete`. |
 
 Examples:
 

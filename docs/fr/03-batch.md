@@ -4,16 +4,16 @@ Cas d'usage : tu as une liste d'adresses (CSV, export Excel, requête SQL) et tu
 
 Deux façons d'attaquer ce besoin, **avec exactement la même logique de résolution derrière** (le même résolveur que `/geocode`) :
 
-- **CLI `crabfinder-batch`** — pas de serveur, pas de port, tu lances un binaire, tu lui donnes un CSV, tu récupères un CSV (ou du GeoJSON). Privilégié pour les pipelines de data, les scripts cron, les exports ponctuels.
-- **Endpoint HTTP `POST /batch/geocode`** — le service tourne déjà, tu pousses un CSV par requête HTTP, tu reçois un CSV (ou du GeoJSON) streamé. Privilégié pour les intégrations applicatives (un backend qui géocode à la demande).
+- **CLI `crabfinder-batch`**: pas de serveur, pas de port, tu lances un binaire, tu lui donnes un CSV, tu récupères un CSV (ou du GeoJSON). Privilégié pour les pipelines de data, les scripts cron, les exports ponctuels.
+- **Endpoint HTTP `POST /batch/geocode`**: le service tourne déjà, tu pousses un CSV par requête HTTP, tu reçois un CSV (ou du GeoJSON) streamé. Privilégié pour les intégrations applicatives (un backend qui géocode à la demande).
 
-Si tu hésites : la CLI est plus simple à démarrer. Va à la section [CLI](#cli--crabfinder-batch).
+Si tu hésites : la CLI est plus simple à démarrer. Va à la section [CLI](#cli-crabfinder-batch).
 
 ---
 
 ## Format d'entrée
 
-CSV avec une ligne d'en-tête. Les colonnes sont reconnues **par leur nom**, dans n'importe quel ordre ; les colonnes inconnues sont ignorées. Deux formes sont acceptées — prends celle que tes données ont déjà.
+CSV avec une ligne d'en-tête. Les colonnes sont reconnues **par leur nom**, dans n'importe quel ordre ; les colonnes inconnues sont ignorées. Deux formes sont acceptées, prends celle que tes données ont déjà.
 
 ### Colonnes séparées
 
@@ -38,7 +38,7 @@ id;address;postal_code
 6;Rue Neuve 1;1000
 ```
 
-Chaque `address` est découpée exactement comme `/geocode?q=` (code postal, numéro, boîte, formats belges — voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#ce-que-le-parseur-comprend)). Une ligne avec une `address` non vide ignore ses colonnes `street` / `house_number` / `box_number`. Une colonne `postal_code` l'emporte quand même sur le code postal lu dans le texte (ligne 6 ci-dessus). Les deux formes peuvent cohabiter dans un même fichier : les lignes dont `address` est vide utilisent les colonnes séparées.
+Chaque `address` est découpée exactement comme `/geocode?q=` (code postal, numéro, boîte, formats belges, voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#ce-que-le-parseur-comprend)). Une ligne avec une `address` non vide ignore ses colonnes `street` / `house_number` / `box_number`. Une colonne `postal_code` l'emporte quand même sur le code postal lu dans le texte (ligne 6 ci-dessus). Les deux formes peuvent cohabiter dans un même fichier : les lignes dont `address` est vide utilisent les colonnes séparées.
 
 ### Colonnes
 
@@ -106,9 +106,9 @@ Ligne 4 : le 33 n'existe pas en 1050, crabfinder renvoie donc le numéro impair 
 
 **Lignes de lieu** : une ligne qui ne nomme qu'un lieu (`Spontin`, `Han-sur-Lesse 5580` ; un hameau comme `Maredsous` demande l'index facultatif `--places`) ressort comme **l'adresse BeSt la plus proche** de ce lieu, à sa propre position BeSt : rue, numéro, `best_id`, `building_group_id` et label viennent tous de BeSt (`Spontin` → par ex. `Chaussée de Dinant 47, 5530 Yvoir`). `confidence=locality` et `fallback_reason=street_missing` t'indiquent que cette adresse n'a pas été demandée par sa rue.
 
-**Lignes de point d'intérêt** (avec l'option facultative `--pois`) : une ligne qui ne nomme qu'un monument ou un lieu connu (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) ressort de la même façon — l'adresse BeSt la plus proche, par ex. `Rue du Chêne 2, 1000 Bruxelles` pour `Manneken Pis` — avec `confidence=landmark`. Le nom et la position du point d'intérêt lui-même ne sont jamais renvoyés.
+**Lignes de point d'intérêt** (avec l'option facultative `--pois`) : une ligne qui ne nomme qu'un monument ou un lieu connu (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) ressort de la même façon : l'adresse BeSt la plus proche (par ex. `Rue du Chêne 2, 1000 Bruxelles` pour `Manneken Pis`), avec `confidence=landmark`. Le nom et la position du point d'intérêt lui-même ne sont jamais renvoyés.
 
-**Garantie 1-in-1-out** : même nombre de lignes, même ordre en entrée et en sortie. Une ligne non géocodée sort avec `confidence=not_found` et des `lat,lng,matched_*` vides — elle n'est **pas** retirée du fichier.
+**Garantie 1-in-1-out** : même nombre de lignes, même ordre en entrée et en sortie. Une ligne non géocodée sort avec `confidence=not_found` et des `lat,lng,matched_*` vides, et n'est **pas** retirée du fichier.
 
 **Déduplication interne** : si ton CSV contient deux fois la même adresse, crabfinder la résout une seule fois et recopie le résultat. Optimisation transparente, sans effet sur la sortie.
 
@@ -142,7 +142,7 @@ Avec `--format geojson` (CLI) ou `format=geojson` (HTTP), la sortie est une `Fea
 
 ---
 
-## CLI — `crabfinder-batch`
+## CLI: `crabfinder-batch`
 
 ### Invocation minimale
 
@@ -154,13 +154,13 @@ Avec `--format geojson` (CLI) ou `format=geojson` (HTTP), la sortie est une `Fea
     --output adresses-geocodees.csv
 ```
 
-Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le résultat. Pas de port HTTP. Pas de service à démarrer. Le `crabfinder-service` peut tourner en parallèle sur le même index — Tantivy supporte les lectures multi-processus.
+Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le résultat. Pas de port HTTP. Pas de service à démarrer. Le `crabfinder-service` peut tourner en parallèle sur le même index (Tantivy supporte les lectures multi-processus).
 
 ### Tous les flags
 
 | Flag | Défaut | Description |
 |---|---|---|
-| `--index CHEMIN` | — (obligatoire) | Dossier de l'index Tantivy. Variable d'environnement : `CRABFINDER_INDEX`. |
+| `--index CHEMIN` | n/a (obligatoire) | Dossier de l'index Tantivy. Variable d'environnement : `CRABFINDER_INDEX`. |
 | `--abbreviation-dict CHEMIN` | (aucun) | YAML des abréviations. Sans lui, « Av. Louise » n'est pas étendu en « Avenue Louise ». **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
 | `--pois CHEMIN` | (aucun) | Aide OpenStreetMap facultative (`data/osm-pois-be-v1.csv`) : comprendre les lignes qui nomment un point d'intérêt ; elles reçoivent l'adresse BeSt la plus proche, `confidence=landmark`. Variable d'environnement : `CRABFINDER_POIS`. |
 | `-i, --input CHEMIN` | `stdin` | CSV d'entrée. `-` = stdin. |
@@ -236,7 +236,7 @@ Ordre de grandeur : ~1500 lignes/s par cœur en lecture in-process sur un portab
 
 ---
 
-## Endpoint HTTP — `POST /batch/geocode`
+## Endpoint HTTP: `POST /batch/geocode`
 
 Prérequis : `crabfinder-service` tourne (voir [`02-installation.md`](02-installation.md) §6).
 
@@ -244,7 +244,7 @@ Prérequis : `crabfinder-service` tourne (voir [`02-installation.md`](02-install
 
 Le handler choisit selon le `Content-Type`. Les trois acceptent les deux formes d'entrée (colonnes séparées ou `address`).
 
-#### Variante 1 — multipart/form-data (recommandé pour les gros fichiers)
+#### Variante 1: multipart/form-data (recommandé pour les gros fichiers)
 
 ```bash
 curl -X POST http://127.0.0.1:8080/batch/geocode \
@@ -255,7 +255,7 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
 
 Capacité : jusqu'à **50 Mo de body** par requête. À ~500 octets par ligne, ça fait ~100k lignes.
 
-#### Variante 2 — application/json (recommandé pour les petits lots, intégrations applicatives)
+#### Variante 2: application/json (recommandé pour les petits lots, intégrations applicatives)
 
 ```bash
 curl -X POST http://127.0.0.1:8080/batch/geocode \
@@ -270,9 +270,9 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
      -o lot.csv
 ```
 
-Capacité : jusqu'à **10 000 adresses** par requête (HTTP 413 au-delà — passe au multipart).
+Capacité : jusqu'à **10 000 adresses** par requête (HTTP 413 au-delà, passe au multipart).
 
-#### Variante 3 — body CSV brut (Content-Type quelconque, simple à câbler)
+#### Variante 3: body CSV brut (Content-Type quelconque, simple à câbler)
 
 ```bash
 curl -X POST "http://127.0.0.1:8080/batch/geocode?format=geojson&lang=nl" \
@@ -285,7 +285,7 @@ C'est le chemin le plus léger, pratique pour tester avec un client minimal.
 
 ### Options
 
-Les options vont dans le body JSON / la partie multipart `options`, **ou dans la query string** (`?format=geojson&lang=nl&mid_street_fallback=false`) — pratique pour la variante CSV brut. La query string l'emporte quand les deux sont fournies.
+Les options vont dans le body JSON / la partie multipart `options`, **ou dans la query string** (`?format=geojson&lang=nl&mid_street_fallback=false`), pratique pour la variante CSV brut. La query string l'emporte quand les deux sont fournies.
 
 | Option | Type | Défaut | Effet |
 |---|---|---|---|
@@ -297,7 +297,7 @@ Les options vont dans le body JSON / la partie multipart `options`, **ou dans la
 
 ### Réponse
 
-`text/csv; charset=utf-8` (ou `application/geo+json`), **streamé**. Les premiers octets partent dès que les premières lignes sont résolues — ça compte sur les gros fichiers.
+`text/csv; charset=utf-8` (ou `application/geo+json`), **streamé**. Les premiers octets partent dès que les premières lignes sont résolues, ce qui compte sur les gros fichiers.
 
 ### Codes HTTP
 
@@ -366,7 +366,7 @@ Quand l'identifiant ne mène à aucune adresse en vigueur et que la ligne a auss
 
 ### Adresses sans code postal
 
-Ça fonctionne, mais la qualité baisse nettement. crabfinder ne peut pas filtrer par CP, donc les rues homonymes (« Kerkstraat » existe dans des centaines de communes) reviennent dans un ordre non déterminé — ces lignes sont en général marquées `ambiguous=true`. **Fournis toujours le CP quand tu l'as.**
+Ça fonctionne, mais la qualité baisse nettement. crabfinder ne peut pas filtrer par CP, donc les rues homonymes (« Kerkstraat » existe dans des centaines de communes) reviennent dans un ordre non déterminé, et ces lignes sont en général marquées `ambiguous=true`. **Fournis toujours le CP quand tu l'as.**
 
 ### Mauvais code postal
 
@@ -381,11 +381,11 @@ Voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#adjacent_commune-
 
 ### Adresses avec seulement un nom de lieu (pas de rue)
 
-Supporté, sous les deux formes : `address=Spontin`, ou `street=Maredsous` avec un `house_number` vide. Quand tout le texte est un nom de lieu connu — une commune, section de commune ou zone postale BeSt, ou, avec l'index facultatif `--places`, un village ou hameau OpenStreetMap (`Maredsous`) — tu obtiens une ligne `locality` : l'adresse BeSt la plus proche du lieu. Avec l'option facultative `--pois`, un nom de point d'intérêt (`Manneken Pis`, `Gare du Midi`, éventuellement suivi de sa localité : `Gravensteen Gent`) donne une ligne `landmark`, là aussi l'adresse BeSt la plus proche — sauf si une rue porte ce nom (`Atomium` → Avenue de l'Atomium, `median_street`).
+Supporté, sous les deux formes : `address=Spontin`, ou `street=Maredsous` avec un `house_number` vide. Quand tout le texte est un nom de lieu connu (une commune, section de commune ou zone postale BeSt, ou, avec l'index facultatif `--places`, un village ou hameau OpenStreetMap comme `Maredsous`), tu obtiens une ligne `locality` : l'adresse BeSt la plus proche du lieu. Avec l'option facultative `--pois`, un nom de point d'intérêt (`Manneken Pis`, `Gare du Midi`, éventuellement suivi de sa localité : `Gravensteen Gent`) donne une ligne `landmark`, là aussi l'adresse BeSt la plus proche, sauf si une rue porte ce nom (`Atomium` → Avenue de l'Atomium, `median_street`).
 
 ### Numéros de boîte
 
-Utilise la colonne `box_number`, ou écris la boîte avec le numéro — dans `house_number` (`32 bte b002`, `32/b002`) ou dans le texte libre (`bte 3`, `bus 3`, `box 3`, `12/3`). La boîte n'empêche jamais un match : le bâtiment est trouvé dans tous les cas, la boîte décide seulement laquelle de ses unités apparaît dans `best_id` / `label`. Écris la boîte comme BeSt l'écrit (Bruxelles utilise souvent des formes comme `b002`) ; une boîte qui ne correspond à aucune unité est ignorée.
+Utilise la colonne `box_number`, ou écris la boîte avec le numéro, dans `house_number` (`32 bte b002`, `32/b002`) ou dans le texte libre (`bte 3`, `bus 3`, `box 3`, `12/3`). La boîte n'empêche jamais un match : le bâtiment est trouvé dans tous les cas, la boîte décide seulement laquelle de ses unités apparaît dans `best_id` / `label`. Écris la boîte comme BeSt l'écrit (Bruxelles utilise souvent des formes comme `b002`) ; une boîte qui ne correspond à aucune unité est ignorée.
 
 ### Doublons dans l'entrée
 

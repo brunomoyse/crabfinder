@@ -4,11 +4,11 @@
 
 crabfinder transforme des adresses belges en coordonnées géographiques (latitude / longitude WGS84) et inversement. Il utilise les données officielles **BeSt Address**, qui couvrent les trois régions du pays et représentent environ 6,9 millions d'adresses (état dump 2026-10). Tout est local : pas d'appel à un service tiers, pas de quota, pas de fuite de données.
 
-**BeSt Address est la seule source officielle.** Chaque adresse, identifiant, coordonnée et label renvoyé par crabfinder vient de BeSt Address. OpenStreetMap peut être activé en option — désactivé par défaut — pour *interpréter* les requêtes qui nomment un hameau (`--places`, à l'indexation) ou un point d'intérêt (`--pois`, dans le service). Il indique seulement à crabfinder où chercher : il n'ajoute ni ne modifie jamais une adresse, et n'est jamais renvoyé comme résultat.
+**BeSt Address est la seule source officielle.** Chaque adresse, identifiant, coordonnée et label renvoyé par crabfinder vient de BeSt Address. OpenStreetMap peut être activé en option (désactivé par défaut) pour *interpréter* les requêtes qui nomment un hameau (`--places`, à l'indexation) ou un point d'intérêt (`--pois`, dans le service). Il indique seulement à crabfinder où chercher : il n'ajoute ni ne modifie jamais une adresse, et n'est jamais renvoyé comme résultat.
 
 Il y a deux façons concrètes de l'utiliser :
 
-### Mode 1 — recherche en ligne (interactif)
+### Mode 1: recherche en ligne (interactif)
 
 Un utilisateur tape une adresse dans un formulaire. Le service répond avec un top-N classé par pertinence, en GeoJSON. Latence typique de quelques millisecondes (p95 ~7 ms).
 
@@ -21,7 +21,7 @@ Réponse  : top 10 adresses candidates, la Grand-Place de Bruxelles en première
 
 C'est le mode idéal pour un champ de recherche ou une carte interactive (recherche à la validation : crabfinder ne complète pas les mots à moitié tapés). Voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md).
 
-### Mode 2 — géocodage batch (traitement de liste)
+### Mode 2: géocodage batch (traitement de liste)
 
 Un fichier CSV en entrée, soit en colonnes séparées (`id`, `street`, `house_number`, `postal_code`), soit avec une seule colonne `address` en texte libre. Un fichier CSV (ou GeoJSON) enrichi en sortie avec lat/lng et indicateurs de confiance pour chaque ligne, **dans le même ordre, avec le même nombre de lignes** que l'entrée.
 
@@ -40,7 +40,7 @@ C'est le mode pertinent pour enrichir une base de données existante, géocoder 
 À savoir avant de l'adopter, pour éviter les surprises :
 
 - **Pas d'autres pays que la Belgique.** L'index est figé sur BeSt Address. Pas de France, pas de Luxembourg, pas de Pays-Bas même limitrophes.
-- **Pas de POI comme résultat.** Seules des adresses BeSt ressortent : pas de gares, de commerces ni de monuments en tant que tels. Par défaut, les noms de lieux sont compris dans la mesure où BeSt les connaît — communes, sections de commune, zones postales (« Spontin », « Han-sur-Lesse »). Les aides OpenStreetMap facultatives étendent cela aux hameaux (« Maredsous », `--places`) et aux points d'intérêt (« Manneken Pis », `--pois`), et même alors la réponse est l'adresse BeSt la plus proche.
+- **Pas de POI comme résultat.** Seules des adresses BeSt ressortent : pas de gares, de commerces ni de monuments en tant que tels. Par défaut, les noms de lieux sont compris dans la mesure où BeSt les connaît : communes, sections de commune, zones postales (« Spontin », « Han-sur-Lesse »). Les aides OpenStreetMap facultatives étendent cela aux hameaux (« Maredsous », `--places`) et aux points d'intérêt (« Manneken Pis », `--pois`), et même alors la réponse est l'adresse BeSt la plus proche.
 - **Pas d'API publique en ligne.** crabfinder est un binaire que tu installes et fais tourner toi-même. Pas de SaaS.
 - **Pas d'authentification.** Le service écoute sur `127.0.0.1:8080` par défaut. Si tu veux l'exposer sur Internet, mets un reverse-proxy + auth devant. Pour un usage local ou intra-LAN, c'est sans souci.
 - **Pas de mise à jour automatique des données.** Quand BeSt publie un nouveau dump, tu lances `scripts/refresh_best.sh` (téléchargement, reconstruction ~1,5-3 min, vérification, bascule) et tu redémarres le service.
@@ -64,7 +64,7 @@ Le destinataire d'un CSV géocodé peut donc trier ses lignes par confiance et i
 
 ## Couverture multilingue
 
-Les adresses bilingues (Bruxelles, communes à facilités) sont indexées dans **toutes leurs variantes** (FR, NL, DE quand disponible). Tu peux taper indifféremment « Avenue Louise 1050 » ou « Louizalaan 1050 » — la même adresse remonte. Les communes germanophones (Eupen, Saint-Vith, …) sont également couvertes.
+Les adresses bilingues (Bruxelles, communes à facilités) sont indexées dans **toutes leurs variantes** (FR, NL, DE quand disponible). Tu peux taper indifféremment « Avenue Louise 1050 » ou « Louizalaan 1050 » : la même adresse remonte. Les communes germanophones (Eupen, Saint-Vith, …) sont également couvertes.
 
 ## Et après ?
 

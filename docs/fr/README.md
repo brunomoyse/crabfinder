@@ -1,4 +1,4 @@
-# Documentation utilisateur — crabfinder (FR)
+# Documentation utilisateur: crabfinder (FR)
 
 Bienvenue. Cette documentation est écrite pour un utilisateur qui veut **utiliser** crabfinder, pas le développer. Profil cible : un géomaticien à l'aise avec une ligne de commande, qui sait lire un CSV, qui n'a pas besoin de connaître Rust ni Tantivy.
 
@@ -8,12 +8,12 @@ Bienvenue. Cette documentation est écrite pour un utilisateur qui veut **utilis
 
 Un service de géocodage belge basé sur les données fédérales **BeSt Address** (6,9 millions d'adresses Bruxelles + Flandre + Wallonie). Deux usages :
 
-1. **Recherche en ligne** — une requête, un top-N classé. Pour intégrer dans une application interactive (formulaire, carte).
-2. **Géocodage batch** — un CSV en entrée, un CSV ou du GeoJSON enrichi en sortie. Pour traiter une liste d'adresses d'un coup.
+1. **Recherche en ligne**: une requête, un top-N classé. Pour intégrer dans une application interactive (formulaire, carte).
+2. **Géocodage batch**: un CSV en entrée, un CSV ou du GeoJSON enrichi en sortie. Pour traiter une liste d'adresses d'un coup.
 
 Tout tourne en local. Pas d'appel externe. Index unique d'environ 2,2 Go sur disque.
 
-**BeSt Address est la seule source.** Chaque adresse, identifiant, coordonnée et label renvoyé par crabfinder vient de BeSt. OpenStreetMap est une aide facultative, désactivée par défaut, pour comprendre les requêtes qui nomment un hameau (`--places`, indexeur) ou un point d'intérêt (`--pois`, service) : il sert seulement à décider où chercher. Il n'ajoute ni ne modifie jamais une adresse et n'est jamais renvoyé comme résultat — la réponse reste l'adresse BeSt la plus proche, signalée par `confidence: locality` / `landmark`.
+**BeSt Address est la seule source.** Chaque adresse, identifiant, coordonnée et label renvoyé par crabfinder vient de BeSt. OpenStreetMap est une aide facultative, désactivée par défaut, pour comprendre les requêtes qui nomment un hameau (`--places`, indexeur) ou un point d'intérêt (`--pois`, service) : il sert seulement à décider où chercher. Il n'ajoute ni ne modifie jamais une adresse et n'est jamais renvoyé comme résultat : la réponse reste l'adresse BeSt la plus proche, signalée par `confidence: locality` / `landmark`.
 
 ## Quickstart
 
@@ -27,14 +27,14 @@ cargo build --release
     --output ./index-belgium \
     --notability-whitelist data/notability-whitelist-v1.yaml
 
-# 3a. Recherche en ligne — démarrer le service
+# 3a. Recherche en ligne: démarrer le service
 ./target/release/crabfinder-service \
     --index ./index-belgium \
     --abbreviation-dict data/street-type-abbreviations-v1.yaml &
 
 curl "http://127.0.0.1:8080/geocode?q=Avenue+Louise+32+1050"
 
-# 3b. Batch — depuis un CSV, sans démarrer le service
+# 3b. Batch: depuis un CSV, sans démarrer le service
 ./target/release/crabfinder-batch \
     --index ./index-belgium \
     --abbreviation-dict data/street-type-abbreviations-v1.yaml \

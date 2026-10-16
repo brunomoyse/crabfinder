@@ -30,7 +30,7 @@ The service listens on **IPv4 only** on `127.0.0.1:8080` by default. Always quer
 | `POST` | `/batch/geocode` | See [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Prometheus metrics (unless started with `--no-metrics`) |
 
-## `GET /health` — service health
+## `GET /health`: service health
 
 ```bash
 curl "http://127.0.0.1:8080/health"
@@ -48,25 +48,25 @@ curl "http://127.0.0.1:8080/health"
 }
 ```
 
-Use this from a load balancer / monitoring to verify the service responds. `index_docs` should be around 6.9M for a full Belgium index — if much lower, indexing partially failed. `index_built_at_unix_secs` tells you when the index was built (handy to spot a forgotten refresh).
+Use this from a load balancer / monitoring to verify the service responds. `index_docs` should be around 6.9M for a full Belgium index; if much lower, indexing partially failed. `index_built_at_unix_secs` tells you when the index was built (handy to spot a forgotten refresh).
 
-## `GET /geocode` — address search
+## `GET /geocode`: address search
 
-The main endpoint. One address in — as free text **or** as separate fields — ranked top-N out as **GeoJSON**.
+The main endpoint. One address in (as free text **or** as separate fields), ranked top-N out as **GeoJSON**.
 
 ### Parameters
 
 | Param | Type | Default | Effect |
 |---|---|---|---|
-| `q` | string | — | Free-text query ("Avenue Louise 32 1050", "grand place bruxelles"…). |
-| `street`, `housenumber`, `box`, `postcode`, `city` | string | — | Structured query, instead of `q` (see below). |
+| `q` | string | n/a | Free-text query ("Avenue Louise 32 1050", "grand place bruxelles"…). |
+| `street`, `housenumber`, `box`, `postcode`, `city` | string | n/a | Structured query, instead of `q` (see below). |
 | `limit` | int | `10` | Max results. Min 1, max 100. |
 | `lang` | string | each address's own | `fr`, `nl` or `de`: language of `properties.label`. |
 | `expand` | bool | `false` | If `true`, returns one feature per BeSt row without building-level dedup. Useful for listing boxes in a single building. |
-| `region` | string | — | Hard filter: `brussels`, `flanders`, `wallonia` (or `BE-BRU`, `BE-VLG`, `BE-WAL`, or variants `bruxelles`, `vlaanderen`, `wallonie`...). |
-| `postal_code` | string | — | Hard filter on postal code (4 digits). Wins over any postal code parsed from `q`, and never falls back to a neighbouring postal code. |
-| `bbox` | string | — | Hard filter: `min_lon,min_lat,max_lon,max_lat` (WGS84, GeoJSON order). Only addresses inside the rectangle. |
-| `focus_point` | string | — | `"lat,lng"` WGS84 inside Belgium. Soft re-rank: candidates close to the point move up. Half-life 25 km. |
+| `region` | string | n/a | Hard filter: `brussels`, `flanders`, `wallonia` (or `BE-BRU`, `BE-VLG`, `BE-WAL`, or variants `bruxelles`, `vlaanderen`, `wallonie`...). |
+| `postal_code` | string | n/a | Hard filter on postal code (4 digits). Wins over any postal code parsed from `q`, and never falls back to a neighbouring postal code. |
+| `bbox` | string | n/a | Hard filter: `min_lon,min_lat,max_lon,max_lat` (WGS84, GeoJSON order). Only addresses inside the rectangle. |
+| `focus_point` | string | n/a | `"lat,lng"` WGS84 inside Belgium. Soft re-rank: candidates close to the point move up. Half-life 25 km. |
 
 Give either `q` or the structured fields, not both.
 
@@ -117,7 +117,7 @@ When a query can be read more than one way, the parser also tries the other read
 - `Rue du 11 Novembre` (no other number): read first with house number 11, then with `11` as part of the street name.
 - `Han-sur-Lesse 5580`, `Grand-Place 1000`: a lone 4-digit number is read first as the postal code, then as a house number.
 
-House numbers are case-insensitive (`32a` = `32A`). The `query.parsed` object in the response shows how your query was split — the first thing to check when a result looks wrong.
+House numbers are case-insensitive (`32a` = `32A`). The `query.parsed` object in the response shows how your query was split, the first thing to check when a result looks wrong.
 
 ### Typos
 
@@ -165,7 +165,7 @@ q=Grand-Place 1000&lang=de   → "Grand-Place 2, 1000 Bruxelles"   (no German na
 
 ### Place names: villages, hamlets, municipalities
 
-A query that is only a place name — a BeSt municipality, part of municipality or postal area, or, if the index was built with the optional `--places` helper, an OpenStreetMap village or hamlet such as Maredsous — returns the BeSt addresses nearest to that place. A top-level `locality` object echoes how the query was understood (`source: "best"` or `"osm"`); it carries no position, and nothing in the features comes from OpenStreetMap:
+A query that is only a place name (a BeSt municipality, part of municipality or postal area, or, if the index was built with the optional `--places` helper, an OpenStreetMap village or hamlet such as Maredsous) returns the BeSt addresses nearest to that place. A top-level `locality` object echoes how the query was understood (`source: "best"` or `"osm"`); it carries no position, and nothing in the features comes from OpenStreetMap:
 
 ```bash
 curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
@@ -274,7 +274,7 @@ curl "http://127.0.0.1:8080/geocode?q=Manneken+Pis&limit=1"
 }
 ```
 
-`confidence`, `fallback_reason` and `house_number_delta` mean exactly what they mean in batch mode — see [`05-understanding-results.md`](05-understanding-results.md). Asking `Avenue Louise 33 1050`, for instance, returns `Avenue Louise 59` with `confidence=nearest_same_side`, `house_number_delta=26`.
+`confidence`, `fallback_reason` and `house_number_delta` mean exactly what they mean in batch mode, see [`05-understanding-results.md`](05-understanding-results.md). Asking `Avenue Louise 33 1050`, for instance, returns `Avenue Louise 59` with `confidence=nearest_same_side`, `house_number_delta=26`.
 
 ### Understanding `match_type`
 
@@ -290,7 +290,7 @@ The top-level `match_type` is `strict` if **at least one** returned feature is s
 
 ### Ambiguous queries
 
-`ambiguous` is `true` when the second result scores at least 90% of the first **and** lies on a different street or municipality — typically a street name that exists in many municipalities, without postal code. `score_gap` (`1 − score₂/score₁`, present when there are at least two results) tells you how close the call was: `0` = tie.
+`ambiguous` is `true` when the second result scores at least 90% of the first **and** lies on a different street or municipality, typically a street name that exists in many municipalities, without postal code. `score_gap` (`1 − score₂/score₁`, present when there are at least two results) tells you how close the call was: `0` = tie.
 
 ```
 q = Kerkstraat 1          → ambiguous=true,  score_gap=0.004
@@ -331,7 +331,7 @@ You get one feature per BeSt row (up to `limit`), no collapse.
 
 Cleaner alternative: use `/building/{id}/units` (below) with the `building_group_id` returned by the first query.
 
-## `GET /reverse` — coordinates → addresses
+## `GET /reverse`: coordinates → addresses
 
 Use case: a user clicks on a map, you want the closest address.
 
@@ -347,7 +347,7 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8467&lng=4.3525&limit=1&lang=nl"
 | `lat` | float | required | WGS84 latitude |
 | `lng` | float | required | WGS84 longitude |
 | `limit` | int | `1` | Max results. Max 100. |
-| `radius_m` | float | — | If set, drops results beyond `radius_m` metres. |
+| `radius_m` | float | n/a | If set, drops results beyond `radius_m` metres. |
 | `lang` | string | each address's own | Language of `properties.label` (and of `interpolation.label`). |
 | `interpolate` | bool | `false` | `true`: estimate the house number of a point lying between two known addresses (see below). |
 
@@ -392,7 +392,7 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&radius_m=50&limit=3"
 
 ### Estimating a missing number: `interpolate=true`
 
-Sometimes the clicked point lies between two known addresses — a vacant plot, a new building BeSt doesn't list yet. With `interpolate=true`, the response gets an extra top-level `interpolation` object estimating the number that point would carry:
+Sometimes the clicked point lies between two known addresses (a vacant plot, a new building BeSt doesn't list yet). With `interpolate=true`, the response gets an extra top-level `interpolation` object estimating the number that point would carry:
 
 ```bash
 curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
@@ -420,9 +420,9 @@ curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
 - And only when the point is nearer to that gap than to any existing address: otherwise the first feature already is the answer, and `interpolation` is absent.
 - `label` follows `lang`, like the features' labels.
 
-**It's an estimate**: the number may not officially exist. Treat it like an approximation (comparable to `nearest_*`), never as a BeSt address — it has no `best_id` or `building_group_id`.
+**It's an estimate**: the number may not officially exist. Treat it like an approximation (comparable to `nearest_*`), never as a BeSt address: it has no `best_id` or `building_group_id`.
 
-## `GET /building/{id}/units` — all units in a building
+## `GET /building/{id}/units`: all units in a building
 
 Use case: you have a `building_group_id` (from a prior `/geocode` call) and want to list every box in the building. Handy when a user clicks a building marker.
 
@@ -436,7 +436,7 @@ curl "http://127.0.0.1:8080/building/${ENCODED}/units"
 
 Response: a `FeatureCollection` with `building_group_id`, `count` and one feature per unit (each with its `label`), sorted by box number (the unit without a box first). An unknown id returns `count: 0`.
 
-## `GET /lookup` — addresses by BeSt id
+## `GET /lookup`: addresses by BeSt id
 
 You stored `best_id`s (from a batch run or `properties.id`) and want the addresses back, without searching. Pass up to 50 ids separated by commas; `lang` works as for `/geocode`.
 
@@ -479,7 +479,7 @@ BeSt publishes no "replaced by" link: the successor is derived from BeSt's own d
 
 An empty `id` is a 400 (`id is empty`), more than 50 too (`too many ids: 51 (max 50)`).
 
-## `GET /validate` — check an address
+## `GET /validate`: check an address
 
 You have an address from a form or a customer file and want to know: does it exist in BeSt, and if not exactly, what is the official one? `/validate` takes the same input as `/geocode` (`q`, or `street` / `housenumber` / `box` / `postcode` / `city`, plus `lang` and `region`) and answers with a `status`, the official BeSt address and the list of what differs.
 
@@ -546,7 +546,7 @@ You have the user's location (from the browser, GPS, IP): passing `focus_point=l
 
 ## CORS
 
-The service answers with `Access-Control-Allow-Origin: *` by default, so a JS frontend in a browser can hit the API directly. To restrict it, start the service with `--cors-origin https://app.example.org` (repeatable). No auth — always assume the service runs locally or behind a trusted reverse proxy.
+The service answers with `Access-Control-Allow-Origin: *` by default, so a JS frontend in a browser can hit the API directly. To restrict it, start the service with `--cors-origin https://app.example.org` (repeatable). There is no authentication, so always assume the service runs locally or behind a trusted reverse proxy.
 
 ## Deadlines and load
 

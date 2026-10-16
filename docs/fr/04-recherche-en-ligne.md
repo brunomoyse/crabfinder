@@ -30,7 +30,7 @@ Le service écoute **en IPv4 uniquement** sur `127.0.0.1:8080` par défaut. Inte
 | `POST` | `/batch/geocode` | Voir [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Métriques Prometheus (sauf si démarré avec `--no-metrics`) |
 
-## `GET /health` — état du service
+## `GET /health` : état du service
 
 ```bash
 curl "http://127.0.0.1:8080/health"
@@ -48,25 +48,25 @@ curl "http://127.0.0.1:8080/health"
 }
 ```
 
-À utiliser depuis un load balancer / un monitoring pour vérifier que le service répond. `index_docs` doit tourner autour de 6,9M pour un index Belgique complet — beaucoup moins, et l'indexation a partiellement échoué. `index_built_at_unix_secs` indique quand l'index a été construit (pratique pour repérer une mise à jour oubliée).
+À utiliser depuis un load balancer / un monitoring pour vérifier que le service répond. `index_docs` doit tourner autour de 6,9M pour un index Belgique complet ; beaucoup moins, et l'indexation a partiellement échoué. `index_built_at_unix_secs` indique quand l'index a été construit (pratique pour repérer une mise à jour oubliée).
 
-## `GET /geocode` — recherche d'adresse
+## `GET /geocode` : recherche d'adresse
 
-L'endpoint principal. Une adresse en entrée — en texte libre **ou** en champs séparés — et un top-N classé en sortie, en **GeoJSON**.
+L'endpoint principal. Une adresse en entrée (en texte libre **ou** en champs séparés) et un top-N classé en sortie, en **GeoJSON**.
 
 ### Paramètres
 
 | Param | Type | Défaut | Effet |
 |---|---|---|---|
-| `q` | string | — | Requête en texte libre (« Avenue Louise 32 1050 », « grand place bruxelles »…). |
-| `street`, `housenumber`, `box`, `postcode`, `city` | string | — | Requête structurée, à la place de `q` (voir plus bas). |
+| `q` | string | n/a | Requête en texte libre (« Avenue Louise 32 1050 », « grand place bruxelles »…). |
+| `street`, `housenumber`, `box`, `postcode`, `city` | string | n/a | Requête structurée, à la place de `q` (voir plus bas). |
 | `limit` | int | `10` | Nombre max de résultats. Min 1, max 100. |
 | `lang` | string | langue de chaque adresse | `fr`, `nl` ou `de` : langue de `properties.label`. |
 | `expand` | bool | `false` | À `true`, renvoie un feature par ligne BeSt, sans déduplication par bâtiment. Utile pour lister les boîtes d'un même bâtiment. |
-| `region` | string | — | Filtre dur : `brussels`, `flanders`, `wallonia` (ou `BE-BRU`, `BE-VLG`, `BE-WAL`, ou les variantes `bruxelles`, `vlaanderen`, `wallonie`…). |
-| `postal_code` | string | — | Filtre dur sur le code postal (4 chiffres). L'emporte sur tout code postal lu dans `q`, et ne se replie jamais sur un code postal voisin. |
-| `bbox` | string | — | Filtre dur : `min_lon,min_lat,max_lon,max_lat` (WGS84, ordre GeoJSON). Seulement les adresses dans le rectangle. |
-| `focus_point` | string | — | `"lat,lng"` WGS84 en Belgique. Re-classement doux : les candidats proches du point remontent. Demi-vie 25 km. |
+| `region` | string | n/a | Filtre dur : `brussels`, `flanders`, `wallonia` (ou `BE-BRU`, `BE-VLG`, `BE-WAL`, ou les variantes `bruxelles`, `vlaanderen`, `wallonie`…). |
+| `postal_code` | string | n/a | Filtre dur sur le code postal (4 chiffres). L'emporte sur tout code postal lu dans `q`, et ne se replie jamais sur un code postal voisin. |
+| `bbox` | string | n/a | Filtre dur : `min_lon,min_lat,max_lon,max_lat` (WGS84, ordre GeoJSON). Seulement les adresses dans le rectangle. |
+| `focus_point` | string | n/a | `"lat,lng"` WGS84 en Belgique. Re-classement doux : les candidats proches du point remontent. Demi-vie 25 km. |
 
 Donne soit `q`, soit les champs structurés, pas les deux.
 
@@ -117,7 +117,7 @@ Quand une requête peut se lire de plusieurs façons, le parseur essaie aussi le
 - `Rue du 11 Novembre` (pas d'autre nombre) : lu d'abord avec le numéro 11, puis avec `11` dans le nom de rue.
 - `Han-sur-Lesse 5580`, `Grand-Place 1000` : un nombre isolé à 4 chiffres est lu d'abord comme code postal, puis comme numéro.
 
-Les numéros ne tiennent pas compte de la casse (`32a` = `32A`). L'objet `query.parsed` de la réponse montre comment ta requête a été découpée — la première chose à regarder quand un résultat semble faux.
+Les numéros ne tiennent pas compte de la casse (`32a` = `32A`). L'objet `query.parsed` de la réponse montre comment ta requête a été découpée, la première chose à regarder quand un résultat semble faux.
 
 ### Fautes de frappe
 
@@ -165,7 +165,7 @@ q=Grand-Place 1000&lang=de   → "Grand-Place 2, 1000 Bruxelles"   (pas de nom a
 
 ### Noms de lieux : villages, hameaux, communes
 
-Une requête qui n'est qu'un nom de lieu — une commune, section de commune ou zone postale BeSt, ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap comme Maredsous — renvoie les adresses BeSt les plus proches de ce lieu. Un objet `locality` de premier niveau rappelle comment la requête a été comprise (`source: "best"` ou `"osm"`) ; il ne porte aucune position, et rien dans les features ne vient d'OpenStreetMap :
+Une requête qui n'est qu'un nom de lieu (une commune, section de commune ou zone postale BeSt, ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap comme Maredsous) renvoie les adresses BeSt les plus proches de ce lieu. Un objet `locality` de premier niveau rappelle comment la requête a été comprise (`source: "best"` ou `"osm"`) ; il ne porte aucune position, et rien dans les features ne vient d'OpenStreetMap :
 
 ```bash
 curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
@@ -274,7 +274,7 @@ curl "http://127.0.0.1:8080/geocode?q=Manneken+Pis&limit=1"
 }
 ```
 
-`confidence`, `fallback_reason` et `house_number_delta` ont exactement le même sens qu'en mode batch — voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md). Demander `Avenue Louise 33 1050`, par exemple, renvoie `Avenue Louise 59` avec `confidence=nearest_same_side`, `house_number_delta=26`.
+`confidence`, `fallback_reason` et `house_number_delta` ont exactement le même sens qu'en mode batch, voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md). Demander `Avenue Louise 33 1050`, par exemple, renvoie `Avenue Louise 59` avec `confidence=nearest_same_side`, `house_number_delta=26`.
 
 ### Comprendre `match_type`
 
@@ -290,7 +290,7 @@ Le `match_type` de premier niveau vaut `strict` si **au moins un** feature renvo
 
 ### Requêtes ambiguës
 
-`ambiguous` vaut `true` quand le deuxième résultat atteint au moins 90 % du score du premier **et** se trouve dans une autre rue ou une autre commune — typiquement un nom de rue présent dans beaucoup de communes, sans code postal. `score_gap` (`1 − score₂/score₁`, présent dès qu'il y a au moins deux résultats) indique à quel point c'était serré : `0` = égalité.
+`ambiguous` vaut `true` quand le deuxième résultat atteint au moins 90 % du score du premier **et** se trouve dans une autre rue ou une autre commune, typiquement un nom de rue présent dans beaucoup de communes, sans code postal. `score_gap` (`1 − score₂/score₁`, présent dès qu'il y a au moins deux résultats) indique à quel point c'était serré : `0` = égalité.
 
 ```
 q = Kerkstraat 1          → ambiguous=true,  score_gap=0.004
@@ -331,7 +331,7 @@ Tu obtiens un feature par ligne BeSt (jusqu'à `limit`), sans regroupement.
 
 Alternative plus propre : utiliser `/building/{id}/units` (plus bas) avec le `building_group_id` renvoyé par la première requête.
 
-## `GET /reverse` — coordonnées → adresses
+## `GET /reverse` : coordonnées → adresses
 
 Cas d'usage : un utilisateur clique sur une carte, tu veux l'adresse la plus proche.
 
@@ -347,7 +347,7 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8467&lng=4.3525&limit=1&lang=nl"
 | `lat` | float | obligatoire | Latitude WGS84 |
 | `lng` | float | obligatoire | Longitude WGS84 |
 | `limit` | int | `1` | Nombre max de résultats. Max 100. |
-| `radius_m` | float | — | Si fourni, écarte les résultats au-delà de `radius_m` mètres. |
+| `radius_m` | float | n/a | Si fourni, écarte les résultats au-delà de `radius_m` mètres. |
 | `lang` | string | langue de chaque adresse | Langue de `properties.label` (et de `interpolation.label`). |
 | `interpolate` | bool | `false` | `true` : estimer le numéro d'un point situé entre deux adresses connues (voir plus bas). |
 
@@ -392,7 +392,7 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&radius_m=50&limit=3"
 
 ### Estimer un numéro manquant : `interpolate=true`
 
-Il arrive que le point cliqué tombe entre deux adresses connues — une parcelle vide, un nouveau bâtiment que BeSt ne liste pas encore. Avec `interpolate=true`, la réponse reçoit en plus un objet `interpolation` de premier niveau qui estime le numéro que porterait ce point :
+Il arrive que le point cliqué tombe entre deux adresses connues (une parcelle vide, un nouveau bâtiment que BeSt ne liste pas encore). Avec `interpolate=true`, la réponse reçoit en plus un objet `interpolation` de premier niveau qui estime le numéro que porterait ce point :
 
 ```bash
 curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
@@ -420,9 +420,9 @@ curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
 - Et seulement si le point est plus proche de ce trou que de toute adresse existante : sinon la première feature est déjà la réponse, et `interpolation` est absent.
 - `label` suit `lang`, comme les labels des features.
 
-**C'est une estimation** : le numéro n'existe peut-être pas officiellement. Traite-le comme une approximation (comparable à `nearest_*`), jamais comme une adresse BeSt — il n'a ni `best_id` ni `building_group_id`.
+**C'est une estimation** : le numéro n'existe peut-être pas officiellement. Traite-le comme une approximation (comparable à `nearest_*`), jamais comme une adresse BeSt : il n'a ni `best_id` ni `building_group_id`.
 
-## `GET /building/{id}/units` — toutes les unités d'un bâtiment
+## `GET /building/{id}/units` : toutes les unités d'un bâtiment
 
 Cas d'usage : tu as un `building_group_id` (issu d'un appel `/geocode`) et tu veux lister toutes les boîtes du bâtiment. Pratique quand un utilisateur clique sur un marqueur de bâtiment.
 
@@ -436,7 +436,7 @@ curl "http://127.0.0.1:8080/building/${ENCODED}/units"
 
 Réponse : une `FeatureCollection` avec `building_group_id`, `count` et un feature par unité (chacun avec son `label`), triés par numéro de boîte (l'unité sans boîte en premier). Un identifiant inconnu renvoie `count: 0`.
 
-## `GET /lookup` — adresses par identifiant BeSt
+## `GET /lookup` : adresses par identifiant BeSt
 
 Tu as stocké des `best_id` (d'un batch ou de `properties.id`) et tu veux récupérer les adresses, sans chercher. Passe jusqu'à 50 identifiants séparés par des virgules ; `lang` fonctionne comme pour `/geocode`.
 
@@ -479,7 +479,7 @@ BeSt ne publie aucun lien « remplacée par » : le successeur est déduit des d
 
 Un `id` vide donne un 400 (`id is empty`), plus de 50 aussi (`too many ids: 51 (max 50)`).
 
-## `GET /validate` — vérifier une adresse
+## `GET /validate` : vérifier une adresse
 
 Tu as une adresse venant d'un formulaire ou d'un fichier client et tu veux savoir : existe-t-elle dans BeSt, et sinon exactement, quelle est l'adresse officielle ? `/validate` prend la même entrée que `/geocode` (`q`, ou `street` / `housenumber` / `box` / `postcode` / `city`, plus `lang` et `region`) et répond par un `status`, l'adresse BeSt officielle et la liste de ce qui diffère.
 
@@ -546,7 +546,7 @@ Tu as la position de l'utilisateur (navigateur, GPS, IP) : passer `focus_point=l
 
 ## CORS
 
-Le service répond avec `Access-Control-Allow-Origin: *` par défaut, donc un frontend JS dans un navigateur peut appeler l'API directement. Pour restreindre, démarre le service avec `--cors-origin https://app.example.org` (répétable). Pas d'authentification — pars toujours du principe que le service tourne en local ou derrière un reverse proxy de confiance.
+Le service répond avec `Access-Control-Allow-Origin: *` par défaut, donc un frontend JS dans un navigateur peut appeler l'API directement. Pour restreindre, démarre le service avec `--cors-origin https://app.example.org` (répétable). Il n'y a pas d'authentification : pars toujours du principe que le service tourne en local ou derrière un reverse proxy de confiance.
 
 ## Délais et charge
 

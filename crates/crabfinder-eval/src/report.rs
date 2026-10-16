@@ -124,7 +124,7 @@ fn detail_path_for(output_json: &Path) -> PathBuf {
 
 pub(crate) fn render_report_md(m: &Metrics, service_url: &str, n: usize) -> String {
     let mut s = String::new();
-    s.push_str("# crabfinder eval — single report\n\n");
+    s.push_str("# crabfinder eval: single report\n\n");
     s.push_str(&format!("- Service: `{service_url}`\n"));
     s.push_str(&format!("- Total queries: **{n}**\n"));
     s.push_str(&format!(
@@ -139,12 +139,12 @@ pub(crate) fn render_report_md(m: &Metrics, service_url: &str, n: usize) -> Stri
     s.push_str("\n## Latency (HTTP mode; under contention)\n\n");
     latency_table(&mut s, &m.latency);
     s.push_str(
-        "\n_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — \
+        "\n_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query; \
 significant on sub-3 ms strict queries, negligible on fuzzy. Measures \
 user-perceived end-to-end latency, not search-engine latency._\n",
     );
 
-    s.push_str("\n## §3.2 contract — cross_language_recall@1\n\n");
+    s.push_str("\n## §3.2 contract: cross_language_recall@1\n\n");
     s.push_str(&format!(
         "- Random samples (n={}): **{:.3}**\n",
         m.cross_language_n, m.cross_language_recall_at_1
@@ -163,7 +163,7 @@ user-perceived end-to-end latency, not search-engine latency._\n",
     s.push_str("\n## By street primary language\n\n");
     region_variant_table(&mut s, &m.by_language, "Language");
 
-    s.push_str("\n## Adversarial — by category\n\n");
+    s.push_str("\n## Adversarial: by category\n\n");
     region_variant_table(&mut s, &m.by_adversarial_category, "Category");
 
     if !m.alternatives.is_empty() {
@@ -184,7 +184,7 @@ user-perceived end-to-end latency, not search-engine latency._\n",
     }
 
     if !m.by_realworld_source.is_empty() {
-        s.push_str("\n## Real-world — by dataset\n\n");
+        s.push_str("\n## Real-world: by dataset\n\n");
         region_variant_table(&mut s, &m.by_realworld_source, "Dataset");
     }
 
@@ -312,16 +312,16 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
 
     let mut s = String::new();
     s.push_str(&format!(
-        "# Eval diff — `{}` → `{}`\n\n",
+        "# Eval diff: `{}` → `{}`\n\n",
         baseline_path.display(),
         current_path.display()
     ));
     s.push_str("_Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._\n\n");
 
-    s.push_str("## Overall (Tier A) — Δ\n\n");
+    s.push_str("## Overall (Tier A): Δ\n\n");
     bucket_diff_table(&mut s, &baseline.metrics.overall, &current.metrics.overall);
 
-    s.push_str("\n## §3.2 contract — cross_language_recall@1 — Δ\n\n");
+    s.push_str("\n## §3.2 contract: cross_language_recall@1: Δ\n\n");
     s.push_str(&format!(
         "| Pool | Baseline | Current | Δ |\n|---|---|---|---|\n\
 | random   (n={base_n}/{cur_n}) | {:.3} | {:.3} | {:+.3} |\n\
@@ -339,7 +339,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         cur_bn = current.metrics.cross_language_boosted_n,
     ));
 
-    s.push_str("\n## Latency — Δ\n\n");
+    s.push_str("\n## Latency: Δ\n\n");
     s.push_str("| | baseline | current | Δ |\n|---|---|---|---|\n");
     s.push_str(&format!(
         "| p50  | {:.1} ms | {:.1} ms | {:+.1} ms |\n",
@@ -360,7 +360,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         current.metrics.latency.p99_ms - baseline.metrics.latency.p99_ms
     ));
 
-    s.push_str("\n## By region — Δ\n\n");
+    s.push_str("\n## By region: Δ\n\n");
     map_diff_table(
         &mut s,
         &baseline.metrics.by_region,
@@ -368,7 +368,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         "Region",
     );
 
-    s.push_str("\n## By variant — Δ\n\n");
+    s.push_str("\n## By variant: Δ\n\n");
     map_diff_table(
         &mut s,
         &baseline.metrics.by_variant,
@@ -376,7 +376,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         "Variant",
     );
 
-    s.push_str("\n## Adversarial — by category — Δ\n\n");
+    s.push_str("\n## Adversarial: by category: Δ\n\n");
     map_diff_table(
         &mut s,
         &baseline.metrics.by_adversarial_category,
@@ -388,7 +388,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
         &baseline.metrics.by_realworld_source,
         &current.metrics.by_realworld_source,
     ) {
-        s.push_str("\n## Real-world — by dataset — Δ\n\n");
+        s.push_str("\n## Real-world: by dataset: Δ\n\n");
         map_diff_table(
             &mut s,
             &baseline.metrics.by_realworld_source,
@@ -398,7 +398,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
     }
 
     if baseline.metrics.distance.n + current.metrics.distance.n > 0 {
-        s.push_str("\n## Distance to the reference point — Δ\n\n");
+        s.push_str("\n## Distance to the reference point: Δ\n\n");
         s.push_str(&format!("| Report {DISTANCE_HEADER}\n"));
         s.push_str("|---|---|---|---|---|---|---|---|\n");
         s.push_str(&format!(
@@ -429,7 +429,7 @@ pub fn write_diff(baseline_path: &Path, current_path: &Path, output_md: &Path) -
     }
     if changes == 0 {
         s.push_str(
-            "_No state changes — all known_failure entries continue to behave as documented._\n",
+            "_No state changes; all known_failure entries continue to behave as documented._\n",
         );
     }
 

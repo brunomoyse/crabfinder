@@ -70,7 +70,8 @@ index dir/          Tantivy segments
 AppState::load      open index, check sidecar, build R-tree + address-count
                     index, load abbreviations / mid-street / localities
         │
-        ├── crabfinder-service  GET /geocode /reverse /building/{id}/units /health /metrics,
+        ├── crabfinder-service  GET /geocode /reverse /lookup /validate
+        │                       /building/{id}/units /health /metrics,
         │                       POST /batch/geocode
         ├── crabfinder-batch    CSV → CSV / GeoJSON
         └── crabfinder-eval     --batch-mode (in-process)
@@ -81,17 +82,17 @@ AppState::load      open index, check sidecar, build R-tree + address-count
 `crabfinder_indexer::meta::SCHEMA_VERSION` is **12**; every reader checks
 `.crab-meta.json` and refuses a mismatch. Recent bumps:
 
-- **v7** — `mid-street-v1.bin` side-file (lower-median house number per
+- **v7**: `mid-street-v1.bin` side-file (lower-median house number per
   street and postal code) for `Confidence::MedianStreet`.
-- **v8** — `house_number` raw field uppercased (`32a` → `32A`); OSM place
+- **v8**: `house_number` raw field uppercased (`32a` → `32A`); OSM place
   names in the payload (`Address::place_name`); `localities-v1.json`.
-- **v9** — positions BeSt publishes as Lambert `0 0` are imputed instead
+- **v9**: positions BeSt publishes as Lambert `0 0` are imputed instead
   of reprojected into France; `Address::position_source` + a FAST
   `position_source` field.
-- **v10** — raw `street_exact` field for the exact-name bonus.
-- **v11** — the OSM `Address::place_name` payload field (v8) is gone:
+- **v10**: raw `street_exact` field for the exact-name bonus.
+- **v11**: the OSM `Address::place_name` payload field (v8) is gone:
   addresses carry BeSt data only.
-- **v12** — raw `best_oid` field (the id without its version) and the
+- **v12**: raw `best_oid` field (the id without its version) and the
   `history-v1.json.gz` side-file. BeSt's `rejected` status (1,406
   Brussels addresses) is no longer misread as `current`, so those
   addresses are no longer searchable.
@@ -163,13 +164,13 @@ streamed, `PositionImputer` assigns, in order:
 `scripts/build_osm_places.py` extracts `place=village|hamlet|locality|
 isolated_dwelling` nodes. With `--places`, each address is matched to the
 nearest place within 3 km (village), 1.5 km (hamlet) or 1 km (locality,
-isolated dwelling), unless BeSt already names it — only to give the
+isolated dwelling), unless BeSt already names it, only to give the
 place its postal codes in the localities file; the address itself is
 left untouched.
 
 `localities-v1.json` (JSON) lists every name a query can mean without a
-street — municipalities, Walloon parts of municipality, Flemish postal
-areas, and with `--places` OSM places — with a centre (address mean, or
+street: municipalities, Walloon parts of municipality, Flemish postal
+areas, and with `--places` OSM places, with a centre (address mean, or
 the OSM node) and postal codes. Centres only steer the search; they are
 never returned. The service loads it into a name → localities map
 (exact and name-prefix lookup).
@@ -287,7 +288,7 @@ address count))`.
 Each tier over-fetches `limit × 20` (≤ 2000) rows, applies focus decay
 (`exp(-d/25 km)` for `focus_point`, `exp(-d/1 km)` around a locality
 centre), collapses by `building_group_id` (`dedup.rs`: max score, lowest box
-as representative — the resolver swaps in the unit with the requested
+as representative; the resolver swaps in the unit with the requested
 box), and hydrates the payload. `CandidateSet::ambiguity` flags near-ties (≥ 0.9) on different
 streets. `CandidateSet::municipality_groups` groups the candidates by NIS code
 in rank order (v3 Phase 11.3): `/geocode?alternatives=true` and the batch

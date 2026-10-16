@@ -83,7 +83,7 @@ Workarounds: drop the broken word and let the others do the work (`Louise 32 105
 
 ### Searching "Avenue Louise" without a PC returns noise
 
-Without `postal_code`, crabfinder can't disambiguate homonymous streets. "Avenue Louise" exists in Brussels, but also in Mons, Charleroi, Tournai, etc. Sorting is by BM25 + notability, so the Brussels Avenue Louise usually surfaces first (notability boost) — but it's a heuristic, not a guarantee.
+Without `postal_code`, crabfinder can't disambiguate homonymous streets. "Avenue Louise" exists in Brussels, but also in Mons, Charleroi, Tournai, etc. Sorting is by BM25 + notability, so the Brussels Avenue Louise usually surfaces first (notability boost), but it's a heuristic, not a guarantee.
 
 Workarounds:
 - Always supply `postal_code` when you have it.
@@ -135,7 +135,7 @@ Check, in order:
 
 ### `median_street` is very frequent in my output
 
-You have many rows without `house_number` — expected. If that's unintended (your data has numbers crabfinder doesn't recognize), inspect a few rows:
+You have many rows without `house_number`: expected. If that's unintended (your data has numbers crabfinder doesn't recognize), inspect a few rows:
 
 ```bash
 grep ',house_number_out_of_range,' geocoded.csv | head -20
@@ -166,7 +166,11 @@ Common in real files: the address sits right on a commune boundary, or someone t
 1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
 ```
 
-The postal code actually found is in `matched_postal_code`; compare it with your input to spot the rows to fix at the source. An exact match inside the given postal code always wins over the neighbour. If you'd rather never leave your postal code (`/geocode` only), pass it as the `postal_code=` filter instead of inside the query: that filter is strict and never relaxed. Details in [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune--found-next-door).
+The postal code actually found is in `matched_postal_code`; compare it with your input to spot the rows to fix at the source. An exact match inside the given postal code always wins over the neighbour. If you'd rather never leave your postal code (`/geocode` only), pass it as the `postal_code=` filter instead of inside the query: that filter is strict and never relaxed. Details in [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune-found-next-door).
+
+### A stored BeSt id no longer works
+
+BeSt versions its ids and retires addresses, so an id saved months ago may be out of date. Ask `GET /lookup?id=…` (or put the ids in a `best_id` column in batch): the `results` entry says whether the id is `current`, an `outdated_version` (same address, newer version: use `current_id`), `retired` / `reserved` / `rejected` (with the `successor` address when BeSt data points to one), or `unknown` (not in this BeSt dump at all). The successor is derived from BeSt's own data (same number and box, then same number, then standing within 5 m), so check the `rule` before trusting it. See [`04-online-search.md`](04-online-search.md#get-lookup-addresses-by-best-id).
 
 ## Multi-process and index sharing
 
@@ -217,7 +221,7 @@ No. crabfinder rebuilds the index in full at each refresh. ~1.5-3 min on a full 
 
 ### How much RAM does the service eat?
 
-At startup: peak ~3-4 GB (spatial R-tree build + address-count). In steady state: ~500 MB to 1 GB (mmap of the index — not really "consumed", OS page cache). The 6.9M-point R-tree adds ~400 MB of effective heap.
+At startup: peak ~3-4 GB (spatial R-tree build + address-count). In steady state: ~500 MB to 1 GB (mmap of the index, not really "consumed": OS page cache). The 6.9M-point R-tree adds ~400 MB of effective heap.
 
 ### How much RAM does the batch CLI eat?
 
@@ -255,11 +259,11 @@ RUST_LOG=info ./target/release/crabfinder-service ... 2>&1 \
   | jq -R '. as $line | try fromjson catch {raw: $line}'
 ```
 
-(No explicit flag at the moment; JSON format can be added via env var if needed — open an issue.)
+(No explicit flag at the moment; JSON format can be added via env var if needed; open an issue.)
 
 ### Monitoring
 
-Every request is logged at `info` with its status and latency. For dashboards and alerts, scrape `GET /metrics` (Prometheus format): request counts and latency per route, `503`s, and the outcome of every search by `confidence` — see [`04-online-search.md`](04-online-search.md#metrics). `--no-metrics` turns the endpoint off.
+Every request is logged at `info` with its status and latency. For dashboards and alerts, scrape `GET /metrics` (Prometheus format): request counts and latency per route, `503`s, and the outcome of every search by `confidence`, see [`04-online-search.md`](04-online-search.md#metrics). `--no-metrics` turns the endpoint off.
 
 ### The service answers `503`
 

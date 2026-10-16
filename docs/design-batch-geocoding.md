@@ -1,25 +1,33 @@
-# Design — batch geocoding pour crabfinder
+# Design: batch geocoding pour crabfinder
 
-Document de décision. Prérequis : avoir lu [`comparison-phacochr.md`](./comparison-phacochr.md) — beaucoup de choix ici se justifient par référence à ce qu'on y a appris.
+> **Statut (2026-10-16)** : document de décision d'origine, conservé tel quel (les sections §1 à §5 sont citées par le code). Le périmètre v1 a été livré, avec des écarts par rapport au texte ci-dessous :
+>
+> - Le cœur `resolve()` vit dans `crates/crabfinder-service/src/resolver.rs` (avec `search()`, `resolve_with`, `resolve_with_alternatives`, `resolve_by_id`) ; `/geocode` utilise `search()` directement (option A du §1.3). `Confidence` compte désormais dix valeurs : `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark`, `id`, `not_found` (`landmark` n'existe qu'avec `--pois`, aide OSM optionnelle qui ne fait qu'interpréter la requête : tout résultat reste une adresse BeSt).
+> - Le CLI est le crate `crabfinder-batch` (lib + `main.rs` mince), pair du service, pas un wrapper. Flags : `--index`, `--abbreviation-dict`, `--pois`, `-i/--input`, `-o/--output`, `--delimiter`, `--no-mid-street`, `--parallel`, `--format csv|geojson`, `--lang`, `--corrections`, `--alternatives`. Il peut tourner à côté d'un service sur le même index (lecture mmap partagée).
+> - L'endpoint HTTP `POST /batch/geocode` accepte JSON (max 10 000 adresses, sinon 413), multipart ou CSV brut ; corps limité à 50 MiB. La réponse n'est **pas** encore streamée incrémentalement : le premier octet part une fois le lot résolu (le streaming et la correction du délai `--batch-timeout-secs`, Phase 11.6, restent à faire). Les jobs batch asynchrones ne sont pas faits non plus.
+> - Entrées au-delà de la v1 : `id,address` (free text), `box_number`, `city`, `best_id` ; sorties : GeoJSON, colonnes `address`, `label`, `position_source`, `ambiguous`, `status`/`corrections` (Phase 11.2), `score_gap`/`alternatives` (Phase 11.3), `id_status`/`successor_best_id` (Phase 11.4). `street_match_score` est le score BM25 brut, pas le bucket 0 à 3 du §3.3 ; la calibration des seuils de confiance est écrite par `crabfinder-eval --batch-mode` (`crates/crabfinder-eval/data/confidence-thresholds-v1.json`).
+> - Le mid-street est une side-file `mid-street-v1.bin` (pas un champ FAST). Le schéma d'index est à la version **12** (`crates/crabfinder-indexer/src/meta.rs`) ; les « v6/v7 » cités plus bas sont historiques. Nearest-number (parité) et commune adjacente (post-v1 au §5) sont livrés. Voir `docs/architecture.md`, `docs/api.md` et `docs/en/` / `docs/fr/` pour l'état courant.
+
+Document de décision. Prérequis : avoir lu [`comparison-phacochr.md`](./comparison-phacochr.md), beaucoup de choix ici se justifient par référence à ce qu'on y a appris.
 
 Objectif : faire entrer un deuxième cas d'usage (batch d'une liste d'adresses → résultat enrichi) dans crabfinder, sans casser le cas d'usage actuel (recherche en ligne, query libre), sans introduire deux produits parallèles, et sans surcharger la v1.
 
-Trois questions produit étaient ouvertes — ce document propose des réponses :
+Trois questions produit étaient ouvertes, ce document propose des réponses :
 1. Quel(s) format(s) d'entrée batch accepter ?
 2. Quelles interfaces exposer (HTTP, CLI, les deux) ?
 3. Comment séparer batch et recherche tout en partageant la logique ?
 
 Réponses, dans l'ordre où elles deviennent les moins discutables : §1 (architecture cœur partagé) d'abord, parce qu'il rend les trois questions ci-dessus largement cosmétiques et réversibles. Puis §2 (formats), §3 (sortie), §4 (interfaces), §5 (scope v1).
 
-## 1. Architecture du cœur partagé — contrainte non négociable
+## 1. Architecture du cœur partagé: contrainte non négociable
 
 **Recommandation** : extraire un module pur `crabfinder_resolver` (intra-crate `crabfinder-service` ou nouveau crate `crabfinder-resolver`) qui prend une adresse **structurée** en entrée et rend une **décision unique** + un score de confiance décomposé. Aucune dépendance HTTP, aucune dépendance CLI, aucune connaissance de Tantivy au-delà de ce qui est strictement nécessaire pour exécuter la requête (et on rend ces accès paramétrables).
 
 Recherche en ligne (`/geocode`) et batch deviennent **deux consommateurs** de ce cœur :
-- `/geocode` ajoute le parsing free-text amont (`crabfinder-parser`) et la sérialisation GeoJSON aval — façade HTTP.
+- `/geocode` ajoute le parsing free-text amont (`crabfinder-parser`) et la sérialisation GeoJSON aval, façade HTTP.
 - Le batch alimente le cœur avec des lignes déjà structurées + sérialise en CSV/GeoJSON.
 
-C'est exactement le même pattern que `dedup.rs` et `spatial.rs` aujourd'hui : pure logic, signatures non-IO, testable en isolation. La preuve qu'on a déjà raison sur ce pattern est dans le code actuel — `dedup.rs:70` (`group_by_building`) est cité dans la doc d'architecture et fonctionne sans Tantivy ni HTTP.
+C'est exactement le même pattern que `dedup.rs` et `spatial.rs` aujourd'hui : pure logic, signatures non-IO, testable en isolation. La preuve qu'on a déjà raison sur ce pattern est dans le code actuel, `dedup.rs:70` (`group_by_building`) est cité dans la doc d'architecture et fonctionne sans Tantivy ni HTTP.
 
 ### 1.1 Signature proposée du cœur
 
@@ -66,7 +74,7 @@ pub enum FallbackReason {
     NoMatch,
 }
 
-/// Entrée principale du cœur. Pas de fonction async ici si on peut l'éviter —
+/// Entrée principale du cœur. Pas de fonction async ici si on peut l'éviter,
 /// le cœur reste synchrone, les façades gèrent l'async.
 pub fn resolve(
     query: &AddressQuery,
@@ -88,7 +96,7 @@ pub struct ResolverContext<'a> {
 
 - **In** : une requête structurée. Pour la recherche, `crabfinder-parser::parse(q)` produit aujourd'hui un `ParsedQuery` qui se mappe trivialement vers `AddressQuery` (deux ou trois champs identiques). Pour le batch, le caller construit directement l'`AddressQuery` (rue + CP en colonnes séparées → rien à parser).
 - **Out** : une `ResolvedAddress`. **Toujours une** : pas de `Vec`, pas de `Option<ResolvedAddress>`. Si zéro hit, on rend `Confidence::NotFound` + `address: None`. Cela évite à chaque consommateur de gérer la branche « rien trouvé » différemment.
-- **Pas de surcharge** : le cœur ne sait pas s'il sert un humain ou un CSV. Il ne fait pas de logging structuré HTTP. Il ne sait pas envoyer une réponse 200 ou 404 — c'est la façade qui mappe `Confidence::NotFound` vers le code HTTP qu'elle veut (200 avec liste vide pour recherche, ligne enrichie avec flag pour batch).
+- **Pas de surcharge** : le cœur ne sait pas s'il sert un humain ou un CSV. Il ne fait pas de logging structuré HTTP. Il ne sait pas envoyer une réponse 200 ou 404, c'est la façade qui mappe `Confidence::NotFound` vers le code HTTP qu'elle veut (200 avec liste vide pour recherche, ligne enrichie avec flag pour batch).
 
 ### 1.3 Comment `/geocode` (recherche) consomme ce cœur
 
@@ -118,17 +126,17 @@ Effort estimé : **2–4 jours** de refactor sans changer la sémantique externe
 Une fois `resolve()` posé comme cœur pur :
 - On peut commencer par un **endpoint HTTP batch** dans le même binaire `crabfinder-service` (façade très mince : reçoit JSON, appelle `resolve()` en boucle, renvoie CSV).
 - Si plus tard on veut un binaire batch séparé (pas de port HTTP, juste un CLI pur), on factorise le cœur dans un crate (déjà fait via le module), on ajoute un `crabfinder-batch` bin qui dépend du cœur, ne dépend pas du service HTTP.
-- Si on veut séparer les deux produits (deux index distincts, deux schemas), on duplique l'index — mais le cœur ne bouge pas.
+- Si on veut séparer les deux produits (deux index distincts, deux schemas), on duplique l'index, mais le cœur ne bouge pas.
 
 Aucune de ces évolutions n'oblige à refactorer `resolve()`. Le coût de réversibilité est faible parce que la frontière est tracée à l'endroit qui sépare réellement le domaine (résoudre une adresse) de la livraison (HTTP, CSV, mémoire).
 
-## 2. Formats d'entrée — recommandation priorisée
+## 2. Formats d'entrée: recommandation priorisée
 
-Le coût réel observé dans PhacochR : ~300 lignes de regex en `phaco_geocode.R:437-760` rien que pour le pré-nettoyage orthographique, plus ~200 lignes de regex de parsing pour les formats 2/3/5 (numéro-rue-CP intégrés). C'est un sous-projet en soi, et le code R est commenté comme « À FAIRE EN NL » à plusieurs endroits — même eux n'ont pas fini.
+Le coût réel observé dans PhacochR : ~300 lignes de regex en `phaco_geocode.R:437-760` rien que pour le pré-nettoyage orthographique, plus ~200 lignes de regex de parsing pour les formats 2/3/5 (numéro-rue-CP intégrés). C'est un sous-projet en soi, et le code R est commenté comme « À FAIRE EN NL » à plusieurs endroits, même eux n'ont pas fini.
 
 ### 2.1 Recommandation
 
-**v1 batch** : un seul format d'entrée — **colonnes propres séparées**.
+**v1 batch** : un seul format d'entrée, **colonnes propres séparées**.
 
 ```csv
 id,street,house_number,postal_code
@@ -140,7 +148,7 @@ id,street,house_number,postal_code
 
 Colonnes : `id` (libre, conservé tel quel dans la sortie), `street` (string libre, tokenisée par crabfinder côté résolveur), `house_number` (optionnel), `postal_code` (string 4 chiffres). Encodage UTF-8. Délimiteur : virgule par défaut, semicolon supporté (les exports BE Excel par défaut). Le header est obligatoire.
 
-C'est le format « idéal » selon PhacochR (« Situation idéale ! ») — eux l'ont adopté comme la cible principale, et leurs quatre autres formats sont des **best-effort de parsing** vers cette cible.
+C'est le format « idéal » selon PhacochR (« Situation idéale ! »), eux l'ont adopté comme la cible principale, et leurs quatre autres formats sont des **best-effort de parsing** vers cette cible.
 
 **v1.1 batch (à valider après v1)** : ajouter le support « rue+num+CP intégrés en un champ ».
 
@@ -168,7 +176,7 @@ Trois raisons de ne pas attaquer les colonnes sales en v1 :
 
 ### 2.3 Alternative écartée
 
-« Tout supporter dès la v1 (5 formats) ». Rejeté pour : (a) double le périmètre v1 avec un travail dont la qualité dépend de cas-tests qu'on n'a pas, (b) c'est ce qui a fait grossir PhacochR de 800 à 1343 lignes pour des gains incrémentaux modestes — leur fiabilité reste sur le format 1, le reste est best-effort, (c) on peut ajouter v1.1 + v1.2 plus tard sans casser v1.
+« Tout supporter dès la v1 (5 formats) ». Rejeté pour : (a) double le périmètre v1 avec un travail dont la qualité dépend de cas-tests qu'on n'a pas, (b) c'est ce qui a fait grossir PhacochR de 800 à 1343 lignes pour des gains incrémentaux modestes, leur fiabilité reste sur le format 1, le reste est best-effort, (c) on peut ajouter v1.1 + v1.2 plus tard sans casser v1.
 
 ### 2.4 Coût v1 (format unique)
 
@@ -190,7 +198,7 @@ Le seul vrai travail est : (a) lecture CSV (crate `csv` ou `serde_csv`), (b) val
 
 ### 3.1 Une décision par ligne
 
-Différence fondamentale avec la recherche : pas de top-N. **Exactement une ligne de sortie par ligne d'entrée**, indépendamment du résultat (trouvé / approximé / pas trouvé). C'est le contrat PhacochR (`phaco_geocode.R:1148-1154` : `MISSING` ré-injecté pour garantir rowcount input == rowcount output) — pas une coïncidence, c'est ce qui rend la sortie utilisable pour un join SQL ou un mapping spatial.
+Différence fondamentale avec la recherche : pas de top-N. **Exactement une ligne de sortie par ligne d'entrée**, indépendamment du résultat (trouvé / approximé / pas trouvé). C'est le contrat PhacochR (`phaco_geocode.R:1148-1154` : `MISSING` ré-injecté pour garantir rowcount input == rowcount output), pas une coïncidence, c'est ce qui rend la sortie utilisable pour un join SQL ou un mapping spatial.
 
 ### 3.2 Schéma de sortie CSV
 
@@ -206,7 +214,7 @@ Détails :
 
 - `id` : passé tel quel. Indispensable pour que l'utilisateur réassocie avec son DB d'origine.
 - `street/house_number/postal_code` : recopiés de l'entrée (audit trail).
-- `matched_*` : ce que crabfinder a effectivement matché. Permet d'auditer les divergences (CP réécrit en cas d'élargissement commune adjacente — pour quand on l'implémentera ; rue détectée différente de la rue d'entrée — pour les cas fuzzy).
+- `matched_*` : ce que crabfinder a effectivement matché. Permet d'auditer les divergences (CP réécrit en cas d'élargissement commune adjacente, pour quand on l'implémentera ; rue détectée différente de la rue d'entrée, pour les cas fuzzy).
 - `lat,lng` : WGS84. Pas de Lambert 72 par défaut (différent de PhacochR qui sort `x_31370/y_31370`). On peut ajouter une option `--coords lambert72|wgs84` plus tard. Belge ou pas, WGS84 reste la convention web.
 - `confidence` : une des sept valeurs énumérées en §1.1, en lowercase string (`exact`, `nearest_same_side`, …, `not_found`).
 - `fallback_reason` : optionnel, vide si `confidence == exact`. Sinon une étiquette courte (`house_number_missing`, `street_spelling_fuzzy`, etc.).
@@ -215,7 +223,7 @@ Détails :
 - `building_group_id` : pour l'utilisateur qui veut dédupliquer côté aval ou faire son propre groupement.
 - `best_id` : l'identifiant officiel BeSt de l'adresse retenue (`namespace/oid/version`). Pour audit et liens vers OpenData BeSt.
 
-### 3.3 Quel score de confiance émettre — discussion
+### 3.3 Quel score de confiance émettre: discussion
 
 PhacochR émet `dist_fuzzy` (entier 0–error_max, sémantique LCS edit-distance). Lisible mais discret et propre à leur méthode. crabfinder a BM25 (réel, échelle non bornée, dépend de la longueur du document).
 
@@ -227,7 +235,7 @@ Trois options :
 
 **C. Bucketiser**. Sortir un entier ∈ {0, 1, 2, 3} où 0 = strict-match-top, 3 = fuzzy-bottom. Seuils empiriques calibrés sur l'eval crabfinder existante (`crabfinder-eval`). Simple à expliquer (« mon CSV a 12k lignes avec confidence=3, je les inspecte »).
 
-**Recommandation : C**. La valeur de la confiance batch n'est pas qu'elle soit théoriquement informative, c'est qu'elle soit **actionnable par un humain qui trie un CSV**. Quatre buckets suffisent. Les seuils sont une donnée externe (config), pas une décision figée — on peut les retoucher post-déploiement sans casser le schéma.
+**Recommandation : C**. La valeur de la confiance batch n'est pas qu'elle soit théoriquement informative, c'est qu'elle soit **actionnable par un humain qui trie un CSV**. Quatre buckets suffisent. Les seuils sont une donnée externe (config), pas une décision figée, on peut les retoucher post-déploiement sans casser le schéma.
 
 ### 3.4 Comportement sur zéro hit
 
@@ -249,7 +257,7 @@ Implémentation : index `(street_lower, house_number, postal_code) → ResolvedA
 
 **Pas en v1** : Parquet, Excel. Le premier n'apporte rien qu'un consommateur ne puisse faire lui-même via `csv → parquet` ; le second n'est pas un format standard et alourdit la dépendance.
 
-## 4. Les deux interfaces — HTTP et CLI
+## 4. Les deux interfaces: HTTP et CLI
 
 Le briefing dit « endpoint HTTP ET CLI sont tous deux voulus ». OK. Ce sont **deux façades minces sur le cœur §1**. Aucune logique de domaine spécifique à l'une ou à l'autre.
 
@@ -290,7 +298,7 @@ $ crabfinder-batch \
 
 Pas de port HTTP. Le binaire ouvre l'index Tantivy en lecture seule, instancie le résolveur, parcourt le CSV, écrit le résultat. Une commande, un fichier, un résultat.
 
-Subtilité : le CLI **ouvre l'index lui-même**, il ne contacte pas un service HTTP qui tournerait à côté. Conséquence : `crabfinder-batch` peut tourner sans `crabfinder-service` actif, mais ne peut pas tourner si `crabfinder-service` détient un lock exclusif sur l'index. (Tantivy supporte la lecture multi-process sur le même index — ce devrait être OK, à vérifier sur la version en usage.)
+Subtilité : le CLI **ouvre l'index lui-même**, il ne contacte pas un service HTTP qui tournerait à côté. Conséquence : `crabfinder-batch` peut tourner sans `crabfinder-service` actif, mais ne peut pas tourner si `crabfinder-service` détient un lock exclusif sur l'index. (Tantivy supporte la lecture multi-process sur le même index, ce devrait être OK, à vérifier sur la version en usage.)
 
 Avantage : pas de couche réseau, pas d'auth, pas de cap port. Idéal pour les pipelines de data engineering.
 
@@ -304,9 +312,9 @@ Les deux façades font littéralement :
 4. Émettre la ligne de sortie (HTTP stream / CSV file).
 ```
 
-L'étape 3 est strictement identique. Les étapes 1, 2, 4 diffèrent uniquement par la source/destination des bytes — c'est l'ABC d'une façade.
+L'étape 3 est strictement identique. Les étapes 1, 2, 4 diffèrent uniquement par la source/destination des bytes, c'est l'ABC d'une façade.
 
-### 4.4 Streaming vs lots — seuil
+### 4.4 Streaming vs lots: seuil
 
 **Question** : pour 100k lignes, faut-il bash tout en mémoire, batcher par paquets, ou streamer ligne à ligne ?
 

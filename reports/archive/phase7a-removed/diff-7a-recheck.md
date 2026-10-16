@@ -1,8 +1,8 @@
-# Eval diff — `reports/mvp-v1-baseline.json` → `reports/post-7a-recheck.json`
+# Eval diff: `reports/mvp-v1-baseline.json` → `reports/post-7a-recheck.json`
 
 _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
-## Overall (Tier A) — Δ
+## Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -14,14 +14,14 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | strict_match_rate | 0.995 | 0.997 | +0.002 |
 | n | 2705 | 2610 | -95 |
 
-## §3.2 contract — cross_language_recall@1 — Δ
+## §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=121/111) | 0.992 | 1.000 | +0.008 |
 | boosted  (n=200/200) | 0.980 | 0.985 | +0.005 |
 
-## Latency — Δ
+## Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -29,7 +29,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | p95  | 5.6 ms | 57.8 ms | +52.2 ms |
 | p99  | 9.4 ms | 84.5 ms | +75.1 ms |
 
-## By region — Δ
+## By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | BE-VLG | 1388/1388 | 0.929/0.929 (+0.000) | 0.950/0.950 (-0.001) | 0.999/0.999 (+0.000) |
 | BE-WAL | 730/730 | 0.936/0.940 (+0.004) | 0.952/0.958 (+0.005) | 0.997/0.997 (+0.000) |
 
-## By variant — Δ
+## By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -48,7 +48,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | minimal | 500/500 | 0.750/0.754 (+0.004) | 0.814/0.819 (+0.005) | 1.000/1.000 (+0.000) |
 | with_postal | 500/500 | 0.998/0.998 (+0.000) | 0.998/0.998 (+0.000) | 1.000/1.000 (+0.000) |
 
-## Adversarial — by category — Δ
+## Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -61,4 +61,4 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
 ## Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._

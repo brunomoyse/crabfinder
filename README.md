@@ -22,45 +22,52 @@ GET /geocode?q=Rue de la Loi 16 bte 3, B-1000 Bruxelles
 GET /geocode?street=Grote Markt&housenumber=1&city=Antwerpen&lang=nl
 GET /reverse?lat=50.8466&lng=4.3525&lang=de
 GET /lookup?id=https://databrussels.be/id/address/210225/1
+GET /validate?street=Av Louise&housenumber=32&postcode=1000&city=Ixelles
 POST /batch/geocode            (CSV in, CSV or GeoJSON out)
 ```
 
 What it handles:
 
-- **Belgian address formats** — `B-1050`, `1050-Ixelles`, box numbers
+- **Belgian address formats**: `B-1050`, `1050-Ixelles`, box numbers
   (`bte`, `bus`, `box`, `12/3`), ranges (`12-14`), 4-digit house numbers
   (`Chaussée de Waterloo 1357 1180 Uccle`), streets with numbers in their
   name (`Rue du 11 Novembre 5`).
-- **Cross-language queries** — FR/NL/DE names are interchangeable
+- **Cross-language queries**: FR/NL/DE names are interchangeable
   (`Anvers Grote Markt`, `Wetstraat 16 Bruxelles`).
-- **Typos** — edit-distance matching on unknown street words
+- **Typos**: edit-distance matching on unknown street words
   (`Avenue Loiuse 32`).
-- **Missing house numbers** — the nearest existing number on the same
+- **Missing house numbers**: the nearest existing number on the same
   side of the street, else the street itself, with an explicit
   `confidence` and `house_number_delta`.
-- **Wrong postal codes** — when nothing matches inside the given code,
+- **Wrong postal codes**: when nothing matches inside the given code,
   the address is found next door (`Avenue Louise 54 1000` → Avenue Louise
   54, 1050) and flagged `adjacent_commune`.
-- **Exact names first** — `Markt` is Bruges' Markt, not every Grote
+- **Exact names first**: `Markt` is Bruges' Markt, not every Grote
   Markt; `Grand-Place` is Brussels.
-- **Municipalities and villages** — a query naming only a place
+- **Municipalities and villages**: a query naming only a place
   (`Spontin`, `Celles Houyet`, `Han-sur-Lesse 5580`) returns the BeSt
   addresses at its centre, flagged `confidence: locality`. Optional
   OpenStreetMap helpers (off by default) extend the names understood to
   hamlets (`--places`: `Maredsous`) and landmarks (`--pois`: `Manneken
   Pis`, `Gare du Midi`, `Gravensteen Gent`).
-- **Reverse interpolation** — `/reverse?interpolate=true` estimates the
+- **Reverse interpolation**: `/reverse?interpolate=true` estimates the
   house number of a point lying between two known numbers of a street.
-- **Positions for every address** — the ~140k Walloon addresses BeSt
+- **Positions for every address**: the ~140k Walloon addresses BeSt
   ships without coordinates are imputed (same number, interpolation,
   locality centroid) and flagged with `position_source`.
-- **Old ids still resolve** — `/lookup` and the batch `best_id` column
+- **Old ids still resolve**: `/lookup` and the batch `best_id` column
   accept ids with or without version, from any earlier dump. A retired
   address leads to the current BeSt address that took its place: same
   number and box, same number, or the same position within 5 m.
-- **Labels in any language** — `lang=fr|nl|de` and a ready-to-print
+- **Validation**: `/validate` and the batch `corrections` columns compare
+  an input with the BeSt address it resolves to and say what differs
+  (postal code, spelling, box, ...).
+- **Which one?**: for an ambiguous query (a street and number without a
+  municipality), `/geocode?alternatives=true` adds the best answer of
+  each municipality, so a UI can offer one option per place.
+- **Labels in any language**: `lang=fr|nl|de` and a ready-to-print
   `label` on every result.
-- **Operations** — request deadlines, a concurrency limit, CORS,
+- **Operations**: request deadlines, a concurrency limit, CORS,
   Prometheus `/metrics`, and a one-command BeSt refresh.
 
 ## Quick start
@@ -68,7 +75,7 @@ What it handles:
 Requires Rust 1.90+ and ~3 GB free disk.
 
 ```bash
-# 1. Build everything (release mode — debug is too slow for Tantivy)
+# 1. Build everything (release mode: debug is too slow for Tantivy)
 cargo build --release
 
 # 2. Download BeSt, build index-<date>, validate it, point index-current at it
@@ -85,7 +92,7 @@ curl "http://127.0.0.1:8080/health"
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000+Bruxelles&limit=3"
 curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&limit=1"
 
-# 5. Batch a CSV (id,street,house_number,postal_code — or id,address)
+# 5. Batch a CSV (`id,street,house_number,postal_code` or `id,address`)
 ./target/release/crabfinder-batch --index ./index-current -i in.csv -o out.csv
 ```
 
@@ -143,17 +150,44 @@ which BeSt addresses a hamlet or landmark name leads to.
 
 Latency is HTTP loopback, 8 concurrent clients. The `minimal` variant
 (street + number, no postal code or municipality: 0.792) is bounded by
-genuine ambiguity — most Belgian street names exist in several
+genuine ambiguity: most Belgian street names exist in several
 municipalities.
 
 Run an eval yourself: see [`docs/eval.md`](docs/eval.md).
+
+### Benchmark against other geocoders
+
+`crabfinder-eval --benchmark` sends the same queries to other Belgian
+geocoders and scores the distance of each top-1 to a reference point
+([`reports/benchmark-2026-10-16.md`](reports/benchmark-2026-10-16.md)).
+The fair comparison is the real-world set: 1,510 addresses from public
+open-data lists (schools, pharmacies, post offices, shops, care
+facilities), each with the publisher's own coordinate, which is often an
+entrance rather than the BeSt point. Share of top-1 answers within 100 m:
+
+| Geocoder | Covers | Within 100 m |
+|---|---|---|
+| crabfinder | Belgium (1,510 queries) | **0.929** |
+| PhacochR | Belgium (1,510) | 0.907 |
+| NGI-IGN national geocoder (`geosearch.ngi.be`) | Belgium (1,510) | 0.836 |
+| Brussels regional geocoder | Brussels (496) | 0.925 |
+| Wallonia regional geocoder (SPW) | Wallonia (550) | 0.847 |
+| Flemish Geolocation API | Flanders + Brussels (960) | 0.505 |
+
+Regional services are only asked the queries in their region, so compare
+them to crabfinder within that region: Brussels 0.935, Wallonia 0.885,
+Flanders 0.974 (Flemish API 0.963 there; its low overall figure comes
+from French-language Brussels addresses it barely covers). The synthetic
+and adversarial sets come from BeSt and from crabfinder's own failure
+history, so they favour crabfinder and are not a fair comparison. BePelias
+is not benchmarked yet. Competitor answers are only compared, never used.
 
 ## Docs
 
 User-facing guides (install, run, batch, troubleshoot):
 
-- [docs/en/](docs/en/README.md) — English
-- [docs/fr/](docs/fr/README.md) — Français
+- [docs/en/](docs/en/README.md): English
+- [docs/fr/](docs/fr/README.md): Français
 
 Technical references:
 
@@ -165,15 +199,15 @@ Technical references:
 
 ## Inputs
 
-- **BeSt zip bundle** — the federal Belgian address dataset, downloaded
+- **BeSt zip bundle**: the federal Belgian address dataset, downloaded
   by `scripts/refresh_best.sh` (or drop the `*Address*.zip`,
   `Municipality*`, `PostalInfo*`, `StreetName*`, `PartOfMunicipality*`
   zips into one directory and pass `--best-dir`).
-- **Notability whitelist** (`data/notability-whitelist-v1.yaml`) — a
+- **Notability whitelist** (`data/notability-whitelist-v1.yaml`): a
   curated `building_group_id → multiplier` map that lifts iconic
   toponyms (Grand-Place, Atomium, …) above look-alikes elsewhere.
-- **Abbreviation dictionary** (`data/street-type-abbreviations-v1.yaml`)
-  — expands user-typed abbreviations at query time
+- **Abbreviation dictionary** (`data/street-type-abbreviations-v1.yaml`):
+  expands user-typed abbreviations at query time
   (`Av. Louise` → `Avenue Louise`, `Stationsstr.` → `Stationsstraat`).
 
 Both are optional; without them the engine still runs, with lower
@@ -182,10 +216,10 @@ scores on notability-sensitive and abbreviated queries.
 Optional OpenStreetMap helpers, off by default. They are never a source
 of results, only of query understanding:
 
-- **OSM places** (`data/osm-places-be-v1.csv`, indexer `--places`) —
+- **OSM places** (`data/osm-places-be-v1.csv`, indexer `--places`):
   hamlet and village names (`scripts/build_osm_places.py`), so
   `Maredsous` finds the BeSt addresses of that hamlet.
-- **OSM landmarks** (`data/osm-pois-be-v1.csv`, service `--pois`) —
+- **OSM landmarks** (`data/osm-pois-be-v1.csv`, service `--pois`):
   ~5,000 sights, stations, castles, town halls… with a Wikidata entry
   (`scripts/build_osm_pois.py`), so `Manneken Pis` finds the BeSt
   addresses next to it. Loaded at startup, no reindex needed.

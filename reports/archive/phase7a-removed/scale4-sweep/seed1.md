@@ -1,4 +1,4 @@
-# crabfinder eval — single report
+# crabfinder eval: single report
 
 - Service: `http://127.0.0.1:8080`
 - Total queries: **23063**
@@ -23,9 +23,9 @@
 |---|---|---|---|---|---|---|
 | ms | 23063 | 2.7 | 71.2 | 85.8 | 8.4 | 250.6 |
 
-_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
+_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query; significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
 
-## §3.2 contract — cross_language_recall@1
+## §3.2 contract: cross_language_recall@1
 
 - Random samples (n=433): **0.986**
 - Boosted samples (n=800): **0.988**
@@ -57,7 +57,7 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 | fr | 2818 | 0.936 | 0.974 | 0.936 | 0.953 | 0.999 |
 | nl | 7522 | 0.937 | 0.977 | 0.937 | 0.955 | 0.997 |
 
-## Adversarial — by category
+## Adversarial: by category
 
 | Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
 |---|---|---|---|---|---|---|
@@ -68,7 +68,7 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 | notability | 30 | 0.200 | 0.567 | 0.933 | 0.383 | 1.000 |
 | special_chars | 10 | 0.800 | 1.000 | 0.800 | 0.900 | 0.900 |
 
-## Autocomplete — prefix metrics (Phase 7a)
+## Autocomplete: prefix metrics (Phase 7a)
 
 ### Overall
 

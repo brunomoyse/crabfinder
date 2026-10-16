@@ -19,7 +19,7 @@ Ajoute deux contrôles à chacun de ces cas : les lignes avec `ambiguous=true` m
 
 ## La taxonomie `confidence`
 
-Neuf valeurs, de la plus forte à la plus faible.
+Dix valeurs, de la plus forte à la plus faible.
 
 | `confidence` | Précision spatiale | En bref |
 |---|---|---|
@@ -31,9 +31,10 @@ Neuf valeurs, de la plus forte à la plus faible.
 | `landmark` | rue (adresse BeSt à côté du point d'intérêt) | La requête ne nomme qu'un point d'intérêt (`--pois` facultatif). |
 | `locality` | village / commune (adresse BeSt la plus proche du lieu) | La requête ne nomme qu'un lieu. |
 | `adjacent_commune` | bâtiment ou rue | Rien ne correspond dans le code postal donné ; trouvé juste de l'autre côté de sa limite. |
+| `id` | bâtiment | Trouvé par identifiant BeSt (colonne batch `best_id`), tel quel ou via son successeur. |
 | `not_found` | aucune | Rien de plausible. |
 
-### `exact` — match parfait
+### `exact` : match parfait
 
 Le numéro exact a été trouvé dans BeSt, dans la rue donnée, au code postal donné.
 
@@ -47,9 +48,9 @@ trouvé :  Avenue Louise 32, 1050 Ixelles   lat=50.83451 lng=4.35670
 
 **Action** : à utiliser tel quel.
 
-### `nearest_same_side` / `nearest_any_side` — un numéro voisin
+### `nearest_same_side` / `nearest_any_side` : un numéro voisin
 
-La rue a été trouvée mais le numéro demandé n'y existe pas (à ce code postal). crabfinder renvoie le **numéro existant le plus proche du même côté de la rue** (même parité : impair avec impair, pair avec pair) — comme le ferait un facteur. Si ce côté n'a pas de numéro assez proche, il prend le plus proche de l'autre côté (`nearest_any_side`). En cas d'égalité, le plus petit numéro gagne. Les suffixes alphabétiques sont ignorés pour la distance (`34B` compte comme 34).
+La rue a été trouvée mais le numéro demandé n'y existe pas (à ce code postal). crabfinder renvoie le **numéro existant le plus proche du même côté de la rue** (même parité : impair avec impair, pair avec pair), comme le ferait un facteur. Si ce côté n'a pas de numéro assez proche, il prend le plus proche de l'autre côté (`nearest_any_side`). En cas d'égalité, le plus petit numéro gagne. Les suffixes alphabétiques sont ignorés pour la distance (`34B` compte comme 34).
 
 ```
 entrée :  Avenue Louise 33 1050
@@ -63,7 +64,7 @@ trouvé :  Avenue Louise 59, 1050 Bruxelles   lat=50.83310 lng=4.35728
 
 **Action** : coordonnées au bâtiment d'une vraie adresse voisine. Convient pour une carte quand `|house_number_delta|` est petit ; vérifie les grands écarts.
 
-### `median_street` — centroïde de rue
+### `median_street` : centroïde de rue
 
 Pas de numéro utilisable : absent de l'entrée, ou trop loin de tous les numéros existants. crabfinder renvoie un **point représentatif de la rue** : le bâtiment dont le numéro se situe à la médiane des numéros existants pour cette rue et ce code postal.
 
@@ -75,7 +76,7 @@ trouvé :  Grand-Place 2, 1000 Bruxelles   lat=50.84623 lng=4.35301
           house_number_delta = (vide)
 ```
 
-**Précision spatiale** : **à la rue**, pas au bâtiment. L'écart peut être de quelques mètres sur une rue courte, ou de plusieurs centaines de mètres sur une rue longue. Pour une agrégation par quartier, généralement acceptable. Pour placer précisément un marqueur sur une carte, c'est trompeur — au minimum, affiche-le avec une autre icône.
+**Précision spatiale** : **à la rue**, pas au bâtiment. L'écart peut être de quelques mètres sur une rue courte, ou de plusieurs centaines de mètres sur une rue longue. Pour une agrégation par quartier, généralement acceptable. Pour placer précisément un marqueur sur une carte, c'est trompeur ; au minimum, affiche-le avec une autre icône.
 
 Deux `fallback_reason` possibles :
 
@@ -84,7 +85,7 @@ Deux `fallback_reason` possibles :
 
 **Action** : utilisable pour des agrégats spatiaux, à éviter pour une analyse au bâtiment. En batch, si tu préfères ne pas avoir de point du tout, tu peux désactiver ce repli (`--no-mid-street` / `mid_street_fallback=false`) ; la ligne devient alors `not_found`.
 
-### `fuzzy_street` — rue trouvée approximativement
+### `fuzzy_street` : rue trouvée approximativement
 
 Le nom de rue n'a pas été trouvé tel quel. Deux mécanismes le produisent :
 
@@ -103,11 +104,11 @@ trouvé :  Avenue Louise 32, 1050 Ixelles   lat=50.83451 lng=4.35670
 
 **Action** : à vérifier, surtout en `match_type=fuzzy`. Compare `matched_street` avec ton entrée ; un `street_match_score` bas (sous ~10) suggère un faux positif.
 
-### `locality` — l'adresse BeSt la plus proche d'un lieu
+### `locality` : l'adresse BeSt la plus proche d'un lieu
 
-La requête ne nommait qu'un lieu — une commune, section de commune ou zone postale BeSt (« Spontin », « Han-sur-Lesse 5580 »), ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap (« Maredsous »). Aucune rue n'était demandée : crabfinder renvoie donc **l'adresse BeSt la plus proche du lieu**, à sa propre position BeSt.
+La requête ne nommait qu'un lieu (une commune, section de commune ou zone postale BeSt comme « Spontin » ou « Han-sur-Lesse 5580 », ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap comme « Maredsous »). Aucune rue n'était demandée : crabfinder renvoie donc **l'adresse BeSt la plus proche du lieu**, à sa propre position BeSt.
 
-- Batch : une ligne BeSt normale — rue, numéro, `best_id`, `building_group_id`, label et position viennent tous de BeSt. Seul `confidence=locality` t'indique qu'elle n'a pas été demandée par sa rue.
+- Batch : une ligne BeSt normale : rue, numéro, `best_id`, `building_group_id`, label et position viennent tous de BeSt. Seul `confidence=locality` t'indique qu'elle n'a pas été demandée par sa rue.
 - `/geocode` : les features sont les adresses BeSt les plus proches du lieu (`match_type=spatial`) ; l'objet `locality` de premier niveau rappelle seulement comment la requête a été comprise (type, noms, codes postaux, `source: best` ou `osm`), sans position.
 
 ```
@@ -119,9 +120,9 @@ trouvé :  Chaussée de Dinant 47, 5530 Yvoir   (une adresse BeSt de Spontin)
 
 **Action** : l'adresse est réelle, mais elle représente le lieu : traite-la comme une précision au village (de quelques centaines de mètres à quelques km). Bien pour savoir « quelle commune », pas pour une livraison.
 
-### `landmark` — l'adresse BeSt la plus proche d'un point d'intérêt
+### `landmark` : l'adresse BeSt la plus proche d'un point d'intérêt
 
-Avec l'aide facultative `--pois`, la requête ne nommait qu'un point d'intérêt OpenStreetMap — site touristique, château, monument, gare, aéroport, hôtel de ville, musée, parc ou église (« Manneken Pis », « Gare du Midi », « Gravensteen Gent »). Une rue du même nom passe avant (`Atomium` → Avenue de l'Atomium, `median_street`). Le point d'intérêt sert seulement à savoir où chercher : la réponse est **l'adresse BeSt la plus proche** (dans un rayon de 600 m), et ni le nom ni la position du point d'intérêt ne sont jamais renvoyés.
+Avec l'aide facultative `--pois`, la requête ne nommait qu'un point d'intérêt OpenStreetMap (site touristique, château, monument, gare, aéroport, hôtel de ville, musée, parc ou église, comme « Manneken Pis », « Gare du Midi » ou « Gravensteen Gent »). Une rue du même nom passe avant (`Atomium` → Avenue de l'Atomium, `median_street`). Le point d'intérêt sert seulement à savoir où chercher : la réponse est **l'adresse BeSt la plus proche** (dans un rayon de 600 m), et ni le nom ni la position du point d'intérêt ne sont jamais renvoyés.
 
 - Batch : une ligne BeSt normale (rue, numéro, identifiants, label, position), avec `confidence=landmark`.
 - `/geocode` : les features sont les adresses BeSt les plus proches du point d'intérêt (`match_type=spatial`) ; le rappel `locality` de premier niveau est de type `landmark`, `source: osm`, sans position.
@@ -133,9 +134,9 @@ trouvé :  Rue du Chêne 2, 1000 Bruxelles   (l'adresse BeSt juste à côté)
           fallback_reason = street_missing
 ```
 
-**Action** : une adresse réelle à quelques dizaines de mètres du monument — bien sur une carte, mais ce n'est pas l'adresse du monument lui-même : à vérifier avant une livraison. Pour les grands sites (un parc, un aéroport), l'adresse renvoyée peut être à plusieurs centaines de mètres.
+**Action** : une adresse réelle à quelques dizaines de mètres du monument : bien sur une carte, mais ce n'est pas l'adresse du monument lui-même : à vérifier avant une livraison. Pour les grands sites (un parc, un aéroport), l'adresse renvoyée peut être à plusieurs centaines de mètres.
 
-### `not_found` — aucune coordonnée
+### `not_found` : aucune coordonnée
 
 Rien de plausible n'a été trouvé. La ligne sort avec des `lat/lng/matched_*` vides, `confidence = not_found`, `fallback_reason = no_match`.
 
@@ -151,9 +152,9 @@ trouvé :  (rien)
 - Mauvais code postal *et* la rue n'existe pas non plus dans les 20 km autour du centre de ce CP (une rue proche donne `adjacent_commune`).
 - Adresse récente pas encore dans le dump BeSt (mise à jour nécessaire).
 - Adresse hors de Belgique.
-- Adresse retirée (seules les adresses BeSt en vigueur sont indexées).
+- Adresse retirée (seules les adresses BeSt en vigueur sont indexées pour la recherche par texte ; si tu as gardé son `best_id`, `/lookup` ou la colonne batch `best_id` peut encore retrouver son successeur).
 
-### `adjacent_commune` — trouvé à côté
+### `adjacent_commune` : trouvé à côté
 
 Le code postal fourni ne contient pas l'adresse, mais un code voisin oui. C'est l'erreur de saisie la plus courante : le code postal de la commune d'à côté, ou de l'autre moitié d'une rue qui traverse une limite.
 
@@ -182,6 +183,14 @@ trouvé :  Kerkstraat 1, 9050 Gentbrugge/Ledeberg
 
 **Action** : généralement juste, mais compare `matched_postal_code` à ton entrée ; si tes codes postaux sont fiables et tes noms de rue pas, traite-le comme `fuzzy_street`. En ligne, `/geocode?postal_code=…` est un filtre strict et ne se replie jamais ainsi ; le code postal dans `q`, le paramètre structuré `postcode` et la colonne batch `postal_code` font partie de l'adresse et se replient.
 
+### `id` : trouvé par identifiant BeSt
+
+Uniquement en batch, quand l'entrée a une colonne `best_id` (voir [`03-batch.md`](03-batch.md#anciens-identifiants-best--best_id)). L'identifiant est recherché directement, à la position BeSt propre de l'adresse, avec un `fallback_reason` vide. C'est l'adresse elle-même (`current`, ou `outdated_version` sous une version plus récente) ou, pour un identifiant `retired` / `reserved` / `rejected`, l'adresse en vigueur qui a pris sa place (le `successor`). Les colonnes supplémentaires `id_status` et `successor_best_id` indiquent lequel. Un identifiant qui ne mène nulle part donne `not_found`.
+
+**Action** : quand l'identifiant est `current` ou `outdated_version`, c'est la même adresse. Quand on passe par un successeur, regarde la règle : `same_number_box` et `same_number` sont très probablement le même endroit renuméroté ou réenregistré, `same_position` (à moins de 5 m) est une bonne hypothèse mais pas une certitude.
+
+L'équivalent en ligne est `GET /lookup`, qui répond un tableau `results` par identifiant au lieu d'une confiance (voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#get-lookup--adresses-par-identifiant-best)). Statuts : `current`, `outdated_version`, `retired` / `reserved` / `rejected` (avec `record` et, s'il existe, `successor`), `unknown`.
+
 ## La taxonomie `fallback_reason`
 
 Plus fine que `confidence`. Quand `confidence != exact`, elle dit **pourquoi** :
@@ -195,7 +204,7 @@ Plus fine que `confidence`. Quand `confidence != exact`, elle dit **pourquoi** :
 | `postal_code_mismatch` | Trouvé hors du code postal donné, à proximité. | `adjacent_commune` |
 | `no_match` | Rien trouvé du tout. | `not_found` |
 
-Cas combiné : une ligne avec `confidence=fuzzy_street, fallback_reason=house_number_missing` signifie « j'ai approximé la rue *et* tu n'as pas fourni de numéro ». C'est une double dégradation — à vérifier en priorité par rapport aux dégradations simples.
+Cas combiné : une ligne avec `confidence=fuzzy_street, fallback_reason=house_number_missing` signifie « j'ai approximé la rue *et* tu n'as pas fourni de numéro ». C'est une double dégradation, à vérifier en priorité par rapport aux dégradations simples.
 
 ## Le champ `house_number_delta`
 
@@ -224,16 +233,32 @@ Où la trouver :
 - Batch : la colonne `position_source`, toujours remplie.
 - `/geocode`, `/building` : `properties.position_source`, présent seulement quand la position a été imputée (absent = `measured`).
 
-Attention : `confidence` porte sur le **match textuel**, `position_source` sur le **point**. Une ligne `exact` peut très bien porter une position `locality` — la bonne adresse, placée au centre de son village. Pour un usage au bâtiment, accepte `measured`, `same_number` et `interpolated`, et traite `street` / `locality` comme des résultats `median_street` / `locality`. `/reverse` ne renvoie jamais d'adresse dont la position est `street` ou `locality`. Son objet optionnel `interpolation` (`interpolate=true`, voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#estimer-un-numéro-manquant--interpolatetrue)) est encore autre chose : un numéro *estimé* entre deux numéros connus, qui n'existe peut-être pas officiellement — traite-le comme une approximation `nearest_*`, jamais comme une adresse BeSt.
+Attention : `confidence` porte sur le **match textuel**, `position_source` sur le **point**. Une ligne `exact` peut très bien porter une position `locality` (la bonne adresse, placée au centre de son village). Pour un usage au bâtiment, accepte `measured`, `same_number` et `interpolated`, et traite `street` / `locality` comme des résultats `median_street` / `locality`. `/reverse` ne renvoie jamais d'adresse dont la position est `street` ou `locality`. Son objet optionnel `interpolation` (`interpolate=true`, voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#estimer-un-numéro-manquant--interpolatetrue)) est encore autre chose : un numéro *estimé* entre deux numéros connus, qui n'existe peut-être pas officiellement. Traite-le comme une approximation `nearest_*`, jamais comme une adresse BeSt.
 
 ## Ambiguïté : `ambiguous` et `score_gap`
 
-`ambiguous=true` signifie que le deuxième candidat atteint au moins 90 % du score de la réponse retenue **et** se trouve dans une autre rue ou une autre commune. Cas typique : un nom de rue courant sans code postal (« Kerkstraat 1 », « Rue de la Station 1 ») — crabfinder a choisi un candidat parmi beaucoup d'autres tout aussi plausibles.
+`ambiguous=true` signifie que le deuxième candidat atteint au moins 90 % du score de la réponse retenue **et** se trouve dans une autre rue ou une autre commune. Cas typique : un nom de rue courant sans code postal (« Kerkstraat 1 », « Rue de la Station 1 ») : crabfinder a choisi un candidat parmi beaucoup d'autres tout aussi plausibles.
 
 - Batch : la colonne `ambiguous` (`true` / `false`).
 - `/geocode` : `ambiguous` au premier niveau, plus `score_gap` = `1 − score₂/score₁` quand il y a au moins deux résultats (`0` = égalité).
 
 **Action** : considère une ligne ambiguë comme non confirmée, quelle que soit sa confiance. Ajouter le code postal la résout presque toujours.
+
+## Validation : `status` et `corrections`
+
+`GET /validate` (et l'option batch `--corrections`) compare ce que tu as saisi à l'adresse BeSt officielle et répond avec un `status` :
+
+| `status` | Sens |
+|---|---|
+| `valid` | L'adresse existe telle qu'écrite (casse, accents et simples compléments mis à part). |
+| `corrected` | Elle existe une fois corrigée ; `corrections` liste ce qui diffère. |
+| `ambiguous` | Deux rues conviennent aussi bien l'une que l'autre. |
+| `incomplete` | Seule une rue ou un lieu a été trouvé : pas de numéro, ou un numéro qui n'est pas dans cette rue. |
+| `not_found` | Rien ne correspond. |
+
+Chaque correction indique un `field`, un `kind`, la valeur saisie (`input`) et la valeur officielle (`official`). Types : `street_spelling`, `abbreviation_expanded`, `street_completed`, `word_ignored`, `municipality_changed`, `municipality_spelling`, `postal_code_changed`, `house_number_approximated`, `house_number_not_found`, `box_not_found`, `reading` et, pour un identifiant, `id_replaced` (batch uniquement, `id_replaced:best_id:<ancien>-><nouveau>`). Trois types sont de simples compléments qui laissent une adresse `valid` valide : `postal_code_added`, `box_added`, `street_language`. La réponse porte aussi la `confidence` et le `fallback_reason` habituels de l'adresse trouvée. Table complète dans [`docs/api.md`](../api.md#get-validate).
+
+**Action** : conserve le `label` ou l'identifiant BeSt officiel pour `valid` et `corrected` ; demande à l'utilisateur pour `ambiguous` et `incomplete`. Une adresse `corrected` avec `house_number_approximated` ou `postal_code_changed` mérite un coup d'œil humain avant une livraison.
 
 ## Le score `street_match_score`
 
@@ -260,7 +285,7 @@ Pour `fuzzy_street`, les scores sont en général plus bas. Pour `not_found`, le
 
 Deux références exploitables en aval :
 
-- `building_group_id` : identifiant de bâtiment de crabfinder, `{identifiant de rue}|{numéro}` (par ex. `https://databrussels.be/id/streetname|3919|32`). Stable d'un dump BeSt à l'autre tant que l'identifiant de rue et le numéro le sont. Toutes les boîtes d'un bâtiment le partagent — utile pour regrouper de ton côté, ou pour `/building/{id}/units`.
+- `building_group_id` : identifiant de bâtiment de crabfinder, `{identifiant de rue}|{numéro}` (par ex. `https://databrussels.be/id/streetname|3919|32`). Stable d'un dump BeSt à l'autre tant que l'identifiant de rue et le numéro le sont. Toutes les boîtes d'un bâtiment le partagent, utile pour regrouper de ton côté, ou pour `/building/{id}/units`.
 - `best_id` : identifiant BeSt officiel sous la forme `namespace/object_identifier/version`. Permet de remonter à la ligne BeSt source (audit, jointures avec d'autres données BeSt). Quand tu donnes un numéro de boîte connu de BeSt, c'est l'identifiant de cette unité.
 
 ## Mini-recette de tri en aval

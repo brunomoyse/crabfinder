@@ -12,7 +12,7 @@ BeSt address nearest to it (`confidence: locality` / `landmark`), and the
 `locality` echo says how the query was understood (`source: osm`), with no
 OSM position.
 
-There is no authentication — bind to localhost or front this with your
+There is no authentication, so bind to localhost or front this with your
 own gateway in production. CORS allows any origin unless `--cors-origin`
 is set (any method, any header).
 
@@ -22,7 +22,8 @@ is set (any method, any header).
 | `GET /geocode` | Free text or structured fields → ranked addresses |
 | `GET /reverse` | Coordinates → nearest addresses |
 | `GET /building/{building_group_id}/units` | Every BeSt row of one building |
-| `GET /lookup?id=…` | Addresses by BeSt id |
+| `GET /lookup?id=…` | Addresses by BeSt id, with each id's status (current, outdated, retired…) |
+| `GET /validate` | Is the input a real BeSt address, and what differs |
 | `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row |
 | `GET /metrics` | Prometheus text exposition (unless `--no-metrics`) |
 
@@ -33,7 +34,7 @@ is set (any method, any header).
 | `--index` | `CRABFINDER_INDEX` | required | Tantivy index directory (schema must match the binary) |
 | `--host` | `CRABFINDER_HOST` | `127.0.0.1` | `0.0.0.0` in containers |
 | `--port` | `CRABFINDER_PORT` | `8080` | |
-| `--abbreviation-dict` | `CRABFINDER_ABBREVIATION_DICT` | — | `data/street-type-abbreviations-v1.yaml`; without it, no `av` → `avenue` expansion |
+| `--abbreviation-dict` | `CRABFINDER_ABBREVIATION_DICT` | n/a | `data/street-type-abbreviations-v1.yaml`; without it, no `av` → `avenue` expansion |
 | `--pois` | `CRABFINDER_POIS` | off | Optional OSM helper: `data/osm-pois-be-v1.csv` (landmarks, `scripts/build_osm_pois.py`) to understand queries naming a landmark; answers stay BeSt addresses. Without it, landmark names aren't recognised |
 | `--no-notability-boost` | `CRABFINDER_NO_NOTABILITY_BOOST` | off | Plain BM25 (A/B the boost on the same index) |
 | `--request-timeout-ms` | `CRABFINDER_REQUEST_TIMEOUT_MS` | `10000` | Deadline per request, queueing included → 503 |
@@ -47,7 +48,7 @@ stderr at `info`; set `RUST_LOG` to change the level.
 
 ## Errors
 
-Every error from `/geocode`, `/reverse`, `/building` and `/health` is
+Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`, `/building` and `/health` is
 JSON:
 
 ```json
@@ -86,24 +87,24 @@ over 10 000 addresses.
 
 ### Parameters
 
-Either free text (`q`) **or** structured fields — not both (400), and
+Either free text (`q`) **or** structured fields, not both (400), and
 not neither (400).
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `q` | string | — | Free text: `Rue de la Loi 16 bte 3, B-1000 Bruxelles` |
-| `street` | string | — | Structured: street name |
-| `housenumber` | string | — | Structured: `12`, `12A` |
-| `box` | string | — | Structured: box/unit; picks the unit shown, never filters |
-| `postcode` | string | — | Structured: 4 digits (else 400); part of the address, so relaxed like a parsed one when nothing matches inside it (`adjacent_commune`) |
-| `city` | string | — | Structured: municipality or locality, matched like street words |
+| `q` | string | n/a | Free text: `Rue de la Loi 16 bte 3, B-1000 Bruxelles` |
+| `street` | string | n/a | Structured: street name |
+| `housenumber` | string | n/a | Structured: `12`, `12A` |
+| `box` | string | n/a | Structured: box/unit; picks the unit shown, never filters |
+| `postcode` | string | n/a | Structured: 4 digits (else 400); part of the address, so relaxed like a parsed one when nothing matches inside it (`adjacent_commune`) |
+| `city` | string | n/a | Structured: municipality or locality, matched like street words |
 | `limit` | int | 10 | Features returned after dedup, clamped to 1–100 |
 | `expand` | bool | false | One feature per BeSt row instead of per building |
-| `region` | string | — | Hard filter: `BE-BRU`/`BE-VLG`/`BE-WAL`, or `brussels`/`bruxelles`/`brussel`/`bru`, `flanders`/`vlaanderen`/`flandre`/`vlg`, `wallonia`/`wallonie`/`wal` |
-| `postal_code` | string | — | Hard filter, never relaxed; overrides a postal code parsed from `q` (a 4-digit token in `q` is then read as the house number) |
-| `bbox` | string | — | Hard filter `min_lon,min_lat,max_lon,max_lat` (else 400 `invalid bbox '…' (expected min_lon,min_lat,max_lon,max_lat)`) |
-| `focus_point` | string | — | `lat,lng` inside Belgium: soft re-rank, scores × `exp(-d / 25 km)` |
-| `lang` | string | — | `fr`, `nl` or `de` for `properties.label`; default: the address's own language (Brussels/Wallonia fr, Flanders nl, 4700–4791 de) |
+| `region` | string | n/a | Hard filter: `BE-BRU`/`BE-VLG`/`BE-WAL`, or `brussels`/`bruxelles`/`brussel`/`bru`, `flanders`/`vlaanderen`/`flandre`/`vlg`, `wallonia`/`wallonie`/`wal` |
+| `postal_code` | string | n/a | Hard filter, never relaxed; overrides a postal code parsed from `q` (a 4-digit token in `q` is then read as the house number) |
+| `bbox` | string | n/a | Hard filter `min_lon,min_lat,max_lon,max_lat` (else 400 `invalid bbox '…' (expected min_lon,min_lat,max_lon,max_lat)`) |
+| `focus_point` | string | n/a | `lat,lng` inside Belgium: soft re-rank, scores × `exp(-d / 25 km)` |
+| `lang` | string | n/a | `fr`, `nl` or `de` for `properties.label`; default: the address's own language (Brussels/Wallonia fr, Flanders nl, 4700–4791 de) |
 | `alternatives` | bool | false | Add `alternatives`: the best 50 buildings grouped by municipality (v3). Given anyway, from the features fetched, when `ambiguous` |
 
 A structured query needs at least one of `street`, `city`, `postcode`.
@@ -121,7 +122,7 @@ order (`query.parsed.alternatives`; `query.reading` says which one won).
 
 The search tries, in order, and the first step with hits wins:
 
-1. **Locality** — the query only names a place (`Spontin`, `Celles
+1. **Locality**: the query only names a place (`Spontin`, `Celles
    Houyet`, `Han-sur-Lesse 5580`): the BeSt addresses around its centre
    (`confidence: locality`). Places are BeSt municipalities, parts of
    municipality and postal areas; with the optional `--places` index,
@@ -130,11 +131,11 @@ The search tries, in order, and the first step with hits wins:
    typo-corrected street + number → nearest existing number on the
    street → street without the number → typo-corrected street without
    the number.
-3. **Street + locality** — `<street> <place>` where the place isn't the
+3. **Street + locality**: `<street> <place>` where the place isn't the
    street's municipality (a neighbouring commune, or an OSM hamlet with
    `--places`): the
    street searched inside that place's area.
-4. **Landmark** — with `--pois`, a query that only names a landmark
+4. **Landmark**: with `--pois`, a query that only names a landmark
    (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`): the BeSt
    addresses nearest to it, within 600 m (`confidence: landmark`). An
    exact landmark name beats a typo-corrected street (`Gravensteen` is not
@@ -143,7 +144,7 @@ The search tries, in order, and the first step with hits wins:
    postal code must lie within 15 km of the landmark; among namesakes,
    the one nearest `focus_point`, else sights before stations and
    institutions, before churches.
-5. **Around the postal code** — nothing matched inside the given postal
+5. **Around the postal code**: nothing matched inside the given postal
    code: the strict tiers again without it, within 20 km of the code's
    centre and nearest first (`confidence: adjacent_commune`,
    `fallback_reason: postal_code_mismatch`). `Avenue Louise 54 1000` →
@@ -151,7 +152,7 @@ The search tries, in order, and the first step with hits wins:
    street (or a nearest number on another street object, or one 20 or
    more away): the exact number just across the boundary wins. Not with
    `postal_code=` (a hard filter) or an unknown postal code.
-6. **OR fallback** — any query word, with then without the number.
+6. **OR fallback**: any query word, with then without the number.
 
 Strict ranking is `(BM25 + bonuses) × notability × (1 + 0.005 × ln(1 +
 addresses on the street))`. Bonuses: adjacent word pairs, and a constant
@@ -228,7 +229,7 @@ Top-level fields:
 | `count` | `features.length` |
 | `ambiguous` | The two best features lie on different streets (or municipalities) with `score₂/score₁ ≥ 0.9`: the query doesn't say which one. `Rue de la Station 1` → Charleroi vs La Louvière, `ambiguous: true` |
 | `score_gap` | `1 − score₂/score₁`; absent with fewer than two features or when scores aren't text relevance (nearest-number, locality answers) |
-| `alternatives` | With `alternatives=true`, or when `ambiguous`: up to 10 municipalities, best first, each `{nis, municipality_name, postal_codes, count, feature}` — `feature` is the municipality's best answer (a labelled BeSt Feature). Lets a UI ask "which one?" with one option per municipality. `features` is unchanged |
+| `alternatives` | With `alternatives=true`, or when `ambiguous`: up to 10 municipalities, best first, each `{nis, municipality_name, postal_codes, count, feature}`; `feature` is the municipality's best answer (a labelled BeSt Feature). Lets a UI ask "which one?" with one option per municipality. `features` is unchanged |
 | `match_type` | `strict` if any feature is strict, else `fuzzy` (empty result: `strict`) |
 | `deduplicated` | `false` with `expand=true` |
 | `raw_hits` | Raw BeSt rows the winning step considered, before dedup |
@@ -277,7 +278,7 @@ dominates nationally, use `region` or `postal_code` as a hard filter.
 
 ## `GET /lookup`
 
-`GET /lookup?id=<best_id>[,<best_id>…]&lang=nl` — up to 50 BeSt ids
+`GET /lookup?id=<best_id>[,<best_id>…]&lang=nl`: up to 50 BeSt ids
 (400 beyond, or when empty), in the canonical
 `{namespace}/{objectIdentifier}/{versionIdentifier}` form of the batch
 `best_id` column, with or without the version. `features` lists the ids
@@ -294,7 +295,7 @@ current (the indexer's `history-v1.json.gz`):
 | `current` | The address, with this id, or this object without version | `current_id`, `feature` |
 | `outdated_version` | The object exists under another version | `current_id`, `feature` |
 | `retired` / `reserved` / `rejected` | BeSt still lists the record, with that status | `record`, and `successor` if any |
-| `unknown` | Not in this dump | — |
+| `unknown` | Not in this dump | n/a |
 
 BeSt has no successor link. The successor is derived from BeSt alone, in
 this order:
@@ -387,8 +388,8 @@ The batch gives the same verdict per row with the `corrections` option.
 | `lat` | float | required | WGS84, −90…90 |
 | `lng` | float | required | WGS84, −180…180 |
 | `limit` | int | 1 | Buildings returned, clamped to 1–100 |
-| `radius_m` | float | — | Drop results farther than this (non-negative) |
-| `lang` | string | — | As for `/geocode` |
+| `radius_m` | float | n/a | Drop results farther than this (non-negative) |
+| `lang` | string | n/a | As for `/geocode` |
 | `interpolate` | bool | `false` | Also estimate the house number at the point when it lies in a gap between two known numbers (see below) |
 
 ```jsonc
@@ -420,7 +421,7 @@ are candidates; street- and locality-level guesses are skipped.
 ### Interpolation
 
 With `interpolate=true`, a top-level `interpolation` object estimates
-the number the point would carry — a vacant plot, a building BeSt
+the number the point would carry: a vacant plot, a building BeSt
 doesn't list yet:
 
 ```jsonc
@@ -443,7 +444,7 @@ within 200 m is tried: two consecutive numbers of the side with a gap
 and at most 60 m off the segment; the number is proportional to the
 position along it, rounded to the side's parity. The nearest such
 segment wins, and only when the point is nearer to it than to any
-existing address — otherwise that address (the first feature) is the
+existing address; otherwise that address (the first feature) is the
 answer and `interpolation` is absent. `features` are unchanged.
 
 ## `GET /building/{building_group_id}/units`
@@ -503,10 +504,10 @@ win): `?format=geojson&lang=nl`.
 | Option | Default | Notes |
 |---|---|---|
 | `format` | `csv` | `csv` or `geojson` (else 400) |
-| `lang` | — | `fr`/`nl`/`de` for the `label` column (else 400) |
+| `lang` | n/a | `fr`/`nl`/`de` for the `label` column (else 400) |
 | `mid_street_fallback` | `true` | `false`: rows whose number can't be matched come back `not_found` instead of a street-level answer |
 | `corrections` | `false` | `true`: append the `/validate` columns `status` and `corrections` (v3) |
-| `alternatives` | `false` | `true`: append `score_gap` and `alternatives` — up to 5 municipalities of the best answers, best first, `Charleroi (6000, 6001); La Louvière (7100)` (v3) |
+| `alternatives` | `false` | `true`: append `score_gap` and `alternatives`, up to 5 municipalities of the best answers, best first, `Charleroi (6000, 6001); La Louvière (7100)` (v3) |
 
 ### Output
 
@@ -553,10 +554,10 @@ Prometheus text format (`text/plain; version=0.0.4`):
 | Series | Labels |
 |---|---|
 | `crabfinder_http_requests_total` | `route` (template, e.g. `/building/{building_group_id}/units`), `method`, `status` |
-| `crabfinder_http_request_duration_seconds` | `route` — histogram, 1 ms … 10 s buckets |
+| `crabfinder_http_request_duration_seconds` | `route`; histogram, 1 ms … 10 s buckets |
 | `crabfinder_http_rejected_total` | `route`, `reason` (`timeout`) |
-| `crabfinder_search_total` | `tier` (`exact`, `typo`, `nearest`, `street`, `typo_street`, `or_with_number`, `or_street`, `locality`, `area`, `none`), `confidence`, `match_type` of the top result — one per `/geocode` call and per batch row |
-| `crabfinder_search_capped_total` | — searches whose over-fetch hit the 2000-row cap |
+| `crabfinder_search_total` | `tier` (`exact`, `typo`, `nearest`, `street`, `typo_street`, `or_with_number`, `or_street`, `locality`, `area`, `none`), `confidence`, `match_type` of the top result; one per `/geocode` call and per batch row |
+| `crabfinder_search_capped_total` | (none); searches whose over-fetch hit the 2000-row cap |
 
 ```
 crabfinder_http_requests_total{route="/geocode",method="GET",status="200"} 3861

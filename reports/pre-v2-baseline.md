@@ -1,4 +1,4 @@
-# crabfinder eval — single report
+# crabfinder eval: single report
 
 - Service: `http://127.0.0.1:8081`
 - Total queries: **3840**
@@ -23,9 +23,9 @@
 |---|---|---|---|---|---|---|
 | ms | 3840 | 1.8 | 19.0 | 51.1 | 5.1 | 80.4 |
 
-_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
+_Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query; significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
 
-## §3.2 contract — cross_language_recall@1
+## §3.2 contract: cross_language_recall@1
 
 - Random samples (n=116): **0.983**
 - Boosted samples (n=200): **0.995**
@@ -61,7 +61,7 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 | fr | 997 | 0.886 | 0.943 | 0.886 | 0.910 | 0.719 |
 | nl | 2724 | 0.828 | 0.875 | 0.828 | 0.849 | 0.721 |
 
-## Adversarial — by category
+## Adversarial: by category
 
 | Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
 |---|---|---|---|---|---|---|

@@ -1,4 +1,4 @@
-# Real-world eval set — sources
+# Real-world eval set: sources
 
 `eval/realworld-be-v1.yaml` samples addresses from these open-data lists
 (downloaded by `scripts/build_realworld_eval.py`, cached in `eval/realworld/sources/`,
@@ -9,11 +9,11 @@ record are kept.
 |---|---|---|---|---|---|
 | `fwb-schools-brussels` | Fichier signalétique des établissements d'enseignement (Brussels sites) | Fédération Wallonie-Bruxelles (via ODWB) | CC BY 4.0 | 652 | 300 |
 | `fwb-schools-wallonia` | Fichier signalétique des établissements d'enseignement (Walloon sites) | Fédération Wallonie-Bruxelles (via ODWB) | CC BY 4.0 | 3518 | 400 |
-| `brussels-bpost` | Points postaux (bpost) — Ville de Bruxelles | Ville de Bruxelles (opendata.brussels) | CC BY 4.0 | 151 | 100 |
-| `brussels-pharmacies` | Pharmacies — Ville de Bruxelles | Ville de Bruxelles (opendata.brussels) | CC0 1.0 | 105 | 60 |
+| `brussels-bpost` | Points postaux (bpost), Ville de Bruxelles | Ville de Bruxelles (opendata.brussels) | CC BY 4.0 | 151 | 100 |
+| `brussels-pharmacies` | Pharmacies, Ville de Bruxelles | Ville de Bruxelles (opendata.brussels) | CC0 1.0 | 105 | 60 |
 | `namur-commerces` | Commerces namurois | Ville de Namur (via ODWB) | CC BY 4.0 | 1903 | 150 |
-| `flanders-schools` | POI-dienst — thema Onderwijs | Vlaams Ministerie van Onderwijs en Vorming / Digitaal Vlaanderen | Modellicentie Gratis Hergebruik | 5054 | 250 |
-| `flanders-care` | POI-dienst — thema Welzijn, gezondheid en gezin | Agencies named per record (AUTEUR) / Digitaal Vlaanderen | Modellicentie Gratis Hergebruik | 9533 | 250 |
+| `flanders-schools` | POI-dienst, thema Onderwijs | Vlaams Ministerie van Onderwijs en Vorming / Digitaal Vlaanderen | Modellicentie Gratis Hergebruik | 5054 | 250 |
+| `flanders-care` | POI-dienst, thema Welzijn, gezondheid en gezin | Agencies named per record (AUTEUR) / Digitaal Vlaanderen | Modellicentie Gratis Hergebruik | 9533 | 250 |
 
 Download URLs:
 

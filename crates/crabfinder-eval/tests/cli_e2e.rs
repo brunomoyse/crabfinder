@@ -242,7 +242,7 @@ fn generate_run_and_diff_end_to_end() {
 
     let md = fs::read_to_string(&report_md).unwrap();
     assert!(md.contains("## Alternatives by municipality"));
-    assert!(md.contains("# crabfinder eval — single report"));
+    assert!(md.contains("# crabfinder eval: single report"));
     assert!(md.contains("notability (building)"));
     assert!(md.contains("hamlet (locality)"));
     assert!(md.contains("adv-known_failure-001"));

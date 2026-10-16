@@ -4,16 +4,16 @@ Use case: you have a list of addresses (CSV, Excel export, SQL query) and you wa
 
 Two ways to do this, **with the exact same resolution logic underneath** (the same resolver as `/geocode`):
 
-- **`crabfinder-batch` CLI** — no server, no port, you run a binary, feed it a CSV, get a CSV (or GeoJSON). Preferred for data pipelines, cron scripts, one-off exports.
-- **`POST /batch/geocode` HTTP endpoint** — the service is already running, you push a CSV per HTTP request, receive a streamed CSV (or GeoJSON). Preferred for application integration (a backend that geocodes on demand).
+- **`crabfinder-batch` CLI**: no server, no port, you run a binary, feed it a CSV, get a CSV (or GeoJSON). Preferred for data pipelines, cron scripts, one-off exports.
+- **`POST /batch/geocode` HTTP endpoint**: the service is already running, you push a CSV per HTTP request, receive a streamed CSV (or GeoJSON). Preferred for application integration (a backend that geocodes on demand).
 
-If unsure: the CLI is simpler to start with. Jump to [CLI](#cli--crabfinder-batch).
+If unsure: the CLI is simpler to start with. Jump to [CLI](#cli-crabfinder-batch).
 
 ---
 
 ## Input format
 
-CSV with a header row. Columns are matched **by name**, in any order; unknown columns are ignored. Two shapes are accepted — pick whichever your data already has.
+CSV with a header row. Columns are matched **by name**, in any order; unknown columns are ignored. Two shapes are accepted, pick whichever your data already has.
 
 ### Split columns
 
@@ -38,7 +38,7 @@ id;address;postal_code
 6;Rue Neuve 1;1000
 ```
 
-Each `address` is parsed exactly like `/geocode?q=` (postal code, house number, box, Belgian formats — see [`04-online-search.md`](04-online-search.md#what-the-parser-understands)). A row with a non-empty `address` ignores its `street` / `house_number` / `box_number` columns. A `postal_code` column still wins over the postal code parsed from the text (row 6 above). Both shapes can be mixed in one file: rows with an empty `address` use the split columns.
+Each `address` is parsed exactly like `/geocode?q=` (postal code, house number, box, Belgian formats, see [`04-online-search.md`](04-online-search.md#what-the-parser-understands)). A row with a non-empty `address` ignores its `street` / `house_number` / `box_number` columns. A `postal_code` column still wins over the postal code parsed from the text (row 6 above). Both shapes can be mixed in one file: rows with an empty `address` use the split columns.
 
 ### Columns
 
@@ -106,9 +106,9 @@ Row 4: 33 doesn't exist in 1050, so crabfinder returned the nearest odd number o
 
 **Locality rows**: a row that only names a place (`Spontin`, `Han-sur-Lesse 5580`; a hamlet such as `Maredsous` needs the optional `--places` index) comes back as the **nearest BeSt address** to that place, at its own BeSt position: street, number, `best_id`, `building_group_id` and label are all BeSt's (`Spontin` → e.g. `Chaussée de Dinant 47, 5530 Yvoir`). `confidence=locality` and `fallback_reason=street_missing` tell you that address wasn't asked for by street.
 
-**Landmark rows** (with the optional `--pois`): a row that only names a landmark (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) comes back the same way — the nearest BeSt address to it, e.g. `Rue du Chêne 2, 1000 Bruxelles` for `Manneken Pis` — with `confidence=landmark`. The landmark's own name and position are never returned.
+**Landmark rows** (with the optional `--pois`): a row that only names a landmark (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) comes back the same way: the nearest BeSt address to it (e.g. `Rue du Chêne 2, 1000 Bruxelles` for `Manneken Pis`), with `confidence=landmark`. The landmark's own name and position are never returned.
 
-**1-in-1-out guarantee**: same row count, same order in and out. A non-geocoded row exits with `confidence=not_found` and empty `lat,lng,matched_*` — **not** dropped from the file.
+**1-in-1-out guarantee**: same row count, same order in and out. A non-geocoded row exits with `confidence=not_found` and empty `lat,lng,matched_*`, and is **not** dropped from the file.
 
 **Internal deduplication**: if your CSV contains the same address twice, crabfinder resolves it once and copies the result. Transparent optimization, no effect on the output.
 
@@ -142,7 +142,7 @@ With `--format geojson` (CLI) or `format=geojson` (HTTP), the output is one GeoJ
 
 ---
 
-## CLI — `crabfinder-batch`
+## CLI: `crabfinder-batch`
 
 ### Minimal invocation
 
@@ -154,13 +154,13 @@ With `--format geojson` (CLI) or `format=geojson` (HTTP), the output is one GeoJ
     --output addresses-geocoded.csv
 ```
 
-The binary opens the Tantivy index read-only, iterates the CSV, writes the result. No HTTP port. No service to start. The `crabfinder-service` can run in parallel against the same index — Tantivy supports multi-process reads.
+The binary opens the Tantivy index read-only, iterates the CSV, writes the result. No HTTP port. No service to start. The `crabfinder-service` can run in parallel against the same index (Tantivy supports multi-process reads.
 
 ### All flags
 
 | Flag | Default | Description |
 |---|---|---|
-| `--index PATH` | — (required) | Tantivy index directory. Env var: `CRABFINDER_INDEX`. |
+| `--index PATH` | n/a (required) | Tantivy index directory. Env var: `CRABFINDER_INDEX`. |
 | `--abbreviation-dict PATH` | (none) | Abbreviations YAML. Without it, queries like "Av. Louise" don't expand to "Avenue Louise". **Recommended**: `data/street-type-abbreviations-v1.yaml`. |
 | `--pois PATH` | (none) | Optional OpenStreetMap helper (`data/osm-pois-be-v1.csv`): understand rows naming a landmark; they get the nearest BeSt address, `confidence=landmark`. Env var: `CRABFINDER_POIS`. |
 | `-i, --input PATH` | `stdin` | Input CSV. `-` = stdin. |
@@ -236,7 +236,7 @@ Ballpark: ~1500 rows/s per core for in-process reads on a dev laptop. For 100k r
 
 ---
 
-## HTTP endpoint — `POST /batch/geocode`
+## HTTP endpoint: `POST /batch/geocode`
 
 Prerequisite: `crabfinder-service` is running (see [`02-installation.md`](02-installation.md) §6).
 
@@ -244,7 +244,7 @@ Prerequisite: `crabfinder-service` is running (see [`02-installation.md`](02-ins
 
 The handler dispatches on `Content-Type`. All three accept both input shapes (split columns or `address`).
 
-#### Variant 1 — multipart/form-data (recommended for large files)
+#### Variant 1: multipart/form-data (recommended for large files)
 
 ```bash
 curl -X POST http://127.0.0.1:8080/batch/geocode \
@@ -255,7 +255,7 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
 
 Capacity: up to **50 MB body** per request. At ~500 bytes/row, that's ~100k rows.
 
-#### Variant 2 — application/json (recommended for small batches and app integration)
+#### Variant 2: application/json (recommended for small batches and app integration)
 
 ```bash
 curl -X POST http://127.0.0.1:8080/batch/geocode \
@@ -270,9 +270,9 @@ curl -X POST http://127.0.0.1:8080/batch/geocode \
      -o batch.csv
 ```
 
-Capacity: up to **10,000 addresses** per request (HTTP 413 beyond — switch to multipart).
+Capacity: up to **10,000 addresses** per request (HTTP 413 beyond, switch to multipart).
 
-#### Variant 3 — raw CSV body (any Content-Type, simplest to wire)
+#### Variant 3: raw CSV body (any Content-Type, simplest to wire)
 
 ```bash
 curl -X POST "http://127.0.0.1:8080/batch/geocode?format=geojson&lang=nl" \
@@ -285,7 +285,7 @@ This is the leanest path, useful for testing with a minimal client.
 
 ### Options
 
-Options go in the JSON body / the `options` multipart part, **or in the query string** (`?format=geojson&lang=nl&mid_street_fallback=false`) — handy for the raw CSV variant. The query string wins when both are given.
+Options go in the JSON body / the `options` multipart part, **or in the query string** (`?format=geojson&lang=nl&mid_street_fallback=false`), handy for the raw CSV variant. The query string wins when both are given.
 
 | Option | Type | Default | Effect |
 |---|---|---|---|
@@ -297,7 +297,7 @@ Options go in the JSON body / the `options` multipart part, **or in the query st
 
 ### Response
 
-`text/csv; charset=utf-8` (or `application/geo+json`), **streamed**. The first bytes ship as soon as the first rows are resolved — this matters on large files.
+`text/csv; charset=utf-8` (or `application/geo+json`), **streamed**. The first bytes ship as soon as the first rows are resolved, which matters on large files.
 
 ### HTTP codes
 
@@ -321,7 +321,7 @@ On the split-column example, row 3 (`Grand-Place`, no number) becomes `not_found
 
 ## Checking addresses: `corrections`
 
-To know, for each row, whether the address exists as written and what was corrected, add `--corrections` (CLI) or `corrections=true` (HTTP). Two columns are appended after the usual ones: `status` and `corrections`, the same verdict as [`/validate`](04-online-search.md#get-validate--check-an-address).
+To know, for each row, whether the address exists as written and what was corrected, add `--corrections` (CLI) or `corrections=true` (HTTP). Two columns are appended after the usual ones: `status` and `corrections`, the same verdict as [`/validate`](04-online-search.md#get-validate-check-an-address).
 
 ```bash
 ./target/release/crabfinder-batch --index ./index-belgium \
@@ -340,7 +340,7 @@ id,street,house_number,postal_code,city,…,status,corrections
 
 ## Old BeSt ids: `best_id`
 
-A file of `best_id`s saved months ago doesn't need geocoding again. BeSt versions its ids and retires addresses, so some of them have changed since. Put them in a `best_id` column. Each row is then looked up by id first, as [`/lookup`](04-online-search.md#get-lookup--addresses-by-best-id) does, and the output gains two last columns: `id_status` and `successor_best_id`.
+A file of `best_id`s saved months ago doesn't need geocoding again. BeSt versions its ids and retires addresses, so some of them have changed since. Put them in a `best_id` column. Each row is then looked up by id first, as [`/lookup`](04-online-search.md#get-lookup-addresses-by-best-id) does, and the output gains two last columns: `id_status` and `successor_best_id`.
 
 ```
 id,best_id,street,house_number,postal_code
@@ -366,7 +366,7 @@ When the id leads to no current address and the row also has address columns, th
 
 ### Addresses without postal code
 
-Works, but quality strongly degraded. crabfinder can't filter by PC, so homonymous streets ("Kerkstraat" exists in hundreds of municipalities) come back in undefined order — such rows are usually flagged `ambiguous=true`. **Always provide the PC when you have it**.
+Works, but quality strongly degraded. crabfinder can't filter by PC, so homonymous streets ("Kerkstraat" exists in hundreds of municipalities) come back in undefined order, and such rows are usually flagged `ambiguous=true`. **Always provide the PC when you have it**.
 
 ### Wrong postal code
 
@@ -377,15 +377,15 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 1,Avenue Louise,54,1000,Avenue Louise,54,1050,50.83340378514029,4.358146544863564,adjacent_commune,postal_code_mismatch,0
 ```
 
-See [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune--found-next-door).
+See [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune-found-next-door).
 
 ### Addresses with only a place name (no street)
 
-Supported, in either shape: `address=Spontin`, or `street=Maredsous` with an empty `house_number`. When the whole text is a known place name — a BeSt municipality, part of municipality or postal area, or, with the optional `--places` index, an OpenStreetMap village or hamlet (`Maredsous`) — you get a `locality` row: the nearest BeSt address to the place. With the optional `--pois`, a landmark name (`Manneken Pis`, `Gare du Midi`, optionally followed by its locality: `Gravensteen Gent`) gives a `landmark` row, again the nearest BeSt address — unless a street has that name (`Atomium` → Avenue de l'Atomium, `median_street`).
+Supported, in either shape: `address=Spontin`, or `street=Maredsous` with an empty `house_number`. When the whole text is a known place name (a BeSt municipality, part of municipality or postal area, or, with the optional `--places` index, an OpenStreetMap village or hamlet such as `Maredsous`), you get a `locality` row: the nearest BeSt address to the place. With the optional `--pois`, a landmark name (`Manneken Pis`, `Gare du Midi`, optionally followed by its locality: `Gravensteen Gent`) gives a `landmark` row, again the nearest BeSt address, unless a street has that name (`Atomium` → Avenue de l'Atomium, `median_street`).
 
 ### Box numbers
 
-Use the `box_number` column, or write the box with the number — in `house_number` (`32 bte b002`, `32/b002`) or in the free text (`bte 3`, `bus 3`, `box 3`, `12/3`). The box never prevents a match: the building is found either way, and the box only decides which of its units is reported in `best_id` / `label`. Write the box as BeSt spells it (Brussels often uses forms like `b002`); a box that matches no unit is ignored.
+Use the `box_number` column, or write the box with the number, in `house_number` (`32 bte b002`, `32/b002`) or in the free text (`bte 3`, `bus 3`, `box 3`, `12/3`). The box never prevents a match: the building is found either way, and the box only decides which of its units is reported in `best_id` / `label`. Write the box as BeSt spells it (Brussels often uses forms like `b002`); a box that matches no unit is ignored.
 
 ### Duplicates in input
 

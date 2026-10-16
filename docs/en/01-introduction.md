@@ -4,11 +4,11 @@
 
 crabfinder turns Belgian addresses into geographic coordinates (latitude / longitude WGS84) and vice versa. It uses the official **BeSt Address** dataset, covering all three regions and ~6.9M addresses (as of the 2026-10 dump). Everything is local: no third-party calls, no quota, no data leaving your machine.
 
-**BeSt Address is the only official source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt Address. OpenStreetMap can optionally be switched on — off by default — to *interpret* queries naming a hamlet (`--places`, at indexing) or a landmark (`--pois`, in the service). It only tells crabfinder where to look: it never adds to or alters an address, and is never returned as a result.
+**BeSt Address is the only official source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt Address. OpenStreetMap can optionally be switched on (off by default) to *interpret* queries naming a hamlet (`--places`, at indexing) or a landmark (`--pois`, in the service). It only tells crabfinder where to look: it never adds to or alters an address, and is never returned as a result.
 
 There are two concrete ways to use it:
 
-### Mode 1 — online search (interactive)
+### Mode 1: online search (interactive)
 
 A user types an address into a form. The service replies with a top-N ranked by relevance, in GeoJSON. Typical latency a few milliseconds (p95 ~7 ms).
 
@@ -21,7 +21,7 @@ Reply:  top 10 candidate addresses, the actual Brussels Grand-Place
 
 This is the right mode for a search box or an interactive map (search on submit: crabfinder doesn't complete half-typed words). See [`04-online-search.md`](04-online-search.md).
 
-### Mode 2 — batch geocoding (list processing)
+### Mode 2: batch geocoding (list processing)
 
 A CSV file, either with split columns (`id`, `street`, `house_number`, `postal_code`) or with one free-text `address` column. An enriched CSV (or GeoJSON) out with lat/lng and quality flags per row, **same row count, same order** as the input.
 
@@ -40,7 +40,7 @@ This is the right mode for enriching an existing database, geocoding an Excel ex
 Worth knowing before adopting it:
 
 - **No countries beyond Belgium.** The index is fixed on BeSt Address. No France, no Luxembourg, no Netherlands even across the border.
-- **No POIs as results.** Nothing but BeSt addresses comes out: no stations, shops or monuments as such. By default, place names are understood as far as BeSt knows them — municipalities, parts of municipalities, postal areas ("Spontin", "Han-sur-Lesse"). The optional OpenStreetMap helpers extend that to hamlets ("Maredsous", `--places`) and landmarks ("Manneken Pis", `--pois`), and even then the answer is the nearest BeSt address.
+- **No POIs as results.** Nothing but BeSt addresses comes out: no stations, shops or monuments as such. By default, place names are understood as far as BeSt knows them: municipalities, parts of municipalities, postal areas ("Spontin", "Han-sur-Lesse"). The optional OpenStreetMap helpers extend that to hamlets ("Maredsous", `--places`) and landmarks ("Manneken Pis", `--pois`), and even then the answer is the nearest BeSt address.
 - **No public hosted API.** crabfinder is a binary you install and run yourself. No SaaS.
 - **No authentication.** The service listens on `127.0.0.1:8080` by default. To expose it on the internet, front it with a reverse proxy + auth. Local or intra-LAN use is fine as-is.
 - **No automatic data refresh.** When BeSt publishes a new dump, you run `scripts/refresh_best.sh` (download, rebuild ~1.5-3 min, check, swap) and restart the service.
@@ -64,7 +64,7 @@ The recipient of a geocoded CSV can therefore sort rows by confidence and inspec
 
 ## Multilingual coverage
 
-Bilingual addresses (Brussels, "facility" municipalities) are indexed in **all their variants** (FR, NL, DE when available). You can type either "Avenue Louise 1050" or "Louizalaan 1050" — the same address surfaces. German-speaking municipalities (Eupen, St. Vith…) are covered too.
+Bilingual addresses (Brussels, "facility" municipalities) are indexed in **all their variants** (FR, NL, DE when available). You can type either "Avenue Louise 1050" or "Louizalaan 1050": the same address surfaces. German-speaking municipalities (Eupen, St. Vith…) are covered too.
 
 ## What's next
 

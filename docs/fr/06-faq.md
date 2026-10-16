@@ -168,6 +168,10 @@ Fréquent dans les vrais fichiers : l'adresse est pile sur une limite de commune
 
 Le code postal réellement trouvé est dans `matched_postal_code` ; compare-le à ton entrée pour repérer les lignes à corriger à la source. Un match exact dans le code postal donné l'emporte toujours sur la commune voisine. Si tu ne veux jamais sortir de ton code postal (`/geocode` uniquement), passe-le en filtre `postal_code=` plutôt que dans la requête : ce filtre est strict et jamais relâché. Détails dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md#adjacent_commune--trouvé-à-côté).
 
+### Un identifiant BeSt conservé ne fonctionne plus
+
+BeSt versionne ses identifiants et retire des adresses, donc un identifiant enregistré il y a des mois peut être périmé. Interroge `GET /lookup?id=…` (ou mets les identifiants dans une colonne `best_id` en batch) : l'entrée `results` indique si l'identifiant est `current`, `outdated_version` (même adresse, version plus récente : utilise `current_id`), `retired` / `reserved` / `rejected` (avec l'adresse `successor` quand les données BeSt en désignent une) ou `unknown` (absent de ce dump BeSt). Le successeur est déduit des données BeSt elles-mêmes (même numéro et même boîte, puis même numéro, puis à moins de 5 m), donc vérifie la `rule` avant de lui faire confiance. Voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#get-lookup--adresses-par-identifiant-best).
+
 ## Multi-process et partage d'index
 
 ### Puis-je faire tourner le service et la CLI en même temps sur le même index ?
@@ -217,7 +221,7 @@ Non. crabfinder reconstruit l'index intégralement à chaque refresh. ~1,5-3 min
 
 ### Combien de RAM consomme le service en régime ?
 
-Au démarrage : pic ~3-4 Go (construction du R-tree spatial + adresses count). En régime : ~500 Mo à 1 Go (mmap de l'index, ne compte pas vraiment comme « consommée » — c'est du cache OS). Le R-tree à 6,9M points ajoute ~400 Mo de heap effectif.
+Au démarrage : pic ~3-4 Go (construction du R-tree spatial + adresses count). En régime : ~500 Mo à 1 Go (mmap de l'index, ne compte pas vraiment comme « consommée » : c'est du cache OS). Le R-tree à 6,9M points ajoute ~400 Mo de heap effectif.
 
 ### Combien de RAM consomme la CLI batch ?
 
@@ -255,11 +259,11 @@ RUST_LOG=info ./target/release/crabfinder-service ... 2>&1 \
   | jq -R '. as $line | try fromjson catch {raw: $line}'
 ```
 
-(Pas de flag explicite pour le moment ; le format JSON peut être ajouté via une variable d'env si besoin — ouvrir une issue.)
+(Pas de flag explicite pour le moment ; le format JSON peut être ajouté via une variable d'env si besoin ; ouvrir une issue.)
 
 ### Monitoring
 
-Chaque requête est journalisée au niveau `info` avec son statut et sa latence. Pour des tableaux de bord et des alertes, scrape `GET /metrics` (format Prometheus) : nombre de requêtes et latence par route, `503`, et le résultat de chaque recherche par `confidence` — voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#métriques). `--no-metrics` désactive l'endpoint.
+Chaque requête est journalisée au niveau `info` avec son statut et sa latence. Pour des tableaux de bord et des alertes, scrape `GET /metrics` (format Prometheus) : nombre de requêtes et latence par route, `503`, et le résultat de chaque recherche par `confidence`, voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#métriques). `--no-metrics` désactive l'endpoint.
 
 ### Le service répond `503`
 

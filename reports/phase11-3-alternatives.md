@@ -1,4 +1,4 @@
-# Phase 11.3 — alternatives by municipality
+# Phase 11.3: alternatives by municipality
 
 Eval run with `--alternatives` (`/geocode?alternatives=true`) on the synthetic v3 + adversarial sets, BeSt 2026-10-15, schema v11, BeSt-only service. Asking for alternatives fetches 50 buildings but doesn't change the features: per query at rank@1, 0 fixed / 0 broken against the Phase 11.1b run.
 

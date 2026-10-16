@@ -1,4 +1,4 @@
-# User documentation — crabfinder (EN)
+# User documentation: crabfinder (EN)
 
 Welcome. This documentation is written for someone who wants to **use** crabfinder, not develop it. Target reader: a GIS user comfortable with a command line, who can read a CSV, with no need to know Rust or Tantivy.
 
@@ -8,12 +8,12 @@ Welcome. This documentation is written for someone who wants to **use** crabfind
 
 A Belgian geocoding service backed by the federal **BeSt Address** dataset (6.9M addresses across Brussels + Flanders + Wallonia). Two usage modes:
 
-1. **Online search** — one query, one ranked top-N. For interactive integration (form, map).
-2. **Batch geocoding** — CSV in, enriched CSV or GeoJSON out. For processing address lists in one go.
+1. **Online search**: one query, one ranked top-N. For interactive integration (form, map).
+2. **Batch geocoding**: CSV in, enriched CSV or GeoJSON out. For processing address lists in one go.
 
 Everything runs locally. No external calls. Single ~2.2 GB index on disk.
 
-**BeSt Address is the only source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt. OpenStreetMap is an optional aid, off by default, for understanding queries that name a hamlet (`--places`, indexer) or a landmark (`--pois`, service): it only decides where to look. It never adds or alters an address and is never returned as a result — the answer is still the nearest BeSt address, flagged `confidence: locality` / `landmark`.
+**BeSt Address is the only source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt. OpenStreetMap is an optional aid, off by default, for understanding queries that name a hamlet (`--places`, indexer) or a landmark (`--pois`, service): it only decides where to look. It never adds or alters an address and is never returned as a result. The answer is still the nearest BeSt address, flagged `confidence: locality` / `landmark`.
 
 ## Quickstart
 
@@ -27,14 +27,14 @@ cargo build --release
     --output ./index-belgium \
     --notability-whitelist data/notability-whitelist-v1.yaml
 
-# 3a. Online search — start the service
+# 3a. Online search: start the service
 ./target/release/crabfinder-service \
     --index ./index-belgium \
     --abbreviation-dict data/street-type-abbreviations-v1.yaml &
 
 curl "http://127.0.0.1:8080/geocode?q=Avenue+Louise+32+1050"
 
-# 3b. Batch — from a CSV, no service required
+# 3b. Batch: from a CSV, no service required
 ./target/release/crabfinder-batch \
     --index ./index-belgium \
     --abbreviation-dict data/street-type-abbreviations-v1.yaml \

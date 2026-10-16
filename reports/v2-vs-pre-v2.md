@@ -1,8 +1,8 @@
-# Eval diff — `reports/pre-v2-baseline.json` → `v2 final (eval/belgium-2026-10-15-v2.json)`
+# Eval diff: `reports/pre-v2-baseline.json` → `v2 final (eval/belgium-2026-10-15-v2.json)`
 
 _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
-## Overall (Tier A) — Δ
+## Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -14,14 +14,14 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | strict_match_rate | 0.726 | 0.863 | +0.137 |
 | n | 3837 | 3837 | 0 |
 
-## §3.2 contract — cross_language_recall@1 — Δ
+## §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=116/116) | 0.983 | 1.000 | +0.017 |
 | boosted  (n=200/200) | 0.995 | 1.000 | +0.005 |
 
-## Latency — Δ
+## Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -29,7 +29,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | p95  | 19.0 ms | 7.2 ms | -11.8 ms |
 | p99  | 51.1 ms | 11.9 ms | -39.2 ms |
 
-## By region — Δ
+## By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | BE-VLG | 1925/1925 | 0.833/0.962 (+0.129) | 0.853/0.970 (+0.117) | 0.731/0.870 (+0.138) |
 | BE-WAL | 1053/1053 | 0.883/0.971 (+0.087) | 0.907/0.979 (+0.072) | 0.720/0.868 (+0.148) |
 
-## By variant — Δ
+## By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -52,7 +52,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | typo | 487/487 | 0.366/0.988 (+0.622) | 0.423/0.990 (+0.566) | 0.000/0.000 (+0.000) |
 | with_postal | 500/500 | 0.996/1.000 (+0.004) | 0.997/1.000 (+0.003) | 1.000/1.000 (+0.000) |
 
-## Adversarial — by category — Δ
+## Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -65,4 +65,4 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
 ## Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._

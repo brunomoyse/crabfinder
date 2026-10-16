@@ -1,4 +1,4 @@
-# Phase 11.1b ranking fixes — eval diff vs Phase 11.1
+# Phase 11.1b ranking fixes: eval diff vs Phase 11.1
 
 Same index (BeSt 2026-10-15, schema v11), same eval sets. The baseline is the service at the Phase 11.1 commit; the current one adds the 11.1b readings (`without_city_words`, `without_leading_type`, `search_local_typo`) and the `1er`/`ier` abbreviation entries.
 
@@ -10,7 +10,7 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 
 
 
-### Overall (Tier A) — Δ
+### Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -22,14 +22,14 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 | strict_match_rate | 0.882 | 0.882 | +0.000 |
 | n | 4365 | 4365 | 0 |
 
-### §3.2 contract — cross_language_recall@1 — Δ
+### §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=116/116) | 1.000 | 1.000 | +0.000 |
 | boosted  (n=200/200) | 1.000 | 1.000 | +0.000 |
 
-### Latency — Δ
+### Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -37,7 +37,7 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 | p95  | 9.5 ms | 25.6 ms | +16.0 ms |
 | p99  | 18.9 ms | 56.9 ms | +38.0 ms |
 
-### By region — Δ
+### By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -45,7 +45,7 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 | BE-VLG | 2177/2177 | 0.961/0.962 (+0.001) | 0.969/0.970 (+0.001) | 0.885/0.885 (+0.000) |
 | BE-WAL | 1204/1204 | 0.969/0.970 (+0.001) | 0.977/0.978 (+0.001) | 0.885/0.885 (+0.000) |
 
-### By variant — Δ
+### By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -61,7 +61,7 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 | with_postal | 500/500 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) |
 | wrong_postal | 500/500 | 0.958/0.958 (+0.000) | 0.962/0.962 (+0.000) | 1.000/1.000 (+0.000) |
 
-### Adversarial — by category — Δ
+### Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -73,7 +73,7 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 | notability | 30/30 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) |
 | special_chars | 10/10 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 0.900/0.900 (+0.000) |
 
-### Distance to the reference point — Δ
+### Distance to the reference point: Δ
 
 | Report | n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 |
 |---|---|---|---|---|---|---|---|
@@ -82,13 +82,13 @@ The latency rows were measured while the competitor benchmark ran on the same ma
 
 ### Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._
 
 ## +OSM aids (`--places` index, `--pois` service)
 
 
 
-### Overall (Tier A) — Δ
+### Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -100,14 +100,14 @@ _No state changes — all known_failure entries continue to behave as documented
 | strict_match_rate | 0.874 | 0.874 | +0.000 |
 | n | 4365 | 4365 | 0 |
 
-### §3.2 contract — cross_language_recall@1 — Δ
+### §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=116/116) | 1.000 | 1.000 | +0.000 |
 | boosted  (n=200/200) | 1.000 | 1.000 | +0.000 |
 
-### Latency — Δ
+### Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -115,7 +115,7 @@ _No state changes — all known_failure entries continue to behave as documented
 | p95  | 11.4 ms | 23.3 ms | +11.9 ms |
 | p99  | 24.1 ms | 81.0 ms | +56.9 ms |
 
-### By region — Δ
+### By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -123,7 +123,7 @@ _No state changes — all known_failure entries continue to behave as documented
 | BE-VLG | 2177/2177 | 0.961/0.962 (+0.001) | 0.969/0.970 (+0.001) | 0.885/0.885 (+0.000) |
 | BE-WAL | 1204/1204 | 0.969/0.970 (+0.001) | 0.977/0.978 (+0.001) | 0.885/0.885 (+0.000) |
 
-### By variant — Δ
+### By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -139,7 +139,7 @@ _No state changes — all known_failure entries continue to behave as documented
 | with_postal | 500/500 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) |
 | wrong_postal | 500/500 | 0.958/0.958 (+0.000) | 0.962/0.962 (+0.000) | 1.000/1.000 (+0.000) |
 
-### Adversarial — by category — Δ
+### Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -151,7 +151,7 @@ _No state changes — all known_failure entries continue to behave as documented
 | notability | 30/30 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) |
 | special_chars | 10/10 | 1.000/1.000 (+0.000) | 1.000/1.000 (+0.000) | 0.900/0.900 (+0.000) |
 
-### Distance to the reference point — Δ
+### Distance to the reference point: Δ
 
 | Report | n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 |
 |---|---|---|---|---|---|---|---|
@@ -160,13 +160,13 @@ _No state changes — all known_failure entries continue to behave as documented
 
 ### Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._
 
 ## Real-world set (`eval/realworld-be-v1.yaml`)
 
 
 
-### Overall (Tier A) — Δ
+### Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -178,14 +178,14 @@ _No state changes — all known_failure entries continue to behave as documented
 | strict_match_rate | 0.970 | 0.979 | +0.010 |
 | n | 1510 | 1510 | 0 |
 
-### §3.2 contract — cross_language_recall@1 — Δ
+### §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=0/0) | 0.000 | 0.000 | +0.000 |
 | boosted  (n=0/0) | 0.000 | 0.000 | +0.000 |
 
-### Latency — Δ
+### Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -193,22 +193,22 @@ _No state changes — all known_failure entries continue to behave as documented
 | p95  | 26.9 ms | 36.9 ms | +10.0 ms |
 | p99  | 65.6 ms | 102.5 ms | +36.9 ms |
 
-### By region — Δ
+### By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
 
-### By variant — Δ
+### By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
 
-### Adversarial — by category — Δ
+### Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
 
-### Real-world — by dataset — Δ
+### Real-world: by dataset: Δ
 
 | Dataset | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -220,7 +220,7 @@ _No state changes — all known_failure entries continue to behave as documented
 | fwb-schools-wallonia | 400/400 | 0.840/0.845 (+0.005) | 0.850/0.855 (+0.005) | 0.950/0.970 (+0.020) |
 | namur-commerces | 150/150 | 0.953/0.993 (+0.040) | 0.954/0.993 (+0.039) | 0.973/1.000 (+0.027) |
 
-### Distance to the reference point — Δ
+### Distance to the reference point: Δ
 
 | Report | n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 |
 |---|---|---|---|---|---|---|---|
@@ -229,4 +229,4 @@ _No state changes — all known_failure entries continue to behave as documented
 
 ### Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._

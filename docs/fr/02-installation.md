@@ -1,6 +1,6 @@
 # 2. Installation
 
-À faire une fois, puis seulement quand BeSt publie un nouveau dump (l'index est figé sur le dump utilisé à la construction). Pour les mises à jour, `scripts/refresh_best.sh` automatise les étapes 4 et 5 — voir [Mettre à jour les données](#mettre-à-jour-les-données).
+À faire une fois, puis seulement quand BeSt publie un nouveau dump (l'index est figé sur le dump utilisé à la construction). Pour les mises à jour, `scripts/refresh_best.sh` automatise les étapes 4 et 5, voir [Mettre à jour les données](#mettre-à-jour-les-données).
 
 ## Pré-requis matériels
 
@@ -9,7 +9,7 @@
 - **~4 Go de RAM libre** pendant l'indexation (essentiellement pour la jointure des dictionnaires en mémoire). Le service tournant en régime stable consomme moins.
 - Un système **Linux, macOS ou Windows** (Linux et macOS sont les chemins testés ; sur Windows, utiliser WSL2 simplifie la vie).
 
-## Étape 1 — Installer Rust
+## Étape 1: Installer Rust
 
 Si `cargo --version` ne renvoie rien :
 
@@ -22,7 +22,7 @@ cargo --version    # doit afficher "cargo 1.90.x" ou plus récent
 
 Sur Windows sans WSL : passer par `https://www.rust-lang.org/tools/install` puis redémarrer le terminal.
 
-## Étape 2 — Récupérer le code
+## Étape 2: Récupérer le code
 
 ```bash
 git clone https://github.com/brunomoyse/crabfinder.git
@@ -31,7 +31,7 @@ cd crabfinder
 
 (Si on t'a remis une archive `.tar.gz` au lieu d'un dépôt git, extraire et entrer dans le dossier décompressé.)
 
-## Étape 3 — Construire les binaires
+## Étape 3: Construire les binaires
 
 ```bash
 cargo build --release
@@ -49,13 +49,13 @@ Vérification rapide :
 ./target/release/crabfinder-batch --version
 ```
 
-## Étape 4 — Télécharger les données BeSt Address
+## Étape 4: Télécharger les données BeSt Address
 
 BeSt publie un bundle ZIP par région. Tu as besoin des trois pour couvrir la Belgique.
 
 ### Sources officielles
 
-Page de téléchargement : [https://opendata.bosa.be/](https://opendata.bosa.be/) — chercher « BeSt Address » dans le catalogue.
+Page de téléchargement : [https://opendata.bosa.be/](https://opendata.bosa.be/), chercher « BeSt Address » dans le catalogue.
 
 Trois archives à récupérer :
 - `BrusselsAddress_*.zip`
@@ -66,7 +66,7 @@ Plus, **dans la même page**, les archives sœurs :
 - `Municipality_*.zip`
 - `PostalInfo_*.zip`
 - `StreetName_*.zip`
-- `PartOfMunicipality_*.zip` (Wallonie uniquement — Bruxelles et la Flandre n'en publient pas)
+- `PartOfMunicipality_*.zip` (Wallonie uniquement : Bruxelles et la Flandre n'en publient pas)
 
 ### Mise en place
 
@@ -83,7 +83,7 @@ mv ~/Downloads/PartOfMunicipality*.zip best-full-latest/
 ls best-full-latest/      # vérifier la présence des ~10 ZIP
 ```
 
-## Étape 5 — Construire l'index
+## Étape 5: Construire l'index
 
 ```bash
 ./target/release/crabfinder-indexer \
@@ -112,7 +112,7 @@ Sortie typique (dump du 2026-10-15, portable Apple Silicon) :
 Comment la lire :
 
 - `skipped_status` : adresses retirées, réservées et rejetées, écartées de la recherche (les adresses en vigueur et en projet sont indexées). Elles sont gardées dans le fichier d'historique (`history records`) pour que les anciens identifiants restent retrouvables.
-- `missing_position` / `imputed positions` : BeSt publie certaines adresses wallonnes (140 263 dans ce dump) sans position (Lambert 72 `0 0`, qui tomberait en France). L'indexeur leur attribue une position à partir de leurs voisines, et note comment dans `position_source` — voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#doù-viennent-les-coordonnées--position_source).
+- `missing_position` / `imputed positions` : BeSt publie certaines adresses wallonnes (140 263 dans ce dump) sans position (Lambert 72 `0 0`, qui tomberait en France). L'indexeur leur attribue une position à partir de leurs voisines, et note comment dans `position_source`, voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#doù-viennent-les-coordonnées--position_source).
 - `localities` : les noms de lieux que le service comprend dans une recherche de lieu : communes, sections de commune et zones postales BeSt (« Spontin », « Han-sur-Lesse »), plus les villages et hameaux OpenStreetMap si l'index est construit avec `--places` (`OSM places loaded` est alors non nul).
 
 Le dossier `./index-belgium/` contient maintenant :
@@ -151,7 +151,7 @@ Dans les deux cas, la réponse est l'adresse BeSt la plus proche (`confidence: l
 
 Pour les lieux, ajoute `--places data/osm-places-be-v1.csv` à la commande d'indexation ci-dessus. Les points d'intérêt sont chargés par le service au démarrage : mettre ce fichier à jour ne demande jamais de réindexer. Les deux CSV sont dérivés d'OpenStreetMap (© les contributeurs d'OpenStreetMap, ODbL 1.0, voir `data/README.md`).
 
-## Étape 6 — Démarrer le service HTTP (pour le mode recherche)
+## Étape 6: Démarrer le service HTTP (pour le mode recherche)
 
 Si tu vas utiliser exclusivement la CLI batch, tu peux sauter cette étape.
 
@@ -191,7 +191,7 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 
 | Flag | Défaut | Effet |
 |---|---|---|
-| `--index CHEMIN` | — (obligatoire) | Dossier de l'index. |
+| `--index CHEMIN` | n/a (obligatoire) | Dossier de l'index. |
 | `--host IP` | `127.0.0.1` | Adresse d'écoute. `0.0.0.0` pour écouter sur toutes les interfaces (conteneurs). |
 | `--port N` | `8080` | Port TCP. |
 | `--abbreviation-dict CHEMIN` | (aucun) | Expansion `av` → `avenue`. **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
@@ -283,7 +283,7 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement, `EVAL_SETS="a.yaml b.json"` pour valider d'autres jeux, `RESTART_CMD="…"` pour redémarrer le service après la bascule. Les anciens dossiers `best-*` / `index-*` ne sont pas supprimés : fais-le toi-même une fois le nouvel index en service.
+Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement, `STAMP=2026-10-15` pour nommer les dossiers autrement que par la date du jour (un `index-<stamp>/` existant est supprimé puis reconstruit), `VALIDATE_PORT=N` pour changer le port 18080 du service de validation, `EVAL_SETS="a.yaml b.json"` pour valider d'autres jeux, `RESTART_CMD="…"` pour redémarrer le service après la bascule. Les anciens dossiers `best-*` / `index-*` ne sont pas supprimés : fais-le toi-même une fois le nouvel index en service.
 
 ### Planifier la mise à jour
 

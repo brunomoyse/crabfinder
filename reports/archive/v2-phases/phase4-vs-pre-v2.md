@@ -1,8 +1,8 @@
-# Eval diff — `reports/pre-v2-baseline.json` → `/private/tmp/claude-501/-Users-brunomoyse-Development-applications-PERSO-crabfinder/ffd86c4d-8c56-4a73-8e94-dd0aa905ccbc/scratchpad/phase4.json`
+# Eval diff: `reports/pre-v2-baseline.json` → `/private/tmp/claude-501/-Users-brunomoyse-Development-applications-PERSO-crabfinder/ffd86c4d-8c56-4a73-8e94-dd0aa905ccbc/scratchpad/phase4.json`
 
 _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
-## Overall (Tier A) — Δ
+## Overall (Tier A): Δ
 
 | Metric | baseline | current | Δ |
 |---|---|---|---|
@@ -14,14 +14,14 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | strict_match_rate | 0.726 | 0.870 | +0.144 |
 | n | 3837 | 3837 | 0 |
 
-## §3.2 contract — cross_language_recall@1 — Δ
+## §3.2 contract: cross_language_recall@1: Δ
 
 | Pool | Baseline | Current | Δ |
 |---|---|---|---|
 | random   (n=116/116) | 0.983 | 1.000 | +0.017 |
 | boosted  (n=200/200) | 0.995 | 0.995 | +0.000 |
 
-## Latency — Δ
+## Latency: Δ
 
 | | baseline | current | Δ |
 |---|---|---|---|
@@ -29,7 +29,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | p95  | 15.1 ms | 6.7 ms | -8.3 ms |
 | p99  | 51.3 ms | 10.4 ms | -40.9 ms |
 
-## By region — Δ
+## By region: Δ
 
 | Region | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | BE-VLG | 1925/1925 | 0.833/0.957 (+0.125) | 0.853/0.968 (+0.115) | 0.731/0.870 (+0.138) |
 | BE-WAL | 1053/1053 | 0.883/0.968 (+0.085) | 0.907/0.977 (+0.070) | 0.720/0.868 (+0.148) |
 
-## By variant — Δ
+## By variant: Δ
 
 | Variant | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -52,7 +52,7 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 | typo | 487/487 | 0.366/0.988 (+0.622) | 0.423/0.990 (+0.566) | 0.000/0.000 (+0.000) |
 | with_postal | 500/500 | 0.996/0.998 (+0.002) | 0.997/0.999 (+0.002) | 1.000/1.000 (+0.000) |
 
-## Adversarial — by category — Δ
+## Adversarial: by category: Δ
 
 | Category | n base/cur | recall@1 base/cur (Δ) | MRR base/cur (Δ) | strict base/cur (Δ) |
 |---|---|---|---|---|
@@ -65,4 +65,4 @@ _Minimal MVP diff. Per-query regression list deferred to Phase 6.5b._
 
 ## Known-failure state changes
 
-_No state changes — all known_failure entries continue to behave as documented._
+_No state changes; all known_failure entries continue to behave as documented._

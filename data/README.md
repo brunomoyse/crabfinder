@@ -32,8 +32,8 @@ address.
 ## OpenStreetMap landmarks
 
 `osm-pois-be-v1.csv` lists Belgian OSM nodes, ways and relations (ways
-and relations at their centre) with a `name` and a `wikidata` tag — the
-notability filter — and a landmark tag: `tourism=attraction|museum|zoo|
+and relations at their centre) with a `name` and a `wikidata` tag (the notability filter) and a landmark tag:
+`tourism=attraction|museum|zoo|
 theme_park|aquarium|gallery`, `historic=castle|monument|memorial|fort|
 citadel|archaeological_site|city_gate|tower|ruins`, `amenity=townhall|
 university|place_of_worship|theatre|concert_hall|hospital`,

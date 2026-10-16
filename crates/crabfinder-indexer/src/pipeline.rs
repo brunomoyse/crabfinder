@@ -16,6 +16,7 @@ use crabfinder_core::{
 
 use crate::bundle::{Entity, Region as BundleRegion, find_zip};
 use crate::dict::DictBundle;
+use crate::history::HistoryBuilder;
 use crate::reproject::Reprojector;
 use crate::xml::{
     RawAddress, read_municipalities, read_parts_of_municipality, read_postal_infos, read_streets,
@@ -92,6 +93,22 @@ pub fn stream_resolved_addresses<F>(
     region: BundleRegion,
     dicts: &DictBundle,
     limit: Option<usize>,
+    handler: F,
+) -> Result<StreamReport>
+where
+    F: FnMut(Address) -> Result<bool>,
+{
+    stream_resolved_addresses_with_history(best_dir, region, dicts, limit, None, handler)
+}
+
+/// `stream_resolved_addresses`, keeping every record the status filter
+/// drops in `history` (schema v12, v3 Phase 11.4).
+pub fn stream_resolved_addresses_with_history<F>(
+    best_dir: &Path,
+    region: BundleRegion,
+    dicts: &DictBundle,
+    limit: Option<usize>,
+    mut history: Option<&mut HistoryBuilder>,
     mut handler: F,
 ) -> Result<StreamReport>
 where
@@ -107,9 +124,13 @@ where
         stream_addresses(r, |raw: RawAddress| -> Result<bool> {
             report.parsed += 1;
 
-            // Status filter — drop Reserved + Retired by default (file 07 §5.3)
+            // Status filter — drop Reserved, Retired and Rejected by
+            // default (file 07 §5.3); they only go to the history side-file.
             if !raw.status.should_index_by_default() {
                 report.skipped_status += 1;
+                if let Some(h) = history.as_deref_mut() {
+                    h.record(&raw, &reprojector);
+                }
                 return Ok(true);
             }
 

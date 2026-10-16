@@ -12,7 +12,7 @@ use crate::resolver::Candidate;
 
 use super::error::ServiceError;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Feature {
     #[serde(rename = "type")]
     pub kind: &'static str,
@@ -44,7 +44,7 @@ pub struct Feature {
     pub house_number_delta: Option<i32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Geometry {
     #[serde(rename = "type")]
     pub kind: &'static str,

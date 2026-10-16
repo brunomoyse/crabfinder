@@ -18,6 +18,7 @@ use tantivy::Index;
 use crabfinder_core::{Address, Language, MultilingualName};
 
 use crate::abbreviation::AbbreviationMap;
+use crate::history::IdStatus;
 use crate::query_builder::{analyze, typo_distance};
 use crate::resolver::{AddressQuery, Confidence, ResolvedAddress, normalize_box};
 
@@ -89,6 +90,9 @@ pub enum CorrectionKind {
     /// The free text was read another way than first parsed (a 4-digit
     /// number as the house number rather than the postal code…).
     Reading,
+    /// The BeSt id given is an older version, or a retired / reserved /
+    /// rejected address: here is today's (v3 Phase 11.4).
+    IdReplaced,
 }
 
 impl CorrectionKind {
@@ -108,6 +112,7 @@ impl CorrectionKind {
             Self::BoxAdded => "box_added",
             Self::BoxNotFound => "box_not_found",
             Self::Reading => "reading",
+            Self::IdReplaced => "id_replaced",
         }
     }
 
@@ -124,7 +129,8 @@ impl CorrectionKind {
 /// One difference between the input and the official address.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Correction {
-    /// `street`, `city`, `postal_code`, `house_number`, `box` or `query`.
+    /// `street`, `city`, `postal_code`, `house_number`, `box`, `query` or
+    /// `best_id`.
     pub field: &'static str,
     pub kind: CorrectionKind,
     /// What the input said (analyzed form for words); absent when the
@@ -197,6 +203,29 @@ pub fn assess(
             corrections: Vec::new(),
         };
     };
+    // Found by id: the id is what the input says.
+    if r.confidence == Confidence::Id {
+        let replaced = r
+            .id_lookup
+            .as_ref()
+            .filter(|l| l.status != IdStatus::Current)
+            .map(|l| {
+                Correction::new(
+                    "best_id",
+                    CorrectionKind::IdReplaced,
+                    Some(l.input.as_str()),
+                    Some(a.id.to_string()),
+                )
+            });
+        return Validation {
+            status: if replaced.is_some() {
+                Status::Corrected
+            } else {
+                Status::Valid
+            },
+            corrections: replaced.into_iter().collect(),
+        };
+    }
     let q = match r.reading {
         0 => query,
         n => query.alternatives.get(n - 1).unwrap_or(query),
@@ -575,6 +604,8 @@ mod tests {
             mid_street: Arc::new(MidStreetIndex::empty()),
             localities: Arc::new(LocalityIndex::empty()),
             landmarks: Arc::new(LandmarkIndex::empty()),
+            history: Arc::new(crate::history::HistoryIndex::empty()),
+            spatial: Arc::new(crate::spatial::SpatialIndex::from_points(Vec::new())),
         }
     }
 

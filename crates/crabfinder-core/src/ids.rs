@@ -40,6 +40,16 @@ impl BestId {
         (&self.namespace, &self.object_identifier)
     }
 
+    /// `{namespace}/{objectIdentifier}`: the id of the object across all its
+    /// versions (schema v12 `best_oid`, v3 Phase 11.4).
+    pub fn object_key(&self) -> String {
+        format!(
+            "{}/{}",
+            self.namespace.trim_end_matches('/'),
+            self.object_identifier
+        )
+    }
+
     /// Returns the owning [`Region`] derived from this ID's namespace.
     pub fn region(&self) -> Result<Region, CoreError> {
         Region::from_namespace(&self.namespace)
@@ -157,6 +167,16 @@ mod tests {
             b.to_string(),
             "https://data.vlaanderen.be/id/adres/200001/2023-11-01"
         );
+    }
+
+    #[test]
+    fn object_key_drops_version_and_trailing_slash() {
+        assert_eq!(
+            sample_addr().object_key(),
+            "https://databrussels.be/id/address/615867"
+        );
+        let b = BestId::new("https://data.vlaanderen.be/id/adres/", "200068", "2023");
+        assert_eq!(b.object_key(), "https://data.vlaanderen.be/id/adres/200068");
     }
 
     #[test]

@@ -64,6 +64,7 @@ index dir/          Tantivy segments
                     .crab-meta.json       schema version guard + build time
                     mid-street-v1.bin     (street, postal) → median-number point
                     localities-v1.json    named places → centre + postal codes
+                    history-v1.json.gz    retired / reserved / rejected addresses (v12)
         │
         ▼
 AppState::load      open index, check sidecar, build R-tree + address-count
@@ -75,9 +76,9 @@ AppState::load      open index, check sidecar, build R-tree + address-count
         └── crabfinder-eval     --batch-mode (in-process)
 ```
 
-## Index (schema v11)
+## Index (schema v12)
 
-`crabfinder_indexer::meta::SCHEMA_VERSION` is **11**; every reader checks
+`crabfinder_indexer::meta::SCHEMA_VERSION` is **12**; every reader checks
 `.crab-meta.json` and refuses a mismatch. Recent bumps:
 
 - **v7** — `mid-street-v1.bin` side-file (lower-median house number per
@@ -90,6 +91,28 @@ AppState::load      open index, check sidecar, build R-tree + address-count
 - **v10** — raw `street_exact` field for the exact-name bonus.
 - **v11** — the OSM `Address::place_name` payload field (v8) is gone:
   addresses carry BeSt data only.
+- **v12** — raw `best_oid` field (the id without its version) and the
+  `history-v1.json.gz` side-file. BeSt's `rejected` status (1,406
+  Brussels addresses) is no longer misread as `current`, so those
+  addresses are no longer searchable.
+
+### History side-file (`history.rs`, v12)
+
+The status filter keeps `current` and `proposed` addresses in the index.
+It writes the others (`retired`, `reserved`, `rejected`: 289,641 in the
+2026-10-15 dump, nearly all Flemish history) to `history-v1.json.gz`.
+Each record keeps:
+
+- the versioned id and the status;
+- the street object, house number, box and postal code;
+- `endLifeSpanVersion`;
+- the last position, reprojected.
+
+The service loads the file into a map keyed by object key, about 1 s
+at startup. `/lookup` and the batch `best_id` column use it to resolve
+old ids. The successor (`same_number_box`, then `same_number`, then
+`same_position` within 5 m) is derived at lookup time from the current
+index, so it never goes stale against the dump it was built with.
 
 The indexer refuses an output directory that already holds an index
 (Tantivy would append a second copy) unless `--overwrite`.
@@ -98,7 +121,8 @@ Fields (`CrabSchema::build`):
 
 | Field | Type | Used by |
 |---|---|---|
-| `best_id` | raw, stored | hydrate |
+| `best_id` | raw, stored | hydrate, `/lookup` |
+| `best_oid` | raw: `{namespace}/{objectIdentifier}` (v12) | `/lookup` of an id without, or with another, version |
 | `searchable` | multi-valued TEXT, `crab` analyzer, no fieldnorms | street/municipality word matching |
 | `street_exact` | raw, multi-valued: each street name form analyzed and space-joined (`grand place`) | exact-name bonus |
 | `lat`, `lon` | f64 FAST + stored | response, R-tree, area queries |
@@ -172,6 +196,7 @@ Markt.
 | `dedup` | Over-fetch, then collapse hits by `building_group_id` |
 | `focus` | `focus_point` parsing and distance decay |
 | `hydrate` | Stored payload → `HydratedHit` / `Address` |
+| `history` | `history-v1.json.gz` and `resolve_id`: an id's status today and its derived successor, for `/lookup` and the batch `best_id` column (v3 Phase 11.4) |
 | `mid_street` | `mid-street-v1.bin`: the street's median-number point (`median_street`) |
 | `localities` | `localities-v1.json`: place name → localities, postal-code centres |
 | `landmarks` | Optional OSM landmarks (`--pois`), query interpretation only |

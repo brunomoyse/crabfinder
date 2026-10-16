@@ -49,6 +49,10 @@ What it handles:
 - **Positions for every address** — the ~140k Walloon addresses BeSt
   ships without coordinates are imputed (same number, interpolation,
   locality centroid) and flagged with `position_source`.
+- **Old ids still resolve** — `/lookup` and the batch `best_id` column
+  accept ids with or without version, from any earlier dump. A retired
+  address leads to the current BeSt address that took its place: same
+  number and box, same number, or the same position within 5 m.
 - **Labels in any language** — `lang=fr|nl|de` and a ready-to-print
   `label` on every result.
 - **Operations** — request deadlines, a concurrency limit, CORS,

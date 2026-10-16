@@ -29,6 +29,7 @@ use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::SharedAddressCountIndex;
 use crate::dedup::{MatchType, RAW_HIT_CAP, RawHit, group_by_building, raw_limit};
 use crate::focus::{FOCUS_HALF_LIFE_M, LOCALITY_DECAY_M, apply_decay};
+use crate::history::{IdStatus, SharedHistoryIndex, SuccessorRule, resolve_id};
 use crate::hydrate::{HydratedHit, hydrate};
 use crate::landmarks::{Landmark, SharedLandmarkIndex};
 use crate::localities::{Province, SharedLocalityIndex};
@@ -37,7 +38,7 @@ use crate::query_builder::{
     Area, BBox, FilterParams, analyze, build_area_query, build_fuzzy_query, build_strict_query,
     build_typo_query, search_score_only, search_with_notability, searchable_field, slot_is_unknown,
 };
-use crate::spatial::haversine_m;
+use crate::spatial::{SharedSpatialIndex, haversine_m};
 use crate::validate::Validation;
 
 /// Structured address input. Both the HTTP free-text path (after parsing) and
@@ -85,6 +86,10 @@ pub struct AddressQuery {
     /// reads it, to compare those words with the address's place names
     /// (v3 Phase 11.2); the search treats them as street words.
     pub city_tokens: usize,
+    /// A BeSt id (the batch `best_id` column, v3 Phase 11.4): looked up
+    /// first (`resolve_by_id`); the words are geocoded only when it leads
+    /// to no current address.
+    pub best_id: Option<String>,
 }
 
 impl AddressQuery {
@@ -155,6 +160,10 @@ pub enum Confidence {
     /// `--pois`: candidates are the BeSt addresses around it, nearest
     /// first, each at its own BeSt position (v2 Phase 10).
     Landmark,
+    /// Found by BeSt id (`AddressQuery::best_id`, v3 Phase 11.4): the
+    /// address itself, or the successor of a retired one
+    /// (`ResolvedAddress::id_lookup`).
+    Id,
     /// No match.
     NotFound,
 }
@@ -170,6 +179,7 @@ impl Confidence {
             Confidence::AdjacentCommune => "adjacent_commune",
             Confidence::Locality => "locality",
             Confidence::Landmark => "landmark",
+            Confidence::Id => "id",
             Confidence::NotFound => "not_found",
         }
     }
@@ -248,9 +258,21 @@ pub struct ResolvedAddress {
     /// The answers grouped by municipality, when asked for
     /// (`resolve_with_alternatives`, v3 Phase 11.3).
     pub alternatives: Option<Vec<MunicipalityGroup>>,
-    /// Input vs. official address, when asked for
-    /// (`validate::resolve_and_assess`, v3 Phase 11.2).
+    /// Input vs. official address, when asked for (`validate::assess`,
+    /// v3 Phase 11.2).
     pub validation: Option<Validation>,
+    /// What the query's `best_id` turned out to be (v3 Phase 11.4).
+    pub id_lookup: Option<IdLookup>,
+}
+
+/// `AddressQuery::best_id`, resolved (`history::resolve_id`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdLookup {
+    pub input: String,
+    pub status: IdStatus,
+    /// How the successor of a retired / reserved / rejected id was found;
+    /// the successor is the returned address.
+    pub successor_rule: Option<SuccessorRule>,
 }
 
 impl ResolvedAddress {
@@ -268,6 +290,7 @@ impl ResolvedAddress {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         }
     }
 }
@@ -297,6 +320,10 @@ pub struct ResolverContext<'a> {
     /// OSM landmarks (`--pois`) behind the landmark step; empty when not
     /// loaded.
     pub landmarks: SharedLandmarkIndex,
+    /// Old ids (`AddressQuery::best_id`, v3 Phase 11.4).
+    pub history: SharedHistoryIndex,
+    /// For `same_position` successors of old ids; empty in the batch CLI.
+    pub spatial: SharedSpatialIndex,
 }
 
 /// Per-call knobs for `search`.
@@ -1752,6 +1779,50 @@ fn resolve_inner(
         score_gap,
         alternatives,
         validation: None,
+        id_lookup: None,
+    }
+}
+
+/// The address BeSt id `id` leads to today (`history::resolve_id`): the
+/// address itself or its successor, as `Confidence::Id`, at its own BeSt
+/// position. `NotFound` when it leads nowhere; `id_lookup` is always set.
+pub fn resolve_by_id(id: &str, ctx: &ResolverContext<'_>) -> ResolvedAddress {
+    let searcher = ctx.reader.searcher();
+    let found = resolve_id(&searcher, ctx.schema, &ctx.history, &ctx.spatial, id);
+    let res = match found {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(error=%e, "resolver: id lookup failed; treating as unknown");
+            return ResolvedAddress::not_found();
+        }
+    };
+    let id_lookup = Some(IdLookup {
+        input: id.trim().to_string(),
+        status: res.status,
+        successor_rule: res.successor.map(|s| s.rule),
+    });
+    let hydrated = res.target().and_then(|addr| {
+        let doc = searcher.doc::<TantivyDocument>(addr).ok()?;
+        let bgid = RawHit::from_doc(&doc, ctx.schema, 1.0, MatchType::Id, 0).building_group_id;
+        let hit = hydrate(&doc, ctx.schema, 1.0, MatchType::Id, 1, bgid, None).ok()?;
+        let address = serde_json::from_value::<Address>(hit.payload.clone()).ok()?;
+        Some((address, hit))
+    });
+    let Some((address, hit)) = hydrated else {
+        return ResolvedAddress {
+            id_lookup,
+            ..ResolvedAddress::not_found()
+        };
+    };
+    ResolvedAddress {
+        address: Some(address),
+        hit: Some(hit),
+        confidence: Confidence::Id,
+        house_number_delta: None,
+        street_match_score: 0.0,
+        fallback_reason: None,
+        id_lookup,
+        ..ResolvedAddress::not_found()
     }
 }
 
@@ -1786,6 +1857,8 @@ mod tests {
             mid_street,
             localities: Arc::new(crate::localities::LocalityIndex::empty()),
             landmarks: Arc::new(crate::landmarks::LandmarkIndex::empty()),
+            history: Arc::new(crate::history::HistoryIndex::empty()),
+            spatial: Arc::new(crate::spatial::SpatialIndex::from_points(Vec::new())),
         }
     }
 
@@ -3298,6 +3371,8 @@ mod alternatives_tests {
             mid_street: Arc::new(MidStreetIndex::empty()),
             localities: Arc::new(crate::localities::LocalityIndex::empty()),
             landmarks: Arc::new(crate::landmarks::LandmarkIndex::empty()),
+            history: Arc::new(crate::history::HistoryIndex::empty()),
+            spatial: Arc::new(crate::spatial::SpatialIndex::from_points(Vec::new())),
         }
     }
 

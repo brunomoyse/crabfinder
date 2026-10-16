@@ -51,7 +51,12 @@ use thiserror::Error;
 ///   v11 — v2 Phase 10: BeSt is the only source of what an address carries:
 ///        the OSM `place_name` payload field (v8) is gone. OSM places stay
 ///        in `localities-v1.json`, for interpreting queries only.
-pub const SCHEMA_VERSION: u32 = 11;
+///   v12 — v3 Phase 11.4: raw `best_oid` field (the id without its
+///        version) and the `history-v1.json.gz` side-file of retired,
+///        reserved and rejected addresses, so `/lookup` and the batch
+///        `best_id` column resolve old ids. BeSt `rejected` (Brussels) is
+///        no longer misread as `current`.
+pub const SCHEMA_VERSION: u32 = 12;
 
 /// Filename under the index directory.
 pub const SIDECAR_FILENAME: &str = ".crab-meta.json";

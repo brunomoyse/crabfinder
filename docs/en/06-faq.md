@@ -225,7 +225,7 @@ Variable with `--parallel N` and the input CSV size held in RAM. At 8 cores and 
 
 ### How much disk?
 
-Tantivy index: ~2.2 GB for full Belgium. Side files (`mid-street-v1.bin`, `localities-v1.json`): ~13 MB. Sidecar: a few bytes. All in: count 2.5 GB generously, twice that during a refresh (old and new index side by side).
+Tantivy index: ~2.2 GB for full Belgium. Side files (`mid-street-v1.bin`, `localities-v1.json`, `history-v1.json.gz`): ~23 MB. Sidecar: a few bytes. All in: count 2.5 GB generously, twice that during a refresh (old and new index side by side).
 
 ## Logs and observability
 
@@ -269,7 +269,7 @@ A request waited longer than `--request-timeout-ms` (default 10 s), slot wait in
 
 Check:
 - That you've read [`02-installation.md`](02-installation.md) if it's a setup problem.
-- That your index is `schema_version=11` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
+- That your index is `schema_version=12` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
 - That the binaries are release builds (`./target/release/...`, not `./target/debug/...`).
 
 Then capture:

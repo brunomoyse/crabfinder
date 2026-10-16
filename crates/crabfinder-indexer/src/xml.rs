@@ -388,6 +388,10 @@ pub struct RawAddress {
     /// Position in EPSG:31370 (Lambert 72). Reprojection happens later.
     pub easting: f64,
     pub northing: f64,
+    /// The `endLifeSpanVersion` attribute of `<tns:address>`: when the
+    /// record was retired (Flanders). Feeds the history side-file
+    /// (schema v12, v3 Phase 11.4).
+    pub end_life_span: Option<String>,
 }
 
 /// Stream the Address XML, invoking `handler` for each parsed `RawAddress`.
@@ -418,12 +422,19 @@ where
     let mut municipality_ref = CodeFields::default();
     let mut postal_info_ref = CodeFields::default();
     let mut pom_ref: Option<CodeFields> = None;
+    let mut end_life_span: Option<String> = None;
 
     loop {
         match xml.read_event_into(&mut buf)? {
             Event::Start(e) => {
                 if name_is(&e, b"tns:address") {
                     in_record = true;
+                    end_life_span = e
+                        .try_get_attribute("endLifeSpanVersion")
+                        .ok()
+                        .flatten()
+                        .map(|a| a.value.to_string())
+                        .filter(|v| !v.is_empty());
                     code = CodeFields::default();
                     status = None;
                     house_number.clear();
@@ -468,6 +479,7 @@ where
                         part_of_municipality_ref: pom,
                         easting: x,
                         northing: y,
+                        end_life_span: end_life_span.take(),
                     };
 
                     if !handler(raw)? {

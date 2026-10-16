@@ -96,12 +96,13 @@ Sortie typique (dump du 2026-10-15, portable Apple Silicon) :
 
 ```
 ====== indexing summary ======
-  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=845464 skipped_status=3361
+  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=844058 skipped_status=4767
   Flanders: pass1=  265ms  pass2=  52383ms  parsed=4218617 emitted=3933743 skipped_status=284874
   Wallonia: pass1=  192ms  pass2=  25818ms  parsed=2107430 emitted=2107430 skipped_status=0 ... missing_position=140263 ...
-     TOTAL: parsed=7174872 emitted=6886637 skipped_status=288235 skipped_unresolved=0 missing_position=140263 ...
+     TOTAL: parsed=7174872 emitted=6885231 skipped_status=289641 skipped_unresolved=0 missing_position=140263 ...
   mid_street entries: 145123
   imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
+  history records: 289641
   localities: 3065 (OSM places loaded: 0)
   commit: 856ms
   wall-clock total: 93063ms (1.6 min)
@@ -110,16 +111,17 @@ Sortie typique (dump du 2026-10-15, portable Apple Silicon) :
 
 Comment la lire :
 
-- `skipped_status` : adresses retirées ou en projet, volontairement écartées (seules les adresses en vigueur sont indexées).
+- `skipped_status` : adresses retirées, réservées et rejetées, écartées de la recherche (les adresses en vigueur et en projet sont indexées). Elles sont gardées dans le fichier d'historique (`history records`) pour que les anciens identifiants restent retrouvables.
 - `missing_position` / `imputed positions` : BeSt publie certaines adresses wallonnes (140 263 dans ce dump) sans position (Lambert 72 `0 0`, qui tomberait en France). L'indexeur leur attribue une position à partir de leurs voisines, et note comment dans `position_source` — voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#doù-viennent-les-coordonnées--position_source).
 - `localities` : les noms de lieux que le service comprend dans une recherche de lieu : communes, sections de commune et zones postales BeSt (« Spontin », « Han-sur-Lesse »), plus les villages et hameaux OpenStreetMap si l'index est construit avec `--places` (`OSM places loaded` est alors non nul).
 
 Le dossier `./index-belgium/` contient maintenant :
 
 - Les fichiers de segments Tantivy (`*.idx`, `*.pos`, `*.term`, etc.).
-- Un sidecar `.crab-meta.json` avec la version du schéma (actuellement **11** ; un index construit par une version plus ancienne doit être reconstruit) et la date de construction.
+- Un sidecar `.crab-meta.json` avec la version du schéma (actuellement **12** ; un index construit par une version plus ancienne doit être reconstruit) et la date de construction.
 - `mid-street-v1.bin` (~10 Mo) : les points de rue utilisés par le repli `median_street`.
 - `localities-v1.json` (~3 Mo) : les noms de lieux servant à comprendre les recherches de lieu.
+- `history-v1.json.gz` (~10 Mo) : les adresses retirées, réservées et rejetées, pour que `/lookup` et la colonne batch `best_id` retrouvent encore les anciens identifiants.
 
 **Le dump BeSt utilisé est figé dans l'index.** Quand un nouveau dump est publié, tu refais l'étape 4 (remplacer les ZIP) puis l'étape 5 (reconstruire). Ce n'est pas une migration incrémentale. L'indexeur refuse un dossier `--output` qui contient déjà un index (sinon il ajouterait une deuxième copie de chaque adresse) : supprime-le d'abord, ou passe `--overwrite`.
 
@@ -164,10 +166,10 @@ Sortie attendue :
 
 ```
 INFO starting crabfinder-service index=./index-belgium port=8080
-INFO index sidecar OK schema_version=11 tokenizer=crab
+INFO index sidecar OK schema_version=12 tokenizer=crab
 INFO spatial index built points=6878576 elapsed_ms=1605
 INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
-INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
+INFO address-count index built elapsed_ms=20048 n_docs=6885231 n_streets=144205 max_count=5649
 INFO mid_street side-file loaded path=./index-belgium/mid-street-v1.bin entries=145123
 INFO localities loaded entries=…
 INFO listening at http://127.0.0.1:8080
@@ -179,8 +181,8 @@ Test rapide depuis un autre terminal :
 
 ```bash
 curl "http://127.0.0.1:8080/health"
-# {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
-#  "schema_version":11,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
+# {"status":"ok","index_path":"./index-belgium","index_docs":6885231,"uptime_secs":12,
+#  "schema_version":12,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```

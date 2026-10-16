@@ -40,9 +40,9 @@ curl "http://127.0.0.1:8080/health"
 {
   "status": "ok",
   "index_path": "./index-belgium",
-  "index_docs": 6886637,
+  "index_docs": 6885231,
   "uptime_secs": 1234,
-  "schema_version": 10,
+  "schema_version": 12,
   "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
@@ -446,13 +446,36 @@ curl -G "http://127.0.0.1:8080/lookup" \
   --data lang=nl
 ```
 
-Réponse : une `FeatureCollection` avec `count`, les features **dans l'ordre demandé** (`match_type: "id"`) et une liste `missing` des identifiants qui n'existent pas (par exemple retirés après une mise à jour BeSt) :
+Réponse : une `FeatureCollection` avec `count`, les features **dans l'ordre demandé** (`match_type: "id"`) et une liste `missing` des identifiants qui ne sont pas des adresses aujourd'hui :
 
 ```
 count = 1
 missing = ["nope/1/1"]
 features[0].properties.label = "Wetstraat 16, 1000 Brussel"
 ```
+
+Un identifiant fonctionne avec ou sans sa version (`…/address/210225/1` ou `…/address/210225`). `results` dit, pour chaque identifiant dans l'ordre demandé, ce qu'il est aujourd'hui :
+
+| `status` | Signification |
+|---|---|
+| `current` | L'adresse (`feature`, `current_id`). |
+| `outdated_version` | La même adresse sous une version plus récente (`feature`, `current_id` = l'identifiant d'aujourd'hui). |
+| `retired`, `reserved`, `rejected` | BeSt ne la liste plus comme en vigueur. `record` contient ce que BeSt a gardé (numéro, code postal, date de fin). `successor` est l'adresse en vigueur qui l'a remplacée, s'il y en a une : même rue, même numéro et même boîte (`same_number_box`), sinon même numéro (`same_number`), sinon à moins de 5 m (`same_position`, avec `distance_m`). |
+| `unknown` | Absent de ce dump BeSt. |
+
+```bash
+curl -G "http://127.0.0.1:8080/lookup" \
+  --data-urlencode "id=https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00"
+```
+
+```
+results[0].status = "retired"
+results[0].record.end = "2023-11-01T15:15:58Z"
+results[0].successor.rule = "same_position"   (4,9 m)
+results[0].successor.feature.properties.label = "Wasstraat 120, 9000 GENT"
+```
+
+BeSt ne publie aucun lien « remplacée par » : le successeur est déduit des données de BeSt elles-mêmes (rue, numéro, boîte, position) et c'est toujours une adresse BeSt en vigueur.
 
 Un `id` vide donne un 400 (`id is empty`), plus de 50 aussi (`too many ids: 51 (max 50)`).
 

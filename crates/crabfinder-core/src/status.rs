@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 
-/// BeSt address/street status. All four observed values from the schema.
-/// See file 11 §5.
+/// BeSt address/street status: the four values of file 11 §5, plus
+/// `rejected` (Brussels, ~1.4k addresses; v3 Phase 11.4 — earlier builds
+/// misread it as `current`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -13,6 +14,7 @@ pub enum Status {
     Proposed,
     Reserved,
     Retired,
+    Rejected,
 }
 
 impl Status {
@@ -29,6 +31,7 @@ impl Status {
             Status::Proposed => "proposed",
             Status::Reserved => "reserved",
             Status::Retired => "retired",
+            Status::Rejected => "rejected",
         }
     }
 }
@@ -42,6 +45,7 @@ impl FromStr for Status {
             "proposed" => Ok(Status::Proposed),
             "reserved" => Ok(Status::Reserved),
             "retired" => Ok(Status::Retired),
+            "rejected" => Ok(Status::Rejected),
             other => Err(CoreError::InvalidStatus(other.to_string())),
         }
     }
@@ -52,11 +56,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_all_four() {
+    fn parses_every_status() {
         assert_eq!(Status::from_str("current").unwrap(), Status::Current);
         assert_eq!(Status::from_str("proposed").unwrap(), Status::Proposed);
         assert_eq!(Status::from_str("reserved").unwrap(), Status::Reserved);
         assert_eq!(Status::from_str("retired").unwrap(), Status::Retired);
+        assert_eq!(Status::from_str("rejected").unwrap(), Status::Rejected);
+        assert_eq!(Status::Rejected.as_str(), "rejected");
     }
 
     #[test]
@@ -65,6 +71,7 @@ mod tests {
         assert!(Status::Proposed.should_index_by_default());
         assert!(!Status::Reserved.should_index_by_default());
         assert!(!Status::Retired.should_index_by_default());
+        assert!(!Status::Rejected.should_index_by_default());
     }
 
     #[test]

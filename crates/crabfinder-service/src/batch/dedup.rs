@@ -17,8 +17,8 @@ use crabfinder_core::{Address, Language};
 
 use crate::query_builder::analyze;
 use crate::resolver::{
-    AddressQuery, Confidence, ResolvedAddress, ResolverContext, SearchOptions, resolve_with,
-    resolve_with_alternatives,
+    AddressQuery, Confidence, ResolvedAddress, ResolverContext, SearchOptions, resolve_by_id,
+    resolve_with, resolve_with_alternatives,
 };
 use crate::validate::assess;
 
@@ -63,16 +63,30 @@ pub const ROW_ALTERNATIVES: usize = 5;
 
 /// The batch decision for one query (`resolve_with`), with what `extras`
 /// asks for: alternatives by municipality, `/validate`'s verdict.
+///
+/// A query with a `best_id` (v3 Phase 11.4) is the address the id leads
+/// to (`resolve_by_id`); its words are geocoded only when the id leads
+/// nowhere, keeping the id's `id_lookup`.
 pub fn resolve_row(
     q: &AddressQuery,
     opts: &SearchOptions,
     ctx: &ResolverContext<'_>,
     extras: RowExtras,
 ) -> ResolvedAddress {
-    let mut r = if extras.alternatives {
-        resolve_with_alternatives(q, opts, ctx, ROW_ALTERNATIVES)
-    } else {
-        resolve_with(q, opts, ctx)
+    let by_id = q.best_id.as_deref().map(|id| resolve_by_id(id, ctx));
+    let mut r = match by_id {
+        Some(r) if r.address.is_some() || q.street_tokens.is_empty() => r,
+        by_id => {
+            let r = if extras.alternatives {
+                resolve_with_alternatives(q, opts, ctx, ROW_ALTERNATIVES)
+            } else {
+                resolve_with(q, opts, ctx)
+            };
+            ResolvedAddress {
+                id_lookup: by_id.and_then(|b| b.id_lookup),
+                ..r
+            }
+        }
     };
     if extras.corrections {
         r.validation = Some(assess(q, &r, ctx.index, &ctx.abbrev, extras.lang));
@@ -91,6 +105,7 @@ type CacheKey = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 
 fn cache_key(row: &InputRow) -> CacheKey {
@@ -101,6 +116,7 @@ fn cache_key(row: &InputRow) -> CacheKey {
         row.box_number.clone(),
         row.address.as_ref().map(|a| a.to_lowercase()),
         row.city.as_ref().map(|c| c.to_lowercase()),
+        row.best_id.clone(),
     )
 }
 
@@ -116,6 +132,14 @@ fn cache_key(row: &InputRow) -> CacheKey {
 /// A `city` column (v3 Phase 11.2) appends its words to the street words,
 /// as `/geocode?city=` does, and `AddressQuery::city_tokens` counts them.
 pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
+    AddressQuery {
+        best_id: row.best_id.clone(),
+        ..words_query(index, row)
+    }
+}
+
+/// `row_query` without the id.
+fn words_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
     if let Some(address) = &row.address {
         let mut q = AddressQuery::from_parsed(index, &crabfinder_parser::parse(address));
         if let Some(pc) = &row.postal_code {
@@ -214,6 +238,9 @@ where
         .collect();
     let cache: HashMap<CacheKey, ResolvedAddress> = resolved_pairs.into_iter().collect();
 
+    // The id columns appear on every row, or on none (v3 Phase 11.4).
+    let id_columns = rows.iter().any(|r| r.best_id.is_some());
+
     // 4) Broadcast. One OutputRow per InputRow, preserving order.
     rows.into_iter()
         .map(|row| {
@@ -224,7 +251,12 @@ where
                 .get(&key)
                 .expect("dédup cache must contain every row's key")
                 .clone();
-            output_row_from(row, resolved, lang)
+            let mut out = output_row_from(row, resolved, lang);
+            if id_columns {
+                out.id_status.get_or_insert_with(String::new);
+                out.successor_best_id.get_or_insert_with(String::new);
+            }
+            out
         })
         .collect()
 }
@@ -313,6 +345,16 @@ pub fn output_row_from(
                 .collect::<Vec<_>>()
                 .join("; ")
         }),
+        id_status: resolved
+            .id_lookup
+            .as_ref()
+            .map(|l| l.status.as_str().to_string()),
+        successor_best_id: resolved.id_lookup.as_ref().map(|l| {
+            l.successor_rule
+                .and(resolved.address.as_ref())
+                .map(|a| a.id.to_string())
+                .unwrap_or_default()
+        }),
     }
 }
 
@@ -398,6 +440,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
             // Inject the input street into a field so we can verify which
             // unique key each row mapped to — except we can't extend the
             // resolver shape here, so we lean on the order-preservation check
@@ -447,6 +490,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         });
         let out = dedup_then_resolve(vec![], &resolver, id_make_query, None);
         assert!(out.is_empty());
@@ -473,6 +517,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         });
         let out = dedup_then_resolve(rows, &resolver, id_make_query, None);
         assert_eq!(out.len(), 3);
@@ -507,6 +552,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         };
         let out = output_row_from(row, resolved, None);
         assert_eq!(out.id, "42");
@@ -536,6 +582,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         };
         let out = output_row_from(row, resolved, None);
         assert_eq!(out.confidence, "not_found");
@@ -640,6 +687,7 @@ mod tests {
             score_gap: None,
             alternatives: None,
             validation: None,
+            id_lookup: None,
         };
         let row = InputRow {
             id: "1".into(),

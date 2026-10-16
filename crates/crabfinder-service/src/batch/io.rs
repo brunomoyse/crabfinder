@@ -4,6 +4,7 @@
 //! ```text
 //! Input:   id, street, house_number?, postal_code?, box_number?, city?
 //!     or:  id, address, postal_code?            (free text, v2 Phase 6)
+//!     and/or: best_id                           (v3 Phase 11.4)
 //! Output:  id, street, house_number, postal_code,
 //!          matched_street, matched_house_number, matched_postal_code,
 //!          lat, lng,
@@ -12,6 +13,7 @@
 //!          address, label, position_source, ambiguous  (appended in v2)
 //!          status, corrections         (only with `corrections`, v3 Phase 11.2)
 //!          score_gap, alternatives     (only with `alternatives`, v3 Phase 11.3)
+//!          id_status, successor_best_id (only when a row has a `best_id`, v3 Phase 11.4)
 //! ```
 //!
 //! Output is CSV, or a GeoJSON FeatureCollection (`OutputFormat`).
@@ -53,6 +55,11 @@ pub struct InputRow {
     /// `corrections` option. Ignored on free-text rows.
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub city: Option<String>,
+    /// A BeSt address id, with or without version (v3 Phase 11.4): looked
+    /// up first, old ids included (`resolver::resolve_by_id`); the address
+    /// columns are geocoded only when it leads to no current address.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub best_id: Option<String>,
 }
 
 /// One row of output. Field order is the wire contract — `csv::Writer`
@@ -105,6 +112,16 @@ pub struct OutputRow {
     /// `Charleroi (6000); La Louvière (7100)`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alternatives: Option<String>,
+    // --- only when some row has a `best_id` (v3 Phase 11.4) ---
+    /// `/lookup`'s status of the input id: `current`, `outdated_version`,
+    /// `retired`, `reserved`, `rejected` or `unknown` (empty on rows
+    /// without one).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id_status: Option<String>,
+    /// The id of the address that replaced a retired / reserved /
+    /// rejected one (the row's address).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub successor_best_id: Option<String>,
 }
 
 /// Batch output format.
@@ -191,7 +208,7 @@ pub enum BatchError {
     Write(#[from] csv::Error),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
-    #[error("csv header has neither a `street` nor an `address` column")]
+    #[error("csv header has none of the `street`, `address` and `best_id` columns")]
     MissingColumn,
 }
 
@@ -241,9 +258,12 @@ pub fn read_rows<R: Read + 'static>(
         .flexible(true)
         .trim(csv::Trim::All)
         .from_reader(r);
-    let missing = reader
-        .headers()
-        .is_ok_and(|h| !h.is_empty() && !h.iter().any(|c| c == "street" || c == "address"));
+    let missing = reader.headers().is_ok_and(|h| {
+        !h.is_empty()
+            && !h
+                .iter()
+                .any(|c| c == "street" || c == "address" || c == "best_id")
+    });
     let header_error = missing.then_some(Err(BatchError::MissingColumn));
     let rows = reader
         .into_deserialize::<InputRow>()
@@ -403,6 +423,8 @@ mod tests {
                 status: None,
                 corrections: None,
                 score_gap: None,
+                id_status: None,
+                successor_best_id: None,
                 alternatives: None,
             })
             .unwrap();
@@ -512,6 +534,8 @@ mod tests {
             status: None,
             corrections: None,
             score_gap: None,
+            id_status: None,
+            successor_best_id: None,
             alternatives: None,
         };
         let missing = OutputRow {

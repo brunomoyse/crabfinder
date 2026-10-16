@@ -44,6 +44,8 @@ clap               = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
 serde-saphyr       = "2"
+# History side-file (schema v12)
+flate2             = "1.1"
 
 [dev-dependencies]
 crabfinder-test-support = { workspace = true }

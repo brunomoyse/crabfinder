@@ -13,6 +13,7 @@ use crabfinder_core::{
     PartOfMunicipalityId, PositionSource, PostalInfoId, Region, Status, StreetId, StreetType,
     WgsCoord,
 };
+use crabfinder_indexer::history::{HistoryBuilder, HistoryRecord};
 use crabfinder_indexer::index::{CrabIndexWriter, CrabSchema, register_tokenizers};
 use crabfinder_indexer::localities::LocalitiesBuilder;
 use crabfinder_indexer::meta::write_sidecar;
@@ -445,6 +446,44 @@ pub fn write_index(dir: &Path, addrs: &[Address], mid_street: bool) {
         mid.finish(&dir.join(MID_STREET_FILENAME))
             .expect("mid-street file");
     }
+}
+
+/// The history record (schema v12) the indexer keeps for `a` once BeSt
+/// retires it (or for its status, when not current): same id, street,
+/// number, box, postal code and position.
+pub fn history_record(a: &Address) -> HistoryRecord {
+    let (lat, lon) = match a.coordinates {
+        Coordinates::Wgs84(w) => (Some(w.lat), Some(w.lon)),
+        Coordinates::Lambert72(_) => (None, None),
+    };
+    let status = match a.status {
+        Status::Current | Status::Proposed => Status::Retired,
+        s => s,
+    };
+    HistoryRecord {
+        id: a.id.to_string(),
+        status: status.as_str().to_string(),
+        street_key: format!(
+            "{}|{}",
+            a.street_id.0.namespace, a.street_id.0.object_identifier
+        ),
+        house_number: a.house_number.clone(),
+        box_number: a.box_number.clone(),
+        postal_code: a.postal_code.clone(),
+        end: Some("2026-01-01T00:00:00Z".into()),
+        lat,
+        lon,
+    }
+}
+
+/// Write `<dir>/history-v1.json.gz` holding `history_record` of each of
+/// `gone` (addresses that are not in the index).
+pub fn write_history(dir: &Path, gone: &[Address]) {
+    let mut b = HistoryBuilder::new();
+    for a in gone {
+        b.push(history_record(a));
+    }
+    b.finish(dir).expect("history file");
 }
 
 /// Write a mid-street side-file at `path` computed from `addrs` with the

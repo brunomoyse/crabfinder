@@ -6,6 +6,7 @@ use std::path::Path;
 use crabfinder_core::{Coordinates, Region, Status};
 use crabfinder_indexer::bundle::{Entity, Region as BundleRegion, detect_regions, find_zip};
 use crabfinder_indexer::cli::{self, Args, RegionArg};
+use crabfinder_indexer::history::{self, HISTORY_FILENAME};
 use crabfinder_indexer::index::{CrabSchema, register_tokenizers};
 use crabfinder_indexer::meta::{SCHEMA_VERSION, check_sidecar};
 use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
@@ -514,5 +515,57 @@ fn cli_run_imputes_missing_positions() {
             ("5".into(), P::Interpolated),
             ("7".into(), P::Measured),
         ]
+    );
+}
+
+#[test]
+fn cli_run_keeps_unindexed_records_in_the_history_file() {
+    let mut b = BestBundle::brussels_sample();
+    // BeSt Brussels also says `rejected`: not current (v12 fix).
+    let mut rejected = AddrSpec::new("1006", "100", "21004", "1000", "16");
+    rejected.status = "rejected".into();
+    b.addresses.push(rejected);
+    let best = bundle_dir(&[b]);
+    let out = tempfile::tempdir().unwrap();
+    let report = cli::run(&Args::new(best.path(), out.path())).unwrap();
+    assert_eq!(report.total().skipped_status, 2);
+    assert_eq!(report.history_entries, 2);
+    assert!(report.summary().contains("history records: 2"));
+    assert!(out.path().join(HISTORY_FILENAME).exists());
+
+    let recs = history::load(out.path()).unwrap();
+    let retired = recs.iter().find(|r| r.status == "retired").unwrap();
+    assert_eq!(retired.id, "https://databrussels.be/id/address/1004/1");
+    assert_eq!(
+        retired.object_key(),
+        "https://databrussels.be/id/address/1004"
+    );
+    assert_eq!(
+        retired.building_group_id(),
+        "https://databrussels.be/id/streetname|3919|99"
+    );
+    assert_eq!(retired.postal_code, "1050");
+    assert_eq!(retired.end.as_deref(), Some("2024-01-01T10:00:00Z"));
+    assert!(retired.lat.is_some() && retired.lon.is_some());
+    let rejected = recs.iter().find(|r| r.status == "rejected").unwrap();
+    assert_eq!(rejected.house_number, "16");
+
+    // Schema v12: every indexed address carries its version-free id.
+    let (index, schema) = open(out.path());
+    assert_eq!(
+        count_term(
+            &index,
+            schema.best_oid,
+            "https://databrussels.be/id/address/1000"
+        ),
+        1
+    );
+    assert_eq!(
+        count_term(
+            &index,
+            schema.best_id,
+            "https://databrussels.be/id/address/1006/1"
+        ),
+        0
     );
 }

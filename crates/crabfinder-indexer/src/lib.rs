@@ -7,6 +7,7 @@
 pub mod bundle;
 pub mod cli;
 pub mod dict;
+pub mod history;
 pub mod impute;
 pub mod index;
 pub mod localities;

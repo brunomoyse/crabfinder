@@ -225,7 +225,7 @@ Variable selon `--parallel N` et la taille du CSV chargé en RAM. À 8 cœurs et
 
 ### Combien de disque ?
 
-Index Tantivy : ~2,2 Go pour la Belgique complète. Fichiers annexes (`mid-street-v1.bin`, `localities-v1.json`) : ~13 Mo. Sidecar : quelques octets. Au total : compter 2,5 Go généreusement, le double pendant une mise à jour (ancien et nouvel index côte à côte).
+Index Tantivy : ~2,2 Go pour la Belgique complète. Fichiers annexes (`mid-street-v1.bin`, `localities-v1.json`, `history-v1.json.gz`) : ~23 Mo. Sidecar : quelques octets. Au total : compter 2,5 Go généreusement, le double pendant une mise à jour (ancien et nouvel index côte à côte).
 
 ## Logs et observabilité
 
@@ -269,7 +269,7 @@ Une requête a attendu plus que `--request-timeout-ms` (10 s par défaut), atten
 
 Vérifie :
 - Que tu as bien lu [`02-installation.md`](02-installation.md) si c'est un souci de setup.
-- Que ton index est en `schema_version=11` (`cat ./index-belgium/.crab-meta.json`, ou `/health`).
+- Que ton index est en `schema_version=12` (`cat ./index-belgium/.crab-meta.json`, ou `/health`).
 - Que les binaires sont en release (`./target/release/...`, pas `./target/debug/...`).
 
 Ensuite, capturer :

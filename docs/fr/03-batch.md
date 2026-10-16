@@ -51,8 +51,9 @@ Chaque `address` est découpée exactement comme `/geocode?q=` (code postal, num
 | `postal_code` | non | Code postal belge à 4 chiffres. Fortement recommandé : sans lui, les rues homonymes (« Rue de la Gare », « Kerkstraat ») ne peuvent pas être départagées. |
 | `city` | non | Nom de commune ou de localité, traité comme les mots de la rue. Ignoré sur les lignes en texte libre. Comparé à l'adresse par `--corrections`. |
 | `box_number` | non | Boîte / unité. Ne filtre jamais : si le bâtiment a une unité avec cette boîte (écrite comme dans BeSt, par ex. `b002`), c'est elle qui donne le `best_id` et le `label` de la ligne (`Avenue Louise 32 bte b002, 1050 Ixelles`) ; une boîte inconnue est simplement ignorée. |
+| `best_id` | non | Un identifiant d'adresse BeSt conservé d'un traitement précédent, avec ou sans sa version. Recherché avant tout le reste, anciens identifiants compris : voir [Anciens identifiants BeSt](#anciens-identifiants-best--best_id). |
 
-L'en-tête doit contenir `street` ou `address` ; sinon la CLI s'arrête avec ``csv header has neither a `street` nor an `address` column`` (HTTP : `400`).
+L'en-tête doit contenir `street`, `address` ou `best_id` ; sinon la CLI s'arrête avec ``csv header has none of the `street`, `address` and `best_id` columns`` (HTTP : `400`).
 
 **Encodage** : UTF-8. Si ton CSV est en `windows-1252` (export Excel français/néerlandais typique), convertis-le d'abord :
 
@@ -79,7 +80,7 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Recopiés de l'entrée**, pour l'audit (`street` vide sur les lignes en texte libre). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | Ce que crabfinder a réellement trouvé dans BeSt. Montre les écarts (faute corrigée, numéro voisin…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Vides si `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark`, `id` (trouvé par la colonne `best_id`) ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
 | `fallback_reason` | Vide si `confidence == exact`. Sinon `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` ou `no_match`. |
 | `house_number_delta` | Numéro trouvé moins numéro demandé : `0` quand le numéro demandé existe, par ex. `26` quand on demande le 33 et que le 59 est renvoyé. Vide pour les résultats au niveau de la rue ou d'un lieu. |
 | `street_match_score` | Score BM25 brut. Indicateur de qualité du match textuel. Plus haut = meilleur match. Vide si `not_found`. |
@@ -336,6 +337,30 @@ id,street,house_number,postal_code,city,…,status,corrections
 ```
 
 `status` vaut `valid`, `corrected`, `ambiguous`, `incomplete` ou `not_found`. Chaque correction se lit `kind:champ:entrée->officiel`, séparées par `; `. Sans l'option, les colonnes de sortie ne changent pas.
+
+## Anciens identifiants BeSt : `best_id`
+
+Un fichier de `best_id` enregistrés il y a des mois n'a pas besoin d'être regéocodé. BeSt versionne ses identifiants et retire des adresses, donc certains ont changé depuis. Mets-les dans une colonne `best_id`. Chaque ligne est alors d'abord recherchée par identifiant, comme le fait [`/lookup`](04-recherche-en-ligne.md#get-lookup--adresses-par-identifiant-best), et la sortie gagne deux dernières colonnes : `id_status` et `successor_best_id`.
+
+```
+id,best_id,street,house_number,postal_code
+1,https://data.vlaanderen.be/id/adres/200001,,,
+2,https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00,,,
+3,nope/1/1,Avenue Louise,45,1050
+```
+
+```
+id,…,confidence,…,best_id,…,id_status,successor_best_id
+1,…,id,…,…/adres/200001/2023-11-01T14:53:09+01:00,…,current,
+2,…,id,…,…/adres/<successeur>,…,retired,…/adres/<successeur>
+3,…,exact,…,…,…,unknown,
+```
+
+- `current` / `outdated_version` : l'adresse elle-même, avec son `best_id` d'aujourd'hui (`confidence=id`).
+- `retired` / `reserved` / `rejected` : l'adresse qui l'a remplacée, si BeSt en a une. C'est une adresse en vigueur dans la même rue, au même numéro et à la même boîte, sinon au même numéro, sinon à moins de 5 m de l'emplacement de l'ancienne. `successor_best_id` est cette adresse. Sans successeur, la ligne est `not_found`.
+- `unknown` : l'identifiant n'est pas dans ce dump BeSt.
+
+Quand l'identifiant ne mène à aucune adresse en vigueur et que la ligne a aussi des colonnes d'adresse, celles-ci sont géocodées normalement (ligne 3). Les lignes sans `best_id` ont des colonnes d'identifiant vides. Avec `--corrections`, un identifiant remplacé se lit `id_replaced:best_id:<ancien>-><nouveau>`.
 
 ## Cas particuliers
 

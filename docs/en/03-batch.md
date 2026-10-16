@@ -51,8 +51,9 @@ Each `address` is parsed exactly like `/geocode?q=` (postal code, house number, 
 | `postal_code` | no | Belgian 4-digit postal code. Strongly recommended: without it, homonymous streets ("Rue de la Gare", "Kerkstraat") can't be told apart. |
 | `city` | no | Municipality or locality name, matched like street words. Ignored on free-text rows. Checked against the address by `--corrections`. |
 | `box_number` | no | Box / unit. Never filters: when the building has a unit with that box (spelled as in BeSt, e.g. `b002`), that unit becomes the row's `best_id` and `label` (`Avenue Louise 32 bte b002, 1050 Ixelles`); an unknown box is simply ignored. |
+| `best_id` | no | A BeSt address id you kept from an earlier run, with or without its version. Looked up before anything else, old ids included: see [Old BeSt ids](#old-best-ids-best_id). |
 
-The header must contain `street` or `address`; otherwise the CLI stops with ``csv header has neither a `street` nor an `address` column`` (HTTP: `400`).
+The header must contain `street`, `address` or `best_id`; otherwise the CLI stops with ``csv header has none of the `street`, `address` and `best_id` columns`` (HTTP: `400`).
 
 **Encoding**: UTF-8. If your CSV is `windows-1252` (typical French/Dutch Excel export), convert first:
 
@@ -79,7 +80,7 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Copied from input**, audit trail (empty `street` on free-text rows). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | What crabfinder actually found in BeSt. Shows divergences (typo corrected, nearest number…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Empty on `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark` or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark`, `id` (found by the `best_id` column) or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
 | `fallback_reason` | Empty if `confidence == exact`. Otherwise `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` or `no_match`. |
 | `house_number_delta` | Matched number minus requested number: `0` when the requested number was found, e.g. `26` when 33 was asked and 59 returned. Empty for street-level and locality results. |
 | `street_match_score` | Raw BM25 score. Text-match quality indicator. Higher = better match. Empty on `not_found`. |
@@ -336,6 +337,30 @@ id,street,house_number,postal_code,city,…,status,corrections
 ```
 
 `status` is `valid`, `corrected`, `ambiguous`, `incomplete` or `not_found`. Each correction reads `kind:field:input->official`, separated by `; `. Without the option the output columns don't change.
+
+## Old BeSt ids: `best_id`
+
+A file of `best_id`s saved months ago doesn't need geocoding again. BeSt versions its ids and retires addresses, so some of them have changed since. Put them in a `best_id` column. Each row is then looked up by id first, as [`/lookup`](04-online-search.md#get-lookup--addresses-by-best-id) does, and the output gains two last columns: `id_status` and `successor_best_id`.
+
+```
+id,best_id,street,house_number,postal_code
+1,https://data.vlaanderen.be/id/adres/200001,,,
+2,https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00,,,
+3,nope/1/1,Avenue Louise,45,1050
+```
+
+```
+id,…,confidence,…,best_id,…,id_status,successor_best_id
+1,…,id,…,…/adres/200001/2023-11-01T14:53:09+01:00,…,current,
+2,…,id,…,…/adres/<successor>,…,retired,…/adres/<successor>
+3,…,exact,…,…,…,unknown,
+```
+
+- `current` / `outdated_version`: the address itself, with today's `best_id` (`confidence=id`).
+- `retired` / `reserved` / `rejected`: the address that took its place, if BeSt has one. This is a current address at the same street, number and box, then at the same number, then standing within 5 m of where the old one stood. `successor_best_id` is that address. Without a successor, the row is `not_found`.
+- `unknown`: the id isn't in this BeSt dump.
+
+When the id leads to no current address and the row also has address columns, those are geocoded as usual (row 3). Rows without a `best_id` get empty id columns. With `--corrections`, a replaced id reads `id_replaced:best_id:<old>-><new>`.
 
 ## Edge cases
 

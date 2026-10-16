@@ -58,6 +58,10 @@ pub fn register_tokenizers(index: &Index) {
 // --- Field names ------------------------------------------------------------
 
 pub const FIELD_BEST_ID: &str = "best_id";
+/// Raw (not stored): `BestId::object_key`, the id without its version, so
+/// `/lookup` finds an address whatever version the caller kept (schema
+/// v12).
+pub const FIELD_BEST_OID: &str = "best_oid";
 pub const FIELD_SEARCHABLE: &str = "searchable";
 /// Raw (not stored): each language form of the street name, analyzed with
 /// the `crab` chain and joined by single spaces (`"Grand-Place"` →
@@ -90,6 +94,7 @@ pub const FIELD_PAYLOAD: &str = "payload";
 pub struct CrabSchema {
     pub schema: Schema,
     pub best_id: Field,
+    pub best_oid: Field,
     pub searchable: Field,
     pub street_exact: Field,
     pub notability_score: Field,
@@ -140,6 +145,7 @@ impl CrabSchema {
             .set_fast();
 
         let best_id = sb.add_text_field(FIELD_BEST_ID, raw_stored.clone());
+        let best_oid = sb.add_text_field(FIELD_BEST_OID, raw_opts.clone());
         let searchable = sb.add_text_field(FIELD_SEARCHABLE, text_opts);
         let street_exact = sb.add_text_field(FIELD_STREET_EXACT, raw_opts.clone());
         let lat = sb.add_f64_field(FIELD_LAT, f64_stored_fast.clone());
@@ -164,6 +170,7 @@ impl CrabSchema {
         Self {
             schema,
             best_id,
+            best_oid,
             searchable,
             street_exact,
             notability_score,
@@ -238,6 +245,7 @@ impl CrabIndexWriter {
         let s = &self.schema;
 
         doc.add_text(s.best_id, addr.id.to_string());
+        doc.add_text(s.best_oid, addr.id.0.object_key());
         for value in &tokens {
             doc.add_text(s.searchable, value);
         }

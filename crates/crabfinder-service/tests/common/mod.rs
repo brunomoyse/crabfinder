@@ -51,6 +51,15 @@ impl App {
         Self { index, state }
     }
 
+    /// An app over `addrs` whose history file holds `gone`
+    /// (`crabfinder_test_support::write_history`).
+    pub fn with_history(addrs: &[Address], gone: &[Address]) -> Self {
+        let index = TestIndex::build_with_mid_street(addrs);
+        crabfinder_test_support::write_history(index.path(), gone);
+        let state = AppState::load(&LoadOptions::new(index.path())).expect("load state");
+        Self { index, state }
+    }
+
     pub fn router(&self) -> Router {
         http::router(self.state.clone())
     }

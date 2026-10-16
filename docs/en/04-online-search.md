@@ -40,9 +40,9 @@ curl "http://127.0.0.1:8080/health"
 {
   "status": "ok",
   "index_path": "./index-belgium",
-  "index_docs": 6886637,
+  "index_docs": 6885231,
   "uptime_secs": 1234,
-  "schema_version": 10,
+  "schema_version": 12,
   "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
@@ -446,13 +446,36 @@ curl -G "http://127.0.0.1:8080/lookup" \
   --data lang=nl
 ```
 
-Response: a `FeatureCollection` with `count`, the features **in the order asked** (`match_type: "id"`) and a `missing` list of the ids that don't exist (for example retired after a BeSt refresh):
+Response: a `FeatureCollection` with `count`, the features **in the order asked** (`match_type: "id"`) and a `missing` list of the ids that are not addresses today:
 
 ```
 count = 1
 missing = ["nope/1/1"]
 features[0].properties.label = "Wetstraat 16, 1000 Brussel"
 ```
+
+An id works with or without its version (`…/address/210225/1` or `…/address/210225`). `results` tells, for every id in the order asked, what it is today:
+
+| `status` | Meaning |
+|---|---|
+| `current` | The address (`feature`, `current_id`). |
+| `outdated_version` | The same address under a newer version (`feature`, `current_id` = today's id). |
+| `retired`, `reserved`, `rejected` | BeSt no longer lists it as current. `record` holds what BeSt kept (number, postal code, end date). `successor` is the current address that took its place, if any: same street, number and box (`same_number_box`), else same number (`same_number`), else standing within 5 m (`same_position`, with `distance_m`). |
+| `unknown` | Not in this BeSt dump. |
+
+```bash
+curl -G "http://127.0.0.1:8080/lookup" \
+  --data-urlencode "id=https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00"
+```
+
+```
+results[0].status = "retired"
+results[0].record.end = "2023-11-01T15:15:58Z"
+results[0].successor.rule = "same_position"   (4.9 m)
+results[0].successor.feature.properties.label = "Wasstraat 120, 9000 GENT"
+```
+
+BeSt publishes no "replaced by" link: the successor is derived from BeSt's own data (street, number, box, position), and is always a current BeSt address.
 
 An empty `id` is a 400 (`id is empty`), more than 50 too (`too many ids: 51 (max 50)`).
 

@@ -10,13 +10,16 @@ use clap::Parser;
 use tracing::{info, warn};
 
 use crate::bundle::detect_regions;
+use crate::history::{HISTORY_FILENAME, HistoryBuilder};
 use crate::impute::{ImputeReport, PositionImputer, needs_position};
 use crate::index::CrabIndexWriter;
 use crate::localities::{LOCALITIES_FILENAME, LocalitiesBuilder};
 use crate::meta::write_sidecar;
 use crate::mid_street::{MID_STREET_FILENAME, MidStreetBuilder};
 use crate::notability::NotabilityMap;
-use crate::pipeline::{IngestRegion, StreamReport, load_dictionaries, stream_resolved_addresses};
+use crate::pipeline::{
+    IngestRegion, StreamReport, load_dictionaries, stream_resolved_addresses_with_history,
+};
 use crate::places::PlaceIndex;
 
 /// Expected per-region status-filter rejection rate, derived from the
@@ -158,6 +161,8 @@ pub struct IndexReport {
     pub total_ms: u128,
     pub mid_street_entries: usize,
     pub localities_entries: usize,
+    /// Retired / reserved / rejected records kept for `/lookup` (v12).
+    pub history_entries: usize,
     pub places_loaded: usize,
     /// Positions imputed for addresses BeSt ships without one (v9).
     pub impute: ImputeReport,
@@ -207,6 +212,7 @@ impl IndexReport {
         );
         let _ = writeln!(s, "  mid_street entries: {}", self.mid_street_entries);
         let _ = writeln!(s, "  imputed positions: {}", self.impute);
+        let _ = writeln!(s, "  history records: {}", self.history_entries);
         let _ = writeln!(
             s,
             "  localities: {} (OSM places loaded: {})",
@@ -299,6 +305,8 @@ pub fn run(args: &Args) -> Result<IndexReport> {
     let mut mid_street_builder = MidStreetBuilder::new();
 
     let mut imputer = PositionImputer::new();
+    // Schema v12: what the status filter drops, for `/lookup`.
+    let mut history = HistoryBuilder::new();
 
     let mut reports = Vec::new();
     let mut samples_printed = 0usize;
@@ -314,8 +322,13 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         let t_pass2 = Instant::now();
         let mut stamped: u64 = 0;
         let mut matched: u64 = 0;
-        let stream =
-            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |addr| {
+        let stream = stream_resolved_addresses_with_history(
+            &args.best_dir,
+            *region,
+            &dicts,
+            args.limit,
+            Some(&mut history),
+            |addr| {
                 // Schema v9: positioned after every measured address is in.
                 if needs_position(&addr) {
                     imputer.defer(addr);
@@ -342,8 +355,9 @@ pub fn run(args: &Args) -> Result<IndexReport> {
                 writer.add_address_with_notability(&addr, boost)?;
                 mid_street_builder.record(&addr);
                 Ok(true)
-            })
-            .with_context(|| format!("Pass 2: streaming {region:?}"))?;
+            },
+        )
+        .with_context(|| format!("Pass 2: streaming {region:?}"))?;
         let pass2_ms = t_pass2.elapsed().as_millis();
         info!(?region, elapsed_ms = pass2_ms, %stream, notability_stamped = stamped, "Pass 2 done");
 
@@ -400,6 +414,10 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         .finish(&places, &args.output)
         .with_context(|| format!("writing {LOCALITIES_FILENAME}"))?;
     info!(entries = localities_entries, "localities side-file written");
+    let history_entries = history
+        .finish(&args.output)
+        .with_context(|| format!("writing {HISTORY_FILENAME}"))?;
+    info!(entries = history_entries, "history side-file written");
 
     Ok(IndexReport {
         regions: reports,
@@ -407,6 +425,7 @@ pub fn run(args: &Args) -> Result<IndexReport> {
         total_ms: t_overall.elapsed().as_millis(),
         mid_street_entries,
         localities_entries,
+        history_entries,
         places_loaded,
         impute,
         whitelist_entries: notability_map.n_entries,

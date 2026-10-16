@@ -122,7 +122,7 @@ fn malformed_csv_is_an_error() {
     assert!(err.to_string().starts_with("csv:"), "{err}");
     assert!(
         err.to_string()
-            .contains("neither a `street` nor an `address`"),
+            .contains("none of the `street`, `address` and `best_id` columns"),
         "{err}"
     );
 }

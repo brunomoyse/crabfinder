@@ -96,12 +96,13 @@ Typical output (2026-10-15 dump, Apple Silicon laptop):
 
 ```
 ====== indexing summary ======
-  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=845464 skipped_status=3361
+  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=844058 skipped_status=4767
   Flanders: pass1=  265ms  pass2=  52383ms  parsed=4218617 emitted=3933743 skipped_status=284874
   Wallonia: pass1=  192ms  pass2=  25818ms  parsed=2107430 emitted=2107430 skipped_status=0 ... missing_position=140263 ...
-     TOTAL: parsed=7174872 emitted=6886637 skipped_status=288235 skipped_unresolved=0 missing_position=140263 ...
+     TOTAL: parsed=7174872 emitted=6885231 skipped_status=289641 skipped_unresolved=0 missing_position=140263 ...
   mid_street entries: 145123
   imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
+  history records: 289641
   localities: 3065 (OSM places loaded: 0)
   commit: 856ms
   wall-clock total: 93063ms (1.6 min)
@@ -110,16 +111,17 @@ Typical output (2026-10-15 dump, Apple Silicon laptop):
 
 How to read it:
 
-- `skipped_status`: retired / proposed addresses, deliberately left out (only current addresses are indexed).
+- `skipped_status`: retired, reserved and rejected addresses, left out of the search (current and proposed addresses are indexed). They are kept in the history file (`history records`) so old ids still resolve.
 - `missing_position` / `imputed positions`: BeSt publishes some Walloon addresses (140,263 in this dump) without a position yet (Lambert 72 `0 0`, which would land in France). The indexer gives them a position from their neighbours instead, and records how in `position_source` — see [`05-understanding-results.md`](05-understanding-results.md#where-the-coordinates-come-from-position_source).
 - `localities`: the place names the service understands in a place-name query: BeSt municipalities, parts of municipalities and postal areas ("Spontin", "Han-sur-Lesse"), plus OpenStreetMap villages and hamlets when built with `--places` (then `OSM places loaded` is non-zero).
 
 The `./index-belgium/` folder now contains:
 
 - Tantivy segment files (`*.idx`, `*.pos`, `*.term`, etc.).
-- A `.crab-meta.json` sidecar with the schema version (currently **11**; an index built by an older version must be rebuilt) and the build time.
+- A `.crab-meta.json` sidecar with the schema version (currently **12**; an index built by an older version must be rebuilt) and the build time.
 - `mid-street-v1.bin` (~10 MB): the street-level points used by the `median_street` fallback.
 - `localities-v1.json` (~3 MB): the place names used to understand place-name queries.
+- `history-v1.json.gz` (~10 MB): the retired, reserved and rejected addresses, so `/lookup` and the batch `best_id` column still resolve old ids.
 
 **The BeSt dump used is frozen into the index.** When a new dump comes out, redo step 4 (replace the ZIPs) then step 5 (rebuild). This is not an incremental migration. The indexer refuses an `--output` folder that already holds an index (it would otherwise append a second copy of every address): delete it first, or pass `--overwrite`.
 
@@ -164,10 +166,10 @@ Expected output:
 
 ```
 INFO starting crabfinder-service index=./index-belgium port=8080
-INFO index sidecar OK schema_version=11 tokenizer=crab
+INFO index sidecar OK schema_version=12 tokenizer=crab
 INFO spatial index built points=6878576 elapsed_ms=1605
 INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
-INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
+INFO address-count index built elapsed_ms=20048 n_docs=6885231 n_streets=144205 max_count=5649
 INFO mid_street side-file loaded path=./index-belgium/mid-street-v1.bin entries=145123
 INFO localities loaded entries=…
 INFO listening at http://127.0.0.1:8080
@@ -179,8 +181,8 @@ Quick test from another terminal:
 
 ```bash
 curl "http://127.0.0.1:8080/health"
-# {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
-#  "schema_version":11,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
+# {"status":"ok","index_path":"./index-belgium","index_docs":6885231,"uptime_secs":12,
+#  "schema_version":12,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```

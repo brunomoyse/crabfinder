@@ -19,6 +19,7 @@ use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
 
 use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::{AddressCountIndex, SharedAddressCountIndex};
+use crate::history::{HistoryIndex, SharedHistoryIndex};
 use crate::landmarks::{LandmarkIndex, SharedLandmarkIndex};
 use crate::localities::{LocalityIndex, SharedLocalityIndex};
 use crate::mid_street::MidStreetIndex;
@@ -101,6 +102,9 @@ pub struct AppState {
     pub localities: SharedLocalityIndex,
     /// OSM landmarks from `--pois`; empty when not supplied.
     pub landmarks: SharedLandmarkIndex,
+    /// Schema-v12 retired / reserved / rejected addresses
+    /// (`history-v1.json.gz`); empty when absent.
+    pub history: SharedHistoryIndex,
 }
 
 impl AppState {
@@ -180,6 +184,9 @@ impl AppState {
             None => LandmarkIndex::empty(),
         };
 
+        let history = HistoryIndex::load(&opts.index)?;
+        info!(records = history.len(), "address history loaded");
+
         if !opts.notability_enabled {
             info!("notability boost disabled: ranking falls back to pure BM25");
         }
@@ -198,6 +205,7 @@ impl AppState {
             mid_street: Arc::new(mid_street),
             localities: Arc::new(localities),
             landmarks: Arc::new(landmarks),
+            history: Arc::new(history),
         })
     }
 
@@ -213,6 +221,8 @@ impl AppState {
             mid_street: self.mid_street.clone(),
             localities: self.localities.clone(),
             landmarks: self.landmarks.clone(),
+            history: self.history.clone(),
+            spatial: self.spatial.clone(),
         }
     }
 }

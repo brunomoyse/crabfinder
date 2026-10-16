@@ -615,6 +615,7 @@ dependencies = [
  "crabfinder-core",
  "crabfinder-test-support",
  "csv",
+ "flate2",
  "proj4rs",
  "quick-xml",
  "rstar 0.13.0",

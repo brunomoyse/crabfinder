@@ -59,6 +59,8 @@ pub struct AddrSpec {
     /// Lambert 72 easting / northing.
     pub x: f64,
     pub y: f64,
+    /// `endLifeSpanVersion` attribute of `<tns:address>`.
+    pub end_life_span: Option<String>,
 }
 
 impl AddrSpec {
@@ -76,6 +78,7 @@ impl AddrSpec {
             // Brussels Grand-Place, Lambert 72.
             x: 148_950.0,
             y: 170_500.0,
+            end_life_span: None,
         }
     }
 }
@@ -112,6 +115,7 @@ impl BestBundle {
         boxed.box_no = opt("2");
         let mut retired = AddrSpec::new("1004", "3919", "21009", "1050", "99");
         retired.status = "retired".into();
+        retired.end_life_span = opt("2024-01-01T10:00:00Z");
         let mut dangling = AddrSpec::new("1005", "9999", "21009", "1050", "1");
         dangling.officially_assigned = false;
         Self {
@@ -270,7 +274,12 @@ impl BestBundle {
             "addresses",
             self.addresses.iter().map(|a| {
                 let mut s = String::new();
-                s.push_str("<tns:address>");
+                match &a.end_life_span {
+                    Some(end) => {
+                        let _ = write!(s, "<tns:address endLifeSpanVersion=\"{end}\">");
+                    }
+                    None => s.push_str("<tns:address>"),
+                }
                 s.push_str(&code(ns_addr, &a.oid));
                 let _ = write!(
                     s,

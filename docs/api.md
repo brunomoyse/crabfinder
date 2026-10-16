@@ -71,9 +71,9 @@ over 10 000 addresses.
 {
   "status": "ok",
   "index_path": "./index-current",
-  "index_docs": 6886637,
+  "index_docs": 6885231,
   "uptime_secs": 42,
-  "schema_version": 10,
+  "schema_version": 12,
   "index_built_at_unix_secs": 1792106077,
   "version": "0.1.0"
 }
@@ -280,14 +280,50 @@ dominates nationally, use `region` or `postal_code` as a hard filter.
 `GET /lookup?id=<best_id>[,<best_id>…]&lang=nl` — up to 50 BeSt ids
 (400 beyond, or when empty), in the canonical
 `{namespace}/{objectIdentifier}/{versionIdentifier}` form of the batch
-`best_id` column. Features come back in the order asked, ids not in the
-index under `missing`:
+`best_id` column, with or without the version. `features` lists the ids
+that are addresses today, in the order asked; the others are under
+`missing`.
+
+`results` (v3 Phase 11.4) gives every id's `status`, in the order asked.
+The lookup tries the exact id first, then the object under any version.
+After that it checks the history of addresses BeSt no longer lists as
+current (the indexer's `history-v1.json.gz`):
+
+| `status` | Meaning | Carries |
+|---|---|---|
+| `current` | The address, with this id, or this object without version | `current_id`, `feature` |
+| `outdated_version` | The object exists under another version | `current_id`, `feature` |
+| `retired` / `reserved` / `rejected` | BeSt still lists the record, with that status | `record`, and `successor` if any |
+| `unknown` | Not in this dump | — |
+
+BeSt has no successor link. The successor is derived from BeSt alone, in
+this order:
+
+| `successor.rule` | Rule |
+|---|---|
+| `same_number_box` | A current address at the same street object, house number and box |
+| `same_number` | Otherwise, any current address at the same street object and house number |
+| `same_position` | Otherwise, the current address within 5 m of the record's last position (`distance_m`) |
 
 ```json
-{"type": "FeatureCollection", "count": 1, "missing": ["nope/1/1"],
- "features": [{"properties": {"label": "Wetstraat 16, 1000 Brussel", "…": "…"},
-               "match_type": "id", "score": 1.0, "unit_count": 1, "…": "…"}]}
+{"type": "FeatureCollection", "count": 1,
+ "missing": ["https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00"],
+ "features": [{"properties": {"label": "Goorbaan 59, 2230 HERSELT/Ramsel", "…": "…"}, "match_type": "id", "…": "…"}],
+ "results": [
+   {"id": "https://data.vlaanderen.be/id/adres/200068/2023-11-01T16:15:58+01:00",
+    "status": "retired",
+    "record": {"status": "retired", "house_number": "53", "postal_code": "9000",
+               "end": "2023-11-01T15:15:58Z", "…": "…"},
+    "successor": {"rule": "same_position", "distance_m": 4.9,
+                  "feature": {"properties": {"label": "Wasstraat 120, 9000 GENT", "…": "…"}, "…": "…"}}},
+   {"id": "https://data.vlaanderen.be/id/adres/200001", "status": "current",
+    "current_id": "https://data.vlaanderen.be/id/adres/200001/2023-11-01T14:53:09+01:00",
+    "feature": {"…": "…"}}]}
 ```
+
+On the 2026-10-15 dump, 82% of a sample of 1,500 history ids got a successor:
+36% `same_number`, 31% `same_number_box`, 15% `same_position` (half of
+them at 0 m: a renamed street or a renumbering).
 
 ## `GET /validate`
 
@@ -455,8 +491,9 @@ by header name:
 | `box_number` | Optional; picks the unit, never filters |
 | `city` | Optional municipality / locality name, matched like street words (v3); ignored on free-text rows |
 | `address` | Free text, parsed like `/geocode?q=`; when present `street` / `house_number` / `box_number` are ignored, `postal_code` still overrides |
+| `best_id` | Optional BeSt address id, with or without version (v3). Looked up first, as `/lookup` does; the row is that address (`confidence: id`), or the successor of a retired / reserved / rejected one. The address columns are geocoded only when the id leads to no current address. |
 
-The header must contain `street` or `address` (else 400).
+The header must contain `street`, `address` or `best_id` (else 400).
 
 ### Options
 
@@ -483,7 +520,12 @@ columns follow: `status` (as `/validate`) and `corrections`, each one as
 `kind:field:input->official`, separated by `; `
 (`street_spelling:street:louisse->louise; postal_code_added:postal_code:->1050`).
 With `alternatives=true`, `score_gap` and `alternatives` follow (after
-`corrections` when both are on).
+`corrections` when both are on). When any row has a `best_id`, two last
+columns follow: `id_status` (the `/lookup` status of the id, empty on
+rows without one) and `successor_best_id` (the row's address when it
+replaced a retired / reserved / rejected id). With `corrections`, an id
+row is `valid` when the id is current. Otherwise it is `corrected`, with
+`id_replaced:best_id:<input>-><today's id>`.
 
 ```
 $ curl -X POST -H 'Content-Type: text/csv' --data-binary @in.csv '127.0.0.1:8080/batch/geocode?lang=nl'
@@ -493,8 +535,8 @@ id,street,house_number,postal_code,matched_street,…,confidence,fallback_reason
 3,,,,,,,,,not_found,no_match,,,,,zzzz qqqq,,,false
 ```
 
-`confidence` adds `not_found` (with `fallback_reason: no_match`) to the
-`/geocode` values. A `locality` or `landmark` row is the BeSt address
+`confidence` adds `not_found` (with `fallback_reason: no_match`) and
+`id` (found by the `best_id` column) to the `/geocode` values. A `locality` or `landmark` row is the BeSt address
 nearest to the place (street, number, ids, position and label all
 BeSt's); its `confidence` says it was not asked for by street.
 

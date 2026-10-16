@@ -12,6 +12,7 @@ pub mod addr_count;
 pub mod batch;
 pub mod dedup;
 pub mod focus;
+pub mod history;
 pub mod http;
 pub mod hydrate;
 pub mod interpolate;

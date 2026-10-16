@@ -281,7 +281,37 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement. Les anciens dossiers `best-*` / `index-*` ne sont pas supprimés : fais-le toi-même une fois le nouvel index en service.
+Le service en cours continue de servir l'ancien index jusqu'à ce que tu le redémarres sur `index-current`. Options (variables d'environnement) : `DATA_DIR=/srv/crab` pour travailler ailleurs qu'à la racine du dépôt, `SKIP_DOWNLOAD=1` pour réutiliser le `best-<date>/` du jour, `SKIP_VALIDATE=1` pour sauter l'étape 3, `WITH_OSM=1` pour indexer les lieux OSM facultatifs, `BEST_URL=…` pour une autre URL de téléchargement, `EVAL_SETS="a.yaml b.json"` pour valider d'autres jeux, `RESTART_CMD="…"` pour redémarrer le service après la bascule. Les anciens dossiers `best-*` / `index-*` ne sont pas supprimés : fais-le toi-même une fois le nouvel index en service.
+
+### Planifier la mise à jour
+
+BeSt est republié régulièrement ; une exécution hebdomadaire est un rythme raisonnable. Le script se termine en erreur (et laisse `index-current` intact) si le téléchargement, la construction ou la validation échoue : un planificateur peut donc alerter en cas d'échec. Avec cron :
+
+```cron
+# Chaque lundi à 03:00 ; le service redémarre sur le nouvel index si tout s'est bien passé.
+0 3 * * 1  cd /srv/crabfinder && DATA_DIR=/srv/crab RESTART_CMD="systemctl restart crabfinder" scripts/refresh_best.sh >> /var/log/crabfinder-refresh.log 2>&1
+```
+
+Avec systemd, un service oneshot et un timer :
+
+```ini
+# /etc/systemd/system/crabfinder-refresh.service
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/crabfinder
+Environment=DATA_DIR=/srv/crab
+Environment="RESTART_CMD=systemctl restart crabfinder"
+ExecStart=/srv/crabfinder/scripts/refresh_best.sh
+
+# /etc/systemd/system/crabfinder-refresh.timer
+[Timer]
+OnCalendar=Mon *-*-* 03:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Chaque exécution demande ~3 Go libres pour les nouveaux `best-<date>/` et `index-<date>/` ; supprime les anciens (par exemple en gardant les deux derniers) dans la même tâche.
 
 ## Désinstallation
 

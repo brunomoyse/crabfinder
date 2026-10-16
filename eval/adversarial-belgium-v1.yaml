@@ -777,10 +777,10 @@ queries:
     subcategory: lontzen-63048
     query: "Aachener Stra\u00dfe Lontzen"
     expected_building_group_id_set:
-      - "geodata.wallonie.be/id/Streetname|7736759|56"
-      - "geodata.wallonie.be/id/Streetname|7736759|58"
-      - "geodata.wallonie.be/id/Streetname|7736759|68"
-    notes: "Rue Marie-Thérèse — Lontzen (fuzzy)"
+      - "geodata.wallonie.be/id/Streetname|7735714|312"
+      - "geodata.wallonie.be/id/Streetname|7736312|2"
+      - "geodata.wallonie.be/id/Streetname|7737410|6"
+    notes: "Lontzen has no Aachener Straße in BeSt (2026-10-15); its neighbours Eupen, Kelmis and Raeren each have one — any of them is right (v3 Phase 11.0 relabel; the old label was a fuzzy stand-in, Rue Marie-Thérèse)"
   - id: adv-de_zone-004
     category: de_zone
     match_level: street
@@ -931,7 +931,9 @@ queries:
     notes: "Bahnhofstraße — Bullange (strict)"
   - id: adv-de_zone-007
     category: de_zone
-    match_level: street
+    match_level: locality
+    expected_point: [50.20463, 6.09231]  # BeSt centroid of the municipality (localities-v1.json)
+    within_m: 3500  # also the village itself (Reuland, ~3 km east), where the OSM --places aid leads
     subcategory: burg-reuland-63013
     query: "Burg-Reuland 4790"
     expected_building_group_id_set:
@@ -943,7 +945,7 @@ queries:
       - "geodata.wallonie.be/id/Streetname|7763291|43"
       - "geodata.wallonie.be/id/Streetname|7763291|45"
       - "geodata.wallonie.be/id/Streetname|7763291|54"
-    notes: "Peckeneck — Burg-Reuland (strict)"
+    notes: "Names no street: scored at locality level (v3 Phase 11.0); the bgids are the MVP's Peckeneck answer, kept for --validate-eval-set"
   - id: adv-de_zone-008
     category: de_zone
     match_level: street
@@ -1342,7 +1344,9 @@ queries:
       - "https://data.vlaanderen.be/id/straatnaam/|31008|1016"
       - "https://data.vlaanderen.be/id/straatnaam/|31008|1022"
       - "https://data.vlaanderen.be/id/straatnaam/|31008|1032"
-    notes: "Romeinse Steenweg — Wemmel (strict)"
+      - "https://data.vlaanderen.be/id/straatnaam/|31016|14"
+      - "https://data.vlaanderen.be/id/straatnaam/|31017|6"
+    notes: "Three Wemmel streets are a steenweg (Romeinse Steenweg, Steenweg op Brussel, Steenweg op Merchtem): any of them is right (v3 Phase 11.0)"
   - id: adv-facilites-006
     category: facilites
     match_level: street

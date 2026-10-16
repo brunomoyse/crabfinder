@@ -160,6 +160,27 @@ Grand-Place, Antwerp's Grote Markt and Bruges' Markt get 3.5, so their
 bare names mean them rather than Tournai's Grand'Place or Leuven's Grote
 Markt.
 
+## Service modules (`crabfinder-service/src`)
+
+| Module | Role |
+|---|---|
+| `state` | `AppState::load`: open the index, check the sidecar, build every in-memory structure below |
+| `resolver` | `search` (the tiered pipeline, below) and `resolve` (top-1, for batch) |
+| `query_builder` | Tantivy queries: strict, typo, OR, area/bbox filters; `analyze` (the `crab` analyzer, query side) |
+| `abbreviation` | Query-time `av` → `avenue` expansion from `street-type-abbreviations-v1.yaml` |
+| `addr_count` | Per-doc street address count, the ranking tiebreak |
+| `dedup` | Over-fetch, then collapse hits by `building_group_id` |
+| `focus` | `focus_point` parsing and distance decay |
+| `hydrate` | Stored payload → `HydratedHit` / `Address` |
+| `mid_street` | `mid-street-v1.bin`: the street's median-number point (`median_street`) |
+| `localities` | `localities-v1.json`: place name → localities, postal-code centres |
+| `landmarks` | Optional OSM landmarks (`--pois`), query interpretation only |
+| `spatial` | R-tree over point-accurate positions for `/reverse` |
+| `interpolate` | `/reverse?interpolate=true` house-number estimate (pure geometry) |
+| `telemetry` | Prometheus series for `/metrics` |
+| `http` | Router, guard (deadline, concurrency), CORS and the handlers |
+| `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, `POST /batch/geocode` |
+
 ## Resolver (`crabfinder_service::resolver`)
 
 `search(AddressQuery, SearchOptions, ResolverContext) → CandidateSet` is

@@ -281,7 +281,37 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `WITH_OSM=1` to index the optional OSM places, `BEST_URL=…` to use another download URL. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
+The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `WITH_OSM=1` to index the optional OSM places, `BEST_URL=…` to use another download URL, `EVAL_SETS="a.yaml b.json"` to validate other sets, `RESTART_CMD="…"` to restart the service after the swap. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
+
+### Scheduling the refresh
+
+BeSt is republished regularly; a weekly run is a reasonable cadence. The script exits non-zero (and leaves `index-current` untouched) when the download, the build or the validation fails, so a scheduler can alert on failure. With cron:
+
+```cron
+# Every Monday at 03:00; the service restarts on the new index if all went well.
+0 3 * * 1  cd /srv/crabfinder && DATA_DIR=/srv/crab RESTART_CMD="systemctl restart crabfinder" scripts/refresh_best.sh >> /var/log/crabfinder-refresh.log 2>&1
+```
+
+With systemd, a oneshot service plus a timer:
+
+```ini
+# /etc/systemd/system/crabfinder-refresh.service
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/crabfinder
+Environment=DATA_DIR=/srv/crab
+Environment="RESTART_CMD=systemctl restart crabfinder"
+ExecStart=/srv/crabfinder/scripts/refresh_best.sh
+
+# /etc/systemd/system/crabfinder-refresh.timer
+[Timer]
+OnCalendar=Mon *-*-* 03:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Each run needs ~3 GB free for the new `best-<date>/` and `index-<date>/`; clean up old ones (e.g. keep the last two) in the same job.
 
 ## Uninstall
 

@@ -16,17 +16,18 @@
 //! input path accepts free-text rows (`id,address`, see `io::InputRow`).
 //!
 //! Streaming model: the resolution phase (dedup + parallel Tantivy) runs in
-//! a `tokio::task::spawn_blocking` task and pushes CSV-serialised chunks to
-//! a `tokio::sync::mpsc` channel. The HTTP body is built from
-//! `Body::from_stream(...)` over that channel. The first chunk lands as soon
-//! as the first batch of rows is resolved.
+//! a `tokio::task::spawn_blocking` task; once every row is resolved, the
+//! serialised output is pushed in chunks to a `tokio::sync::mpsc` channel
+//! feeding `Body::from_stream(...)`. So the first byte only leaves after
+//! the whole batch is resolved, and the route's deadline (`--batch-timeout-
+//! secs`) covers queueing and upload, not the resolution (v2 Phase 11.0
+//! note; Phase 11.6 makes both incremental).
 //!
 //! Caps:
 //! - JSON path refuses payloads with > 10_000 addresses (HTTP 413 — use
 //!   multipart for larger files; per design §4.6).
-//! - Multipart files are bounded by axum's default 2 MiB limit unless
-//!   overridden at server config; we deliberately don't override here in
-//!   Lot E. A future operator dial would set `axum::extract::DefaultBodyLimit`.
+//! - Request bodies are bounded at 50 MiB (`MULTIPART_BODY_LIMIT`, applied
+//!   by `body_limit_layer`).
 
 use axum::{
     body::Body,

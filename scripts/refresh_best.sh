@@ -7,6 +7,9 @@
 #   SKIP_DOWNLOAD=1 scripts/refresh_best.sh     # reuse today's best-<date>/
 #   SKIP_VALIDATE=1 scripts/refresh_best.sh     # don't start a service to validate
 #   WITH_OSM=1 scripts/refresh_best.sh          # also index the optional OSM places
+#   EVAL_SETS="a.yaml b.json" scripts/refresh_best.sh   # sets to validate (space-separated)
+#   RESTART_CMD="systemctl restart crabfinder" scripts/refresh_best.sh
+#                                               # run after the swap (else: restart by hand)
 #
 # BeSt Address is the only source of the index. With WITH_OSM=1 the
 # OpenStreetMap places CSV (data/osm-places-be-v1.csv) is added as a
@@ -23,7 +26,7 @@ stamp="${STAMP:-$(date +%Y-%m-%d)}"
 best_dir="$data_dir/best-$stamp"
 index_dir="$data_dir/index-$stamp"
 port="${VALIDATE_PORT:-18080}"
-eval_sets=("${EVAL_SETS[@]:-eval/adversarial-belgium-v1.yaml}")
+read -r -a eval_sets <<<"${EVAL_SETS:-eval/adversarial-belgium-v1.yaml}"
 
 log() { printf '\033[1m[refresh]\033[0m %s\n' "$*" >&2; }
 
@@ -76,4 +79,9 @@ link="$data_dir/index-current"
 python3 -c 'import os, sys; t, l = sys.argv[1:]; os.symlink(t, l + ".tmp"); os.replace(l + ".tmp", l)' \
     "$(basename "$index_dir")" "$link"
 log "index-current -> $(basename "$index_dir")"
-log "restart the service with: crabfinder-service --index $link"
+if [[ -n "${RESTART_CMD:-}" ]]; then
+    log "restarting: $RESTART_CMD"
+    bash -c "$RESTART_CMD"
+else
+    log "restart the service with: crabfinder-service --index $link"
+fi

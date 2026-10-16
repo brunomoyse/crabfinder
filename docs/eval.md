@@ -272,7 +272,7 @@ would use the map centre). The report has a section for each. The
 
 ```bash
 ./target/release/crabfinder-eval \
-  --baseline reports/v2-baseline.json \
+  --baseline reports/v3-baseline.json \
   --current  reports/post-foo.json \
   --diff-output reports/diff-foo.md
 ```
@@ -349,25 +349,34 @@ behavior.
 
 ## Baseline
 
-`reports/v2-baseline.json` is the current promoted baseline, in the
-default BeSt-only configuration: BeSt dump of 2026-10-15, schema v11,
-`eval/belgium-2026-10-15-v3.json` + `eval/adversarial-belgium-v1.yaml`,
-full notability whitelist, full abbreviation dict, no OpenStreetMap aid.
-`reports/v2-baseline-osm.json` is the same with both optional OSM aids
-(index built with `--places`, service with `--pois`);
-`reports/v2-osm-aids.md` diffs the two (hamlets 0.833 → 1.000,
-landmarks 0.269 → 1.000). Evaluate a change in the configuration it
-affects: BeSt-only by default, against the OSM baseline when touching
-the locality or landmark steps. `reports/pre-v2-baseline.json` is the
-v1 code on the same data and the v2 set, the comparison point for the
-v2 work (`reports/v2-vs-pre-v2.md`, on the shared v2 set). `reports/mvp-v1-baseline.json` is the
-original MVP baseline on the 2026-05-19 dump; per-phase v2 diffs are in
-`reports/archive/v2-phases/`.
+`reports/v3-baseline.json` is the current promoted baseline (v3 Phase
+11.8), in the default BeSt-only configuration: BeSt dump of 2026-10-15,
+schema v12, `eval/belgium-2026-10-15-v3.json` +
+`eval/adversarial-belgium-v1.yaml`, full notability whitelist, full
+abbreviation dict, no OpenStreetMap aid. `reports/v3-baseline-osm.json`
+is the same with both optional OSM aids (index built with `--places`,
+service with `--pois`); `reports/v3-osm-aids.md` diffs the two (hamlets
+0.833 → 1.000, landmarks 0.269 → 1.000). Evaluate a change in the
+configuration it affects: BeSt-only by default, against the OSM baseline
+when touching the locality or landmark steps.
+
+`reports/v3-vs-v2.md` and `reports/v3-vs-v2-osm.md` compare them with the
+v2 baselines (now in `reports/archive/v2/`): recall@1 0.964 → 0.965, the
+typo variant 0.988 → 0.996, 7 queries better and none worse in each
+configuration. `reports/pre-v2-baseline.json` is the v1 code on the same
+data and the v2 set, the comparison point for the v2 work
+(`reports/v2-vs-pre-v2.md`, on the shared v2 set).
+`reports/mvp-v1-baseline.json` is the original MVP baseline on the
+2026-05-19 dump; per-phase v2 diffs are in `reports/archive/v2-phases/`.
+
+Latency in a report is measured with the service warm: run the eval
+once after a restart before the run you keep (the first run after
+startup reads the index from disk, p99 +5 ms).
 
 To promote a new baseline:
 
 ```bash
 # After validating the new report is at least as good as the baseline,
-mv reports/v2-baseline.json reports/archive/$(date -I)-baseline.json
-cp reports/post-newfeature.json reports/v2-baseline.json
+mv reports/v3-baseline.json reports/archive/$(date -I)-baseline.json
+cp reports/post-newfeature.json reports/v3-baseline.json
 ```

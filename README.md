@@ -149,21 +149,24 @@ cases, 3,840 queries; [`reports/v2-vs-pre-v2.md`](reports/v2-vs-pre-v2.md)):
 | iconic places (adversarial notability) | 0.933 | **1.000** |
 | p95 / p99 `/geocode` latency | 19.0 / 51.1 ms | **7.2 / 11.9 ms** |
 
-The promoted baseline [`reports/v2-baseline.md`](reports/v2-baseline.md)
-adds 500 `wrong_postal` queries (the neighbouring commune's postal code):
-recall@1 0.004 before the postal-code relaxation, **0.958** after; 0.969 overall
-on its 4,342 queries.
+The promoted baseline [`reports/v3-baseline.md`](reports/v3-baseline.md)
+(v3, schema v12, 4,365 queries) adds 500 `wrong_postal` queries (the
+neighbouring commune's postal code): recall@1 0.004 before the
+postal-code relaxation, **0.958** after. Against the v2 baseline
+([`reports/v3-vs-v2.md`](reports/v3-vs-v2.md)): recall@1 0.964 → 0.965
+(typos 0.988 → 0.996), no query worse, and p95 / p99 7.7 / 12.8 ms →
+5.9 / 10.9 ms.
 
 BeSt-only (the default, no OpenStreetMap aid) vs with both optional OSM
-aids, on the full v3 set + 26 landmark queries (4,365 queries; schema
-v11):
+aids, on the same 4,365 queries
+([`reports/v3-osm-aids.md`](reports/v3-osm-aids.md)):
 
 | | BeSt only | + OSM `--places` / `--pois` |
 |---|---|---|
-| recall@1 | 0.964 | **0.969** |
+| recall@1 | 0.965 | **0.971** |
 | hamlets (30, adversarial) | 0.833 | **1.000** |
 | landmarks (26, `Manneken Pis`, `Gare du Midi`, …) | 0.269 | **1.000** |
-| p95 / p99 latency | 7.7 / 12.8 ms | 7.5 / 14.7 ms |
+| p95 / p99 latency | 5.9 / 10.9 ms | 5.9 / 13.7 ms |
 
 Either way every result is a BeSt address; the OSM aids only change
 which BeSt addresses a hamlet or landmark name leads to.

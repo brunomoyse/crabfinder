@@ -1,6 +1,6 @@
 # Belgian geocoder benchmark, 2026-10-16
 
-Phase 11.1, refreshed after the Phase 11.1b ranking fixes, then rerun with the NGI national geocoder and BePelias added. One run of `crabfinder-eval --benchmark` (see `docs/eval.md` §Benchmarking) per query set:
+Phase 11.1, refreshed after the Phase 11.1b ranking fixes, then rerun with the NGI national geocoder and BePelias added, and rerun a last time at the end of v3 (Phase 11.8) with every v3 feature in. One run of `crabfinder-eval --benchmark` (see `docs/eval.md` §Benchmarking) per query set:
 
 - **Real-world** (`eval/realworld-be-v1.yaml`): 1,510 addresses from 7 public open-data lists (schools, pharmacies, bpost offices, care facilities, shops; sources and licences in `eval/realworld/SOURCES.md`). The reference point is the coordinate the publisher gives, so it isn't exact; a hit means within 100 m.
 - **Synthetic + adversarial** (`eval/belgium-2026-10-15-v3.json`, `eval/adversarial-belgium-v1.yaml`), with `--with-points`: each expected BeSt building gives the reference point. These sets come from BeSt and crabfinder's own failure history, so they **favour crabfinder**. The real-world set is the fairer comparison.
@@ -9,7 +9,7 @@ Phase 11.1, refreshed after the Phase 11.1b ranking fixes, then rerun with the N
 
 | Geocoder | What | How it was asked |
 |---|---|---|
-| `crabfinder` | this repo with the Phase 11.1b ranking fixes, index schema v12 from BeSt 2026-10-15, BeSt-only | free text, `/geocode` |
+| `crabfinder` | this repo at the end of v3 (Phase 11.8), index schema v12 from BeSt 2026-10-15, BeSt-only | free text, `/geocode` |
 | `crabfinder-osm` | same, index built with `--places`, service with `--pois` (the optional OSM aids) | free text |
 | `brussels` | Paradigm (paradigm.brussels, ex-CIRB/CIBG), the Brussels regional geocoder over UrbIS addresses, `geoservices.irisnet.be/geocoding` | free text with fr/nl fallback, Brussels queries only, 2 req/s |
 | `vlaanderen` | Digitaal Vlaanderen Geolocation API v4 | free text, Flanders + Brussels queries, 2 req/s |
@@ -22,6 +22,7 @@ Competitor responses are cached in `eval/bench-cache/` (gitignored), so a rerun 
 
 ## Notes
 
+- **Phase 11.8 (final v3 run):** competitors answered from the cache of the earlier runs, crabfinder asked again with every v3 feature in (validation, alternatives, retired ids, autocomplete, streamed batch and jobs, protection; none of them changes `/geocode` ranking). Accuracy is the same to the last digit on both sets, and so are the losses lists. crabfinder's latency is lower: real-world p95 18.7 → 11.4 ms, synthetic 7.9 → 5.7 ms (measured warm, see `docs/eval.md` §Baseline).
 - **NGI:** the national geocoder announced at BeGeo 2024 as "search.geo.be" runs at `https://geosearch.ngi.be`, keyless, OpenAPI at `/v3/api-docs` (found 2026-10-16). Its addresses are BeSt's and carry BeSt ids, so it gets `recall@1`. What holds it back here:
   - the postal code doesn't filter: "Wollestraat 25, 8000 Brugge" returns a Wollestraat 25 elsewhere in the municipality of Brugge, 10 km away;
   - no abbreviations (`Wielewaalstr.`), no cross-language queries (`Gand Einde Were 15`), no neighbouring-commune relaxation (`wrong_postal` 0.018);
@@ -48,8 +49,8 @@ Competitor responses are cached in `eval/bench-cache/` (gitignored), so a rerun 
 
 | Geocoder | asked | errors | recall@1 | n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 | p50 | p95 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| crabfinder | 1510 | 0 | 0.929 | 1510 | 1.000 | 0.736 | 0.929 | 0.967 | 5 m | 72 m | 1.9 ms | 18.7 ms |
-| crabfinder-osm | 1510 | 0 | 0.929 | 1510 | 1.000 | 0.736 | 0.929 | 0.967 | 5 m | 72 m | 1.9 ms | 18.8 ms |
+| crabfinder | 1510 | 0 | 0.929 | 1510 | 1.000 | 0.736 | 0.929 | 0.967 | 5 m | 72 m | 1.6 ms | 11.4 ms |
+| crabfinder-osm | 1510 | 0 | 0.929 | 1510 | 1.000 | 0.736 | 0.929 | 0.967 | 5 m | 72 m | 1.6 ms | 9.5 ms |
 | brussels | 496 | 0 | 0.925 | 496 | 0.980 | 0.780 | 0.925 | 0.942 | 7 m | 51 m | 111.2 ms | 504.3 ms |
 | vlaanderen | 960 | 0 | – | 960 | 0.526 | 0.481 | 0.505 | 0.510 | 0 m | 13 m | 85.7 ms | 200.9 ms |
 | wallonie | 550 | 0 | – | 550 | 0.989 | 0.500 | 0.847 | 0.911 | 24 m | 186 m | 126.6 ms | 308.0 ms |
@@ -245,8 +246,8 @@ Competitor responses are cached in `eval/bench-cache/` (gitignored), so a rerun 
 
 | Geocoder | asked | errors | recall@1 | n | found | ≤25 m | ≤100 m | ≤250 m | median | p90 | p50 | p95 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| crabfinder | 4368 | 0 | 0.965 | 4350 | 0.998 | 0.953 | 0.957 | 0.962 | 0 m | 0 m | 1.3 ms | 7.9 ms |
-| crabfinder-osm | 4368 | 0 | 0.971 | 4350 | 1.000 | 0.959 | 0.966 | 0.970 | 0 m | 0 m | 1.4 ms | 8.0 ms |
+| crabfinder | 4368 | 0 | 0.965 | 4350 | 0.998 | 0.953 | 0.957 | 0.962 | 0 m | 0 m | 1.3 ms | 5.7 ms |
+| crabfinder-osm | 4368 | 0 | 0.971 | 4350 | 1.000 | 0.959 | 0.966 | 0.970 | 0 m | 0 m | 1.3 ms | 6.0 ms |
 | brussels | 885 | 11 | 0.960 | 874 | 0.977 | 0.960 | 0.960 | 0.963 | 0 m | 0 m | 107.5 ms | 1202.2 ms |
 | vlaanderen | 3079 | 0 | – | 3073 | 0.528 | 0.473 | 0.477 | 0.480 | 0 m | 56 m | 75.9 ms | 227.8 ms |
 | wallonie | 1260 | 0 | – | 1251 | 0.763 | 0.500 | 0.514 | 0.520 | 0 m | 8732 m | 99.3 ms | 2120.5 ms |

@@ -24,22 +24,13 @@
         },
         "latency": {
           "n": 4368,
-          "p50_ms": 1.29125,
-          "p95_ms": 7.8910409999999995,
-          "p99_ms": 22.471458,
-          "mean_ms": 2.691121529761906,
-          "max_ms": 324.62725
+          "p50_ms": 1.257833,
+          "p95_ms": 5.672417,
+          "p99_ms": 10.391708,
+          "mean_ms": 2.049982482371795,
+          "max_ms": 88.741958
         },
         "by_region": {
-          "BE-BRU": {
-            "n": 863,
-            "recall_at_1": 0.9895712630359212,
-            "recall_at_5": 0.9953650057937428,
-            "recall_at_10": 0.9953650057937428,
-            "mrr": 0.9917921977597528,
-            "building_group_recall_at_1": 0.9895712630359212,
-            "strict_match_rate": 0.8794901506373117
-          },
           "BE-VLG": {
             "n": 2177,
             "recall_at_1": 0.9623334864492421,
@@ -48,6 +39,15 @@
             "mrr": 0.9702379129572514,
             "building_group_recall_at_1": 0.9623334864492421,
             "strict_match_rate": 0.8851630684428112
+          },
+          "BE-BRU": {
+            "n": 863,
+            "recall_at_1": 0.9895712630359212,
+            "recall_at_5": 0.9953650057937428,
+            "recall_at_10": 0.9953650057937428,
+            "mrr": 0.9917921977597528,
+            "building_group_recall_at_1": 0.9895712630359212,
+            "strict_match_rate": 0.8794901506373117
           },
           "BE-WAL": {
             "n": 1204,
@@ -60,41 +60,14 @@
           }
         },
         "by_variant": {
-          "cross_language": {
-            "n": 306,
-            "recall_at_1": 1.0,
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.9958932238193019,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
-          },
-          "messy_punctuation": {
-            "n": 500,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
-          },
-          "with_postal": {
-            "n": 500,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
-          },
-          "high_house_number": {
-            "n": 101,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
+            "mrr": 0.9976043805612593,
+            "building_group_recall_at_1": 0.9958932238193019,
+            "strict_match_rate": 0.0
           },
           "canonical": {
             "n": 500,
@@ -114,8 +87,26 @@
             "building_group_recall_at_1": 1.0,
             "strict_match_rate": 0.9896193771626297
           },
-          "casing": {
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9672131147540983
+          },
+          "minimal": {
             "n": 500,
+            "recall_at_1": 0.792,
+            "recall_at_5": 0.912,
+            "recall_at_10": 0.946,
+            "mrr": 0.8437119047619047,
+            "building_group_recall_at_1": 0.792,
+            "strict_match_rate": 1.0
+          },
+          "cross_language": {
+            "n": 306,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
@@ -132,44 +123,44 @@
             "building_group_recall_at_1": 0.958,
             "strict_match_rate": 1.0
           },
-          "minimal": {
-            "n": 500,
-            "recall_at_1": 0.792,
-            "recall_at_5": 0.912,
-            "recall_at_10": 0.946,
-            "mrr": 0.8437119047619047,
-            "building_group_recall_at_1": 0.792,
-            "strict_match_rate": 1.0
-          },
-          "typo": {
-            "n": 487,
-            "recall_at_1": 0.9958932238193019,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 0.9976043805612593,
-            "building_group_recall_at_1": 0.9958932238193019,
-            "strict_match_rate": 0.0
-          },
-          "box_number": {
-            "n": 61,
+          "high_house_number": {
+            "n": 101,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
             "mrr": 1.0,
             "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.9672131147540983
+            "strict_match_rate": 1.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "messy_punctuation": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "casing": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
           }
         },
         "by_language": {
-          "fr": {
-            "n": 1140,
-            "recall_at_1": 0.9710526315789474,
-            "recall_at_5": 0.9885964912280701,
-            "recall_at_10": 0.9921052631578947,
-            "mrr": 0.9787033556112503,
-            "building_group_recall_at_1": 0.9710526315789474,
-            "strict_match_rate": 0.8850877192982456
-          },
           "de": {
             "n": 24,
             "recall_at_1": 1.0,
@@ -187,31 +178,28 @@
             "mrr": 0.9759634611420326,
             "building_group_recall_at_1": 0.9694805194805195,
             "strict_match_rate": 0.8834415584415585
+          },
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.9710526315789474,
+            "recall_at_5": 0.9885964912280701,
+            "recall_at_10": 0.9921052631578947,
+            "mrr": 0.9787033556112503,
+            "building_group_recall_at_1": 0.9710526315789474,
+            "strict_match_rate": 0.8850877192982456
           }
         },
         "by_adversarial_category": {
-          "special_chars": {
-            "n": 10,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.9,
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 0.2692307692307692,
+            "recall_at_5": 0.2692307692307692,
+            "recall_at_10": 0.2692307692307692,
+            "mrr": 0.2692307692307692,
+            "building_group_recall_at_1": 0.2692307692307692,
+            "strict_match_rate": 0.3076923076923077,
             "match_levels": [
-              "address"
-            ]
-          },
-          "cross_language": {
-            "n": 10,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0,
-            "match_levels": [
-              "address"
+              "locality"
             ]
           },
           "de_zone": {
@@ -240,16 +228,28 @@
               "street"
             ]
           },
-          "landmark": {
-            "n": 26,
-            "recall_at_1": 0.2692307692307692,
-            "recall_at_5": 0.2692307692307692,
-            "recall_at_10": 0.2692307692307692,
-            "mrr": 0.2692307692307692,
-            "building_group_recall_at_1": 0.2692307692307692,
-            "strict_match_rate": 0.3076923076923077,
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0,
             "match_levels": [
-              "locality"
+              "street"
+            ]
+          },
+          "special_chars": {
+            "n": 10,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9,
+            "match_levels": [
+              "address"
             ]
           },
           "notability": {
@@ -264,8 +264,8 @@
               "building"
             ]
           },
-          "facilites": {
-            "n": 6,
+          "cross_language": {
+            "n": 10,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
@@ -273,7 +273,7 @@
             "building_group_recall_at_1": 1.0,
             "strict_match_rate": 1.0,
             "match_levels": [
-              "street"
+              "address"
             ]
           }
         },
@@ -288,15 +288,6 @@
           "p90_error_m": 0.0
         },
         "distance_by": {
-          "synthetic": {
-            "n": 4244,
-            "found_rate": 1.0,
-            "within_25m": 0.970311027332705,
-            "within_100m": 0.9707822808671065,
-            "within_250m": 0.9707822808671065,
-            "median_error_m": 0.0,
-            "p90_error_m": 0.0
-          },
           "region:wallonia": {
             "n": 1204,
             "found_rate": 1.0,
@@ -315,12 +306,12 @@
             "median_error_m": 127.89475127471108,
             "p90_error_m": 2012.5554374514243
           },
-          "region:flanders": {
-            "n": 2177,
+          "synthetic": {
+            "n": 4244,
             "found_rate": 1.0,
-            "within_25m": 0.9623334864492421,
-            "within_100m": 0.9627928341754708,
-            "within_250m": 0.9627928341754708,
+            "within_25m": 0.970311027332705,
+            "within_100m": 0.9707822808671065,
+            "within_250m": 0.9707822808671065,
             "median_error_m": 0.0,
             "p90_error_m": 0.0
           },
@@ -330,6 +321,15 @@
             "within_25m": 0.9895712630359212,
             "within_100m": 0.9907300115874855,
             "within_250m": 0.9907300115874855,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 1.0,
+            "within_25m": 0.9623334864492421,
+            "within_100m": 0.9627928341754708,
+            "within_250m": 0.9627928341754708,
             "median_error_m": 0.0,
             "p90_error_m": 0.0
           }
@@ -362,58 +362,58 @@
           }
         ],
         "alternatives": {
-          "minimal": {
-            "n": 500,
-            "recall_at_1": 0.07,
-            "recall_at_3": 0.164
-          },
-          "wrong_postal": {
-            "n": 500,
-            "recall_at_1": 0.006,
-            "recall_at_3": 0.008
-          },
-          "all": {
-            "n": 4244,
-            "recall_at_1": 0.01060320452403393,
-            "recall_at_3": 0.02191328934967012
-          },
-          "casing": {
-            "n": 500,
-            "recall_at_1": 0.0,
-            "recall_at_3": 0.0
-          },
           "canonical": {
             "n": 500,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
-          },
-          "typo": {
-            "n": 487,
-            "recall_at_1": 0.012320328542094456,
-            "recall_at_3": 0.012320328542094456
           },
           "abbreviated": {
             "n": 289,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
           },
-          "high_house_number": {
-            "n": 101,
+          "all": {
+            "n": 4244,
+            "recall_at_1": 0.01060320452403393,
+            "recall_at_3": 0.02191328934967012
+          },
+          "box_number": {
+            "n": 61,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
+          },
+          "minimal": {
+            "n": 500,
+            "recall_at_1": 0.07,
+            "recall_at_3": 0.164
+          },
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.012320328542094456,
+            "recall_at_3": 0.012320328542094456
           },
           "with_postal": {
             "n": 500,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
           },
+          "casing": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_3": 0.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.006,
+            "recall_at_3": 0.008
+          },
           "cross_language": {
             "n": 306,
             "recall_at_1": 0.0032679738562091504,
             "recall_at_3": 0.0032679738562091504
           },
-          "box_number": {
-            "n": 61,
+          "high_house_number": {
+            "n": 101,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
           },
@@ -446,11 +446,11 @@
         },
         "latency": {
           "n": 4368,
-          "p50_ms": 1.353875,
-          "p95_ms": 7.964875,
-          "p99_ms": 26.842708,
-          "mean_ms": 2.8442700723443175,
-          "max_ms": 306.72125
+          "p50_ms": 1.298333,
+          "p95_ms": 5.959959,
+          "p99_ms": 12.338333,
+          "mean_ms": 2.2426069615384616,
+          "max_ms": 87.06195899999999
         },
         "by_region": {
           "BE-WAL": {
@@ -462,15 +462,6 @@
             "building_group_recall_at_1": 0.9700996677740864,
             "strict_match_rate": 0.8853820598006644
           },
-          "BE-VLG": {
-            "n": 2177,
-            "recall_at_1": 0.9623334864492421,
-            "recall_at_5": 0.9802480477721636,
-            "recall_at_10": 0.9857602204869086,
-            "mrr": 0.9702379129572514,
-            "building_group_recall_at_1": 0.9623334864492421,
-            "strict_match_rate": 0.8851630684428112
-          },
           "BE-BRU": {
             "n": 863,
             "recall_at_1": 0.9895712630359212,
@@ -479,9 +470,27 @@
             "mrr": 0.9917921977597528,
             "building_group_recall_at_1": 0.9895712630359212,
             "strict_match_rate": 0.8794901506373117
+          },
+          "BE-VLG": {
+            "n": 2177,
+            "recall_at_1": 0.9623334864492421,
+            "recall_at_5": 0.9802480477721636,
+            "recall_at_10": 0.9857602204869086,
+            "mrr": 0.9702379129572514,
+            "building_group_recall_at_1": 0.9623334864492421,
+            "strict_match_rate": 0.8851630684428112
           }
         },
         "by_variant": {
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.9672131147540983
+          },
           "abbreviated": {
             "n": 289,
             "recall_at_1": 1.0,
@@ -491,8 +500,44 @@
             "building_group_recall_at_1": 1.0,
             "strict_match_rate": 0.9896193771626297
           },
-          "casing": {
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "messy_punctuation": {
             "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 1.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.958,
+            "recall_at_5": 0.966,
+            "recall_at_10": 0.966,
+            "mrr": 0.962,
+            "building_group_recall_at_1": 0.958,
+            "strict_match_rate": 1.0
+          },
+          "cross_language": {
+            "n": 306,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
@@ -508,15 +553,6 @@
             "mrr": 0.9976043805612593,
             "building_group_recall_at_1": 0.9958932238193019,
             "strict_match_rate": 0.0
-          },
-          "with_postal": {
-            "n": 500,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
           },
           "canonical": {
             "n": 500,
@@ -536,44 +572,8 @@
             "building_group_recall_at_1": 0.792,
             "strict_match_rate": 1.0
           },
-          "wrong_postal": {
+          "casing": {
             "n": 500,
-            "recall_at_1": 0.958,
-            "recall_at_5": 0.966,
-            "recall_at_10": 0.966,
-            "mrr": 0.962,
-            "building_group_recall_at_1": 0.958,
-            "strict_match_rate": 1.0
-          },
-          "messy_punctuation": {
-            "n": 500,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
-          },
-          "box_number": {
-            "n": 61,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.9672131147540983
-          },
-          "high_house_number": {
-            "n": 101,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 1.0
-          },
-          "cross_language": {
-            "n": 306,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
@@ -583,6 +583,15 @@
           }
         },
         "by_language": {
+          "nl": {
+            "n": 3080,
+            "recall_at_1": 0.9694805194805195,
+            "recall_at_5": 0.9844155844155844,
+            "recall_at_10": 0.9886363636363636,
+            "mrr": 0.9759634611420326,
+            "building_group_recall_at_1": 0.9694805194805195,
+            "strict_match_rate": 0.8834415584415585
+          },
           "de": {
             "n": 24,
             "recall_at_1": 1.0,
@@ -600,15 +609,6 @@
             "mrr": 0.9787033556112503,
             "building_group_recall_at_1": 0.9710526315789474,
             "strict_match_rate": 0.8850877192982456
-          },
-          "nl": {
-            "n": 3080,
-            "recall_at_1": 0.9694805194805195,
-            "recall_at_5": 0.9844155844155844,
-            "recall_at_10": 0.9886363636363636,
-            "mrr": 0.9759634611420326,
-            "building_group_recall_at_1": 0.9694805194805195,
-            "strict_match_rate": 0.8834415584415585
           }
         },
         "by_adversarial_category": {
@@ -624,6 +624,18 @@
               "building"
             ]
           },
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.038461538461538464,
+            "match_levels": [
+              "locality"
+            ]
+          },
           "cross_language": {
             "n": 10,
             "recall_at_1": 1.0,
@@ -634,19 +646,6 @@
             "strict_match_rate": 1.0,
             "match_levels": [
               "address"
-            ]
-          },
-          "hamlet": {
-            "n": 30,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "locality",
-              "street"
             ]
           },
           "special_chars": {
@@ -673,6 +672,19 @@
               "street"
             ]
           },
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
           "de_zone": {
             "n": 9,
             "recall_at_1": 1.0,
@@ -684,18 +696,6 @@
             "match_levels": [
               "locality",
               "street"
-            ]
-          },
-          "landmark": {
-            "n": 26,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.038461538461538464,
-            "match_levels": [
-              "locality"
             ]
           }
         },
@@ -710,30 +710,12 @@
           "p90_error_m": 0.0
         },
         "distance_by": {
-          "region:brussels": {
-            "n": 863,
+          "region:wallonia": {
+            "n": 1204,
             "found_rate": 1.0,
-            "within_25m": 0.9895712630359212,
-            "within_100m": 0.9907300115874855,
-            "within_250m": 0.9907300115874855,
-            "median_error_m": 0.0,
-            "p90_error_m": 0.0
-          },
-          "adversarial": {
-            "n": 106,
-            "found_rate": 1.0,
-            "within_25m": 0.5094339622641509,
-            "within_100m": 0.7547169811320755,
-            "within_250m": 0.9433962264150944,
-            "median_error_m": 24.738711227055425,
-            "p90_error_m": 190.2844758016138
-          },
-          "synthetic": {
-            "n": 4244,
-            "found_rate": 1.0,
-            "within_25m": 0.970311027332705,
-            "within_100m": 0.9707822808671065,
-            "within_250m": 0.9707822808671065,
+            "within_25m": 0.9709302325581395,
+            "within_100m": 0.9709302325581395,
+            "within_250m": 0.9709302325581395,
             "median_error_m": 0.0,
             "p90_error_m": 0.0
           },
@@ -746,12 +728,30 @@
             "median_error_m": 0.0,
             "p90_error_m": 0.0
           },
-          "region:wallonia": {
-            "n": 1204,
+          "synthetic": {
+            "n": 4244,
             "found_rate": 1.0,
-            "within_25m": 0.9709302325581395,
-            "within_100m": 0.9709302325581395,
-            "within_250m": 0.9709302325581395,
+            "within_25m": 0.970311027332705,
+            "within_100m": 0.9707822808671065,
+            "within_250m": 0.9707822808671065,
+            "median_error_m": 0.0,
+            "p90_error_m": 0.0
+          },
+          "adversarial": {
+            "n": 106,
+            "found_rate": 1.0,
+            "within_25m": 0.5094339622641509,
+            "within_100m": 0.7547169811320755,
+            "within_250m": 0.9433962264150944,
+            "median_error_m": 24.738711227055425,
+            "p90_error_m": 190.2844758016138
+          },
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 1.0,
+            "within_25m": 0.9895712630359212,
+            "within_100m": 0.9907300115874855,
+            "within_250m": 0.9907300115874855,
             "median_error_m": 0.0,
             "p90_error_m": 0.0
           }
@@ -784,22 +784,7 @@
           }
         ],
         "alternatives": {
-          "abbreviated": {
-            "n": 289,
-            "recall_at_1": 0.0,
-            "recall_at_3": 0.0
-          },
-          "high_house_number": {
-            "n": 101,
-            "recall_at_1": 0.0,
-            "recall_at_3": 0.0
-          },
-          "typo": {
-            "n": 487,
-            "recall_at_1": 0.012320328542094456,
-            "recall_at_3": 0.012320328542094456
-          },
-          "casing": {
+          "canonical": {
             "n": 500,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
@@ -809,23 +794,18 @@
             "recall_at_1": 0.0032679738562091504,
             "recall_at_3": 0.0032679738562091504
           },
-          "canonical": {
-            "n": 500,
-            "recall_at_1": 0.0,
-            "recall_at_3": 0.0
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.012320328542094456,
+            "recall_at_3": 0.012320328542094456
           },
-          "with_postal": {
+          "messy_punctuation": {
             "n": 500,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
           },
           "box_number": {
             "n": 61,
-            "recall_at_1": 0.0,
-            "recall_at_3": 0.0
-          },
-          "messy_punctuation": {
-            "n": 500,
             "recall_at_1": 0.0,
             "recall_at_3": 0.0
           },
@@ -839,10 +819,30 @@
             "recall_at_1": 0.07,
             "recall_at_3": 0.164
           },
+          "casing": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_3": 0.0
+          },
+          "with_postal": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_3": 0.0
+          },
           "all": {
             "n": 4244,
             "recall_at_1": 0.01060320452403393,
             "recall_at_3": 0.02191328934967012
+          },
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 0.0,
+            "recall_at_3": 0.0
+          },
+          "abbreviated": {
+            "n": 289,
+            "recall_at_1": 0.0,
+            "recall_at_3": 0.0
           }
         }
       }
@@ -895,8 +895,71 @@
             "building_group_recall_at_1": 1.0,
             "strict_match_rate": 0.0
           },
+          "canonical": {
+            "n": 100,
+            "recall_at_1": 0.99,
+            "recall_at_5": 0.99,
+            "recall_at_10": 0.99,
+            "mrr": 0.99,
+            "building_group_recall_at_1": 0.99,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 100,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 97,
+            "recall_at_1": 0.9587628865979382,
+            "recall_at_5": 0.9587628865979382,
+            "recall_at_10": 0.9587628865979382,
+            "mrr": 0.9587628865979382,
+            "building_group_recall_at_1": 0.9587628865979382,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 34,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 96,
+            "recall_at_1": 0.9479166666666666,
+            "recall_at_5": 0.9479166666666666,
+            "recall_at_10": 0.9479166666666666,
+            "mrr": 0.9479166666666666,
+            "building_group_recall_at_1": 0.9479166666666666,
+            "strict_match_rate": 0.0
+          },
           "high_house_number": {
             "n": 37,
+            "recall_at_1": 1.0,
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "mrr": 1.0,
+            "building_group_recall_at_1": 1.0,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 90,
+            "recall_at_1": 0.8888888888888888,
+            "recall_at_5": 0.8888888888888888,
+            "recall_at_10": 0.8888888888888888,
+            "mrr": 0.8888888888888888,
+            "building_group_recall_at_1": 0.8888888888888888,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 100,
             "recall_at_1": 1.0,
             "recall_at_5": 1.0,
             "recall_at_10": 1.0,
@@ -911,69 +974,6 @@
             "recall_at_10": 0.99,
             "mrr": 0.99,
             "building_group_recall_at_1": 0.99,
-            "strict_match_rate": 0.0
-          },
-          "abbreviated": {
-            "n": 90,
-            "recall_at_1": 0.8888888888888888,
-            "recall_at_5": 0.8888888888888888,
-            "recall_at_10": 0.8888888888888888,
-            "mrr": 0.8888888888888888,
-            "building_group_recall_at_1": 0.8888888888888888,
-            "strict_match_rate": 0.0
-          },
-          "wrong_postal": {
-            "n": 96,
-            "recall_at_1": 0.9479166666666666,
-            "recall_at_5": 0.9479166666666666,
-            "recall_at_10": 0.9479166666666666,
-            "mrr": 0.9479166666666666,
-            "building_group_recall_at_1": 0.9479166666666666,
-            "strict_match_rate": 0.0
-          },
-          "messy_punctuation": {
-            "n": 100,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.0
-          },
-          "box_number": {
-            "n": 34,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.0
-          },
-          "minimal": {
-            "n": 100,
-            "recall_at_1": 1.0,
-            "recall_at_5": 1.0,
-            "recall_at_10": 1.0,
-            "mrr": 1.0,
-            "building_group_recall_at_1": 1.0,
-            "strict_match_rate": 0.0
-          },
-          "canonical": {
-            "n": 100,
-            "recall_at_1": 0.99,
-            "recall_at_5": 0.99,
-            "recall_at_10": 0.99,
-            "mrr": 0.99,
-            "building_group_recall_at_1": 0.99,
-            "strict_match_rate": 0.0
-          },
-          "typo": {
-            "n": 97,
-            "recall_at_1": 0.9587628865979382,
-            "recall_at_5": 0.9587628865979382,
-            "recall_at_10": 0.9587628865979382,
-            "mrr": 0.9587628865979382,
-            "building_group_recall_at_1": 0.9587628865979382,
             "strict_match_rate": 0.0
           }
         },
@@ -1025,15 +1025,6 @@
           "p90_error_m": 0.0
         },
         "distance_by": {
-          "adversarial": {
-            "n": 20,
-            "found_rate": 0.3,
-            "within_25m": 0.3,
-            "within_100m": 0.3,
-            "within_250m": 0.3,
-            "median_error_m": 0.0,
-            "p90_error_m": 7.073240659849489e-10
-          },
           "synthetic": {
             "n": 854,
             "found_rate": 0.9929742388758782,
@@ -1051,6 +1042,15 @@
             "within_250m": 0.9789227166276346,
             "median_error_m": 0.0,
             "p90_error_m": 0.0
+          },
+          "adversarial": {
+            "n": 20,
+            "found_rate": 0.3,
+            "within_25m": 0.3,
+            "within_100m": 0.3,
+            "within_250m": 0.3,
+            "median_error_m": 0.0,
+            "p90_error_m": 7.073240659849489e-10
           }
         },
         "cross_language_recall_at_1": 0.0,
@@ -1108,44 +1108,8 @@
           }
         },
         "by_variant": {
-          "canonical": {
-            "n": 350,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
           "messy_punctuation": {
             "n": 350,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "minimal": {
-            "n": 350,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "high_house_number": {
-            "n": 84,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "cross_language": {
-            "n": 191,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -1162,7 +1126,7 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "casing": {
+          "with_postal": {
             "n": 350,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -1180,8 +1144,17 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "typo": {
-            "n": 349,
+          "cross_language": {
+            "n": 191,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 350,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -1198,8 +1171,35 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "with_postal": {
+          "canonical": {
             "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "casing": {
+            "n": 350,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "high_house_number": {
+            "n": 84,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 349,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -1220,6 +1220,30 @@
           }
         },
         "by_adversarial_category": {
+          "special_chars": {
+            "n": 6,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
+          "cross_language": {
+            "n": 2,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
           "notability": {
             "n": 25,
             "recall_at_1": 0.0,
@@ -1242,30 +1266,6 @@
             "strict_match_rate": 0.0,
             "match_levels": [
               "street"
-            ]
-          },
-          "cross_language": {
-            "n": 2,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "address"
-            ]
-          },
-          "special_chars": {
-            "n": 6,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "address"
             ]
           }
         },
@@ -1298,15 +1298,6 @@
             "median_error_m": 0.01065625185719777,
             "p90_error_m": 0.13370958795414134
           },
-          "region:flanders": {
-            "n": 2177,
-            "found_rate": 0.5034451079467157,
-            "within_25m": 0.4561322921451539,
-            "within_100m": 0.4565916398713826,
-            "within_250m": 0.45705098759761137,
-            "median_error_m": 0.010514082594573863,
-            "p90_error_m": 0.014998903279585486
-          },
           "adversarial": {
             "n": 33,
             "found_rate": 0.9696969696969697,
@@ -1315,6 +1306,15 @@
             "within_250m": 0.5757575757575758,
             "median_error_m": 109.48728526019516,
             "p90_error_m": 20995.829593154056
+          },
+          "region:flanders": {
+            "n": 2177,
+            "found_rate": 0.5034451079467157,
+            "within_25m": 0.4561322921451539,
+            "within_100m": 0.4565916398713826,
+            "within_250m": 0.45705098759761137,
+            "median_error_m": 0.010514082594573863,
+            "p90_error_m": 0.014998903279585486
           }
         },
         "cross_language_recall_at_1": 0.0,
@@ -1363,70 +1363,7 @@
           }
         },
         "by_variant": {
-          "cross_language": {
-            "n": 115,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "box_number": {
-            "n": 8,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "minimal": {
-            "n": 150,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "typo": {
-            "n": 138,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "with_postal": {
-            "n": 150,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
           "canonical": {
-            "n": 150,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "abbreviated": {
-            "n": 26,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "messy_punctuation": {
             "n": 150,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -1444,8 +1381,62 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
+          "abbreviated": {
+            "n": 26,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "box_number": {
+            "n": 8,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
           "casing": {
             "n": 150,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 115,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -1461,18 +1452,18 @@
             "mrr": 0.0,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
-          }
-        },
-        "by_language": {
-          "fr": {
-            "n": 1140,
+          },
+          "typo": {
+            "n": 138,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
             "mrr": 0.0,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
-          },
+          }
+        },
+        "by_language": {
           "de": {
             "n": 24,
             "recall_at_1": 0.0,
@@ -1490,11 +1481,20 @@
             "mrr": 0.0,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
+          },
+          "fr": {
+            "n": 1140,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
           }
         },
         "by_adversarial_category": {
-          "de_zone": {
-            "n": 9,
+          "cross_language": {
+            "n": 8,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -1502,8 +1502,7 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0,
             "match_levels": [
-              "locality",
-              "street"
+              "address"
             ]
           },
           "hamlet": {
@@ -1519,18 +1518,6 @@
               "street"
             ]
           },
-          "cross_language": {
-            "n": 8,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "address"
-            ]
-          },
           "notability": {
             "n": 5,
             "recall_at_1": 0.0,
@@ -1541,6 +1528,19 @@
             "strict_match_rate": 0.0,
             "match_levels": [
               "building"
+            ]
+          },
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
             ]
           },
           "special_chars": {
@@ -1576,15 +1576,6 @@
             "median_error_m": 0.0,
             "p90_error_m": 9171.851099598818
           },
-          "adversarial": {
-            "n": 47,
-            "found_rate": 0.40425531914893614,
-            "within_25m": 0.2553191489361702,
-            "within_100m": 0.3191489361702128,
-            "within_250m": 0.3191489361702128,
-            "median_error_m": 0.0,
-            "p90_error_m": 4359.619072243355
-          },
           "synthetic": {
             "n": 1204,
             "found_rate": 0.7774086378737541,
@@ -1593,6 +1584,15 @@
             "within_250m": 0.5282392026578073,
             "median_error_m": 0.0,
             "p90_error_m": 9171.851099598818
+          },
+          "adversarial": {
+            "n": 47,
+            "found_rate": 0.40425531914893614,
+            "within_25m": 0.2553191489361702,
+            "within_100m": 0.3191489361702128,
+            "within_250m": 0.3191489361702128,
+            "median_error_m": 0.0,
+            "p90_error_m": 4359.619072243355
           }
         },
         "cross_language_recall_at_1": 0.0,
@@ -1630,15 +1630,6 @@
           "max_ms": 494.684875
         },
         "by_region": {
-          "BE-WAL": {
-            "n": 1204,
-            "recall_at_1": 0.584717607973422,
-            "recall_at_5": 0.632890365448505,
-            "recall_at_10": 0.632890365448505,
-            "mrr": 0.6031561461794024,
-            "building_group_recall_at_1": 0.6137873754152824,
-            "strict_match_rate": 0.0
-          },
           "BE-BRU": {
             "n": 863,
             "recall_at_1": 0.6106604866743917,
@@ -1646,6 +1637,15 @@
             "recall_at_10": 0.7265353418308227,
             "mrr": 0.6539011201235998,
             "building_group_recall_at_1": 0.7207415990730012,
+            "strict_match_rate": 0.0
+          },
+          "BE-WAL": {
+            "n": 1204,
+            "recall_at_1": 0.584717607973422,
+            "recall_at_5": 0.632890365448505,
+            "recall_at_10": 0.632890365448505,
+            "mrr": 0.6031561461794024,
+            "building_group_recall_at_1": 0.6137873754152824,
             "strict_match_rate": 0.0
           },
           "BE-VLG": {
@@ -1659,60 +1659,6 @@
           }
         },
         "by_variant": {
-          "messy_punctuation": {
-            "n": 500,
-            "recall_at_1": 0.63,
-            "recall_at_5": 0.702,
-            "recall_at_10": 0.702,
-            "mrr": 0.6567000000000001,
-            "building_group_recall_at_1": 0.676,
-            "strict_match_rate": 0.0
-          },
-          "cross_language": {
-            "n": 306,
-            "recall_at_1": 0.13398692810457516,
-            "recall_at_5": 0.13725490196078433,
-            "recall_at_10": 0.13725490196078433,
-            "mrr": 0.13464052287581701,
-            "building_group_recall_at_1": 0.13725490196078433,
-            "strict_match_rate": 0.0
-          },
-          "minimal": {
-            "n": 498,
-            "recall_at_1": 0.5522088353413654,
-            "recall_at_5": 0.7088353413654619,
-            "recall_at_10": 0.7088353413654619,
-            "mrr": 0.614457831325301,
-            "building_group_recall_at_1": 0.5863453815261044,
-            "strict_match_rate": 0.0
-          },
-          "with_postal": {
-            "n": 498,
-            "recall_at_1": 0.7610441767068273,
-            "recall_at_5": 0.8413654618473896,
-            "recall_at_10": 0.8413654618473896,
-            "mrr": 0.7918674698795178,
-            "building_group_recall_at_1": 0.8172690763052208,
-            "strict_match_rate": 0.0
-          },
-          "typo": {
-            "n": 487,
-            "recall_at_1": 0.8993839835728953,
-            "recall_at_5": 0.9815195071868583,
-            "recall_at_10": 0.9815195071868583,
-            "mrr": 0.9299452429842571,
-            "building_group_recall_at_1": 0.9671457905544147,
-            "strict_match_rate": 0.0
-          },
-          "canonical": {
-            "n": 500,
-            "recall_at_1": 0.882,
-            "recall_at_5": 0.978,
-            "recall_at_10": 0.978,
-            "mrr": 0.9189333333333332,
-            "building_group_recall_at_1": 0.944,
-            "strict_match_rate": 0.0
-          },
           "casing": {
             "n": 500,
             "recall_at_1": 0.882,
@@ -1731,15 +1677,6 @@
             "building_group_recall_at_1": 0.002008032128514056,
             "strict_match_rate": 0.0
           },
-          "abbreviated": {
-            "n": 289,
-            "recall_at_1": 0.2664359861591695,
-            "recall_at_5": 0.28719723183391005,
-            "recall_at_10": 0.28719723183391005,
-            "mrr": 0.27376009227220305,
-            "building_group_recall_at_1": 0.28719723183391005,
-            "strict_match_rate": 0.0
-          },
           "high_house_number": {
             "n": 101,
             "recall_at_1": 0.9405940594059405,
@@ -1749,6 +1686,51 @@
             "building_group_recall_at_1": 1.0,
             "strict_match_rate": 0.0
           },
+          "with_postal": {
+            "n": 498,
+            "recall_at_1": 0.7610441767068273,
+            "recall_at_5": 0.8413654618473896,
+            "recall_at_10": 0.8413654618473896,
+            "mrr": 0.7918674698795178,
+            "building_group_recall_at_1": 0.8172690763052208,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 306,
+            "recall_at_1": 0.13398692810457516,
+            "recall_at_5": 0.13725490196078433,
+            "recall_at_10": 0.13725490196078433,
+            "mrr": 0.13464052287581701,
+            "building_group_recall_at_1": 0.13725490196078433,
+            "strict_match_rate": 0.0
+          },
+          "messy_punctuation": {
+            "n": 500,
+            "recall_at_1": 0.63,
+            "recall_at_5": 0.702,
+            "recall_at_10": 0.702,
+            "mrr": 0.6567000000000001,
+            "building_group_recall_at_1": 0.676,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 500,
+            "recall_at_1": 0.882,
+            "recall_at_5": 0.978,
+            "recall_at_10": 0.978,
+            "mrr": 0.9189333333333332,
+            "building_group_recall_at_1": 0.944,
+            "strict_match_rate": 0.0
+          },
+          "abbreviated": {
+            "n": 289,
+            "recall_at_1": 0.2664359861591695,
+            "recall_at_5": 0.28719723183391005,
+            "recall_at_10": 0.28719723183391005,
+            "mrr": 0.27376009227220305,
+            "building_group_recall_at_1": 0.28719723183391005,
+            "strict_match_rate": 0.0
+          },
           "box_number": {
             "n": 61,
             "recall_at_1": 0.8360655737704918,
@@ -1756,6 +1738,24 @@
             "recall_at_10": 0.9016393442622951,
             "mrr": 0.8633879781420766,
             "building_group_recall_at_1": 0.8852459016393442,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 487,
+            "recall_at_1": 0.8993839835728953,
+            "recall_at_5": 0.9815195071868583,
+            "recall_at_10": 0.9815195071868583,
+            "mrr": 0.9299452429842571,
+            "building_group_recall_at_1": 0.9671457905544147,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 498,
+            "recall_at_1": 0.5522088353413654,
+            "recall_at_5": 0.7088353413654619,
+            "recall_at_10": 0.7088353413654619,
+            "mrr": 0.614457831325301,
+            "building_group_recall_at_1": 0.5863453815261044,
             "strict_match_rate": 0.0
           }
         },
@@ -1789,28 +1789,29 @@
           }
         },
         "by_adversarial_category": {
-          "cross_language": {
+          "special_chars": {
             "n": 10,
-            "recall_at_1": 0.8,
+            "recall_at_1": 0.5,
             "recall_at_5": 0.8,
             "recall_at_10": 0.8,
-            "mrr": 0.8,
-            "building_group_recall_at_1": 0.8,
+            "mrr": 0.65,
+            "building_group_recall_at_1": 0.5,
             "strict_match_rate": 0.0,
             "match_levels": [
               "address"
             ]
           },
-          "notability": {
+          "hamlet": {
             "n": 30,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
+            "recall_at_1": 0.13333333333333333,
+            "recall_at_5": 0.16666666666666666,
+            "recall_at_10": 0.16666666666666666,
+            "mrr": 0.15,
+            "building_group_recall_at_1": 0.13333333333333333,
             "strict_match_rate": 0.0,
             "match_levels": [
-              "building"
+              "locality",
+              "street"
             ]
           },
           "landmark": {
@@ -1825,13 +1826,13 @@
               "locality"
             ]
           },
-          "special_chars": {
+          "cross_language": {
             "n": 10,
-            "recall_at_1": 0.5,
+            "recall_at_1": 0.8,
             "recall_at_5": 0.8,
             "recall_at_10": 0.8,
-            "mrr": 0.65,
-            "building_group_recall_at_1": 0.5,
+            "mrr": 0.8,
+            "building_group_recall_at_1": 0.8,
             "strict_match_rate": 0.0,
             "match_levels": [
               "address"
@@ -1849,17 +1850,16 @@
               "street"
             ]
           },
-          "hamlet": {
+          "notability": {
             "n": 30,
-            "recall_at_1": 0.13333333333333333,
-            "recall_at_5": 0.16666666666666666,
-            "recall_at_10": 0.16666666666666666,
-            "mrr": 0.15,
-            "building_group_recall_at_1": 0.13333333333333333,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0,
             "match_levels": [
-              "locality",
-              "street"
+              "building"
             ]
           },
           "de_zone": {
@@ -1887,15 +1887,6 @@
           "p90_error_m": 4549.41218898741
         },
         "distance_by": {
-          "adversarial": {
-            "n": 106,
-            "found_rate": 0.8679245283018868,
-            "within_25m": 0.12264150943396226,
-            "within_100m": 0.20754716981132076,
-            "within_250m": 0.2641509433962264,
-            "median_error_m": 2571.4374268839338,
-            "p90_error_m": 75112.1791892111
-          },
           "synthetic": {
             "n": 4238,
             "found_rate": 0.9188296366210477,
@@ -1904,6 +1895,15 @@
             "within_250m": 0.6498348277489382,
             "median_error_m": 0.0043544782586711845,
             "p90_error_m": 4312.0413440675675
+          },
+          "region:flanders": {
+            "n": 2171,
+            "found_rate": 0.9129433440810686,
+            "within_25m": 0.6315062183325656,
+            "within_100m": 0.6370336250575771,
+            "within_250m": 0.6434822662367573,
+            "median_error_m": 0.004310995921478632,
+            "p90_error_m": 4901.138191398766
           },
           "region:wallonia": {
             "n": 1204,
@@ -1923,14 +1923,14 @@
             "median_error_m": 0.004353677089815623,
             "p90_error_m": 2089.072424591731
           },
-          "region:flanders": {
-            "n": 2171,
-            "found_rate": 0.9129433440810686,
-            "within_25m": 0.6315062183325656,
-            "within_100m": 0.6370336250575771,
-            "within_250m": 0.6434822662367573,
-            "median_error_m": 0.004310995921478632,
-            "p90_error_m": 4901.138191398766
+          "adversarial": {
+            "n": 106,
+            "found_rate": 0.8679245283018868,
+            "within_25m": 0.12264150943396226,
+            "within_100m": 0.20754716981132076,
+            "within_250m": 0.2641509433962264,
+            "median_error_m": 2571.4374268839338,
+            "p90_error_m": 75112.1791892111
           }
         },
         "cross_language_recall_at_1": 0.19827586206896552,
@@ -1990,12 +1990,12 @@
           "max_ms": 8277.568000000001
         },
         "by_region": {
-          "BE-WAL": {
-            "n": 1202,
-            "recall_at_1": 0.7254575707154742,
-            "recall_at_5": 0.7562396006655574,
-            "recall_at_10": 0.7653910149750416,
-            "mrr": 0.7405953701502787,
+          "BE-VLG": {
+            "n": 2173,
+            "recall_at_1": 0.6281638288080994,
+            "recall_at_5": 0.6792452830188679,
+            "recall_at_10": 0.6870685687988956,
+            "mrr": 0.6494576293471828,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
@@ -2008,62 +2008,17 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "BE-VLG": {
-            "n": 2173,
-            "recall_at_1": 0.6281638288080994,
-            "recall_at_5": 0.6792452830188679,
-            "recall_at_10": 0.6870685687988956,
-            "mrr": 0.6494576293471828,
+          "BE-WAL": {
+            "n": 1202,
+            "recall_at_1": 0.7254575707154742,
+            "recall_at_5": 0.7562396006655574,
+            "recall_at_10": 0.7653910149750416,
+            "mrr": 0.7405953701502787,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           }
         },
         "by_variant": {
-          "minimal": {
-            "n": 500,
-            "recall_at_1": 0.7,
-            "recall_at_5": 0.798,
-            "recall_at_10": 0.822,
-            "mrr": 0.7419039682539684,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "typo": {
-            "n": 481,
-            "recall_at_1": 0.3887733887733888,
-            "recall_at_5": 0.4261954261954262,
-            "recall_at_10": 0.43243243243243246,
-            "mrr": 0.4053559053559054,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "wrong_postal": {
-            "n": 500,
-            "recall_at_1": 0.69,
-            "recall_at_5": 0.752,
-            "recall_at_10": 0.766,
-            "mrr": 0.7163103174603176,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "box_number": {
-            "n": 61,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "casing": {
-            "n": 500,
-            "recall_at_1": 0.854,
-            "recall_at_5": 0.854,
-            "recall_at_10": 0.854,
-            "mrr": 0.854,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
           "with_postal": {
             "n": 500,
             "recall_at_1": 0.868,
@@ -2082,12 +2037,30 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "cross_language": {
-            "n": 306,
-            "recall_at_1": 0.6699346405228758,
-            "recall_at_5": 0.7973856209150327,
-            "recall_at_10": 0.8137254901960784,
-            "mrr": 0.7264796659404503,
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "wrong_postal": {
+            "n": 500,
+            "recall_at_1": 0.69,
+            "recall_at_5": 0.752,
+            "recall_at_10": 0.766,
+            "mrr": 0.7163103174603176,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "canonical": {
+            "n": 500,
+            "recall_at_1": 0.854,
+            "recall_at_5": 0.854,
+            "recall_at_10": 0.854,
+            "mrr": 0.854,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
@@ -2100,12 +2073,39 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "canonical": {
+          "casing": {
             "n": 500,
             "recall_at_1": 0.854,
             "recall_at_5": 0.854,
             "recall_at_10": 0.854,
             "mrr": 0.854,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "cross_language": {
+            "n": 306,
+            "recall_at_1": 0.6699346405228758,
+            "recall_at_5": 0.7973856209150327,
+            "recall_at_10": 0.8137254901960784,
+            "mrr": 0.7264796659404503,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "minimal": {
+            "n": 500,
+            "recall_at_1": 0.7,
+            "recall_at_5": 0.798,
+            "recall_at_10": 0.822,
+            "mrr": 0.7419039682539684,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "typo": {
+            "n": 481,
+            "recall_at_1": 0.3887733887733888,
+            "recall_at_5": 0.4261954261954262,
+            "recall_at_10": 0.43243243243243246,
+            "mrr": 0.4053559053559054,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
@@ -2120,6 +2120,15 @@
           }
         },
         "by_language": {
+          "de": {
+            "n": 24,
+            "recall_at_1": 0.75,
+            "recall_at_5": 0.75,
+            "recall_at_10": 0.75,
+            "mrr": 0.75,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
           "fr": {
             "n": 1140,
             "recall_at_1": 0.7219298245614035,
@@ -2137,18 +2146,21 @@
             "mrr": 0.5976577748861416,
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
-          },
-          "de": {
-            "n": 24,
-            "recall_at_1": 0.75,
-            "recall_at_5": 0.75,
-            "recall_at_10": 0.75,
-            "mrr": 0.75,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
           }
         },
         "by_adversarial_category": {
+          "special_chars": {
+            "n": 10,
+            "recall_at_1": 0.9,
+            "recall_at_5": 0.9,
+            "recall_at_10": 0.9,
+            "mrr": 0.9,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "address"
+            ]
+          },
           "de_zone": {
             "n": 9,
             "recall_at_1": 0.1111111111111111,
@@ -2175,8 +2187,8 @@
               "street"
             ]
           },
-          "notability": {
-            "n": 29,
+          "facilites": {
+            "n": 6,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2184,7 +2196,7 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0,
             "match_levels": [
-              "building"
+              "street"
             ]
           },
           "landmark": {
@@ -2199,18 +2211,6 @@
               "locality"
             ]
           },
-          "special_chars": {
-            "n": 10,
-            "recall_at_1": 0.9,
-            "recall_at_5": 0.9,
-            "recall_at_10": 0.9,
-            "mrr": 0.9,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "address"
-            ]
-          },
           "cross_language": {
             "n": 10,
             "recall_at_1": 0.8,
@@ -2223,8 +2223,8 @@
               "address"
             ]
           },
-          "facilites": {
-            "n": 6,
+          "notability": {
+            "n": 29,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2232,7 +2232,7 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0,
             "match_levels": [
-              "street"
+              "building"
             ]
           }
         },
@@ -2247,14 +2247,14 @@
           "p90_error_m": 4138.503117857906
         },
         "distance_by": {
-          "region:brussels": {
-            "n": 863,
-            "found_rate": 0.9942062572421785,
-            "within_25m": 0.7172653534183082,
-            "within_100m": 0.7381228273464658,
-            "within_250m": 0.7601390498261877,
-            "median_error_m": 1.1436198038493561,
-            "p90_error_m": 1961.5529736699382
+          "region:flanders": {
+            "n": 2173,
+            "found_rate": 0.9967786470317533,
+            "within_25m": 0.6921306948918545,
+            "within_100m": 0.7022549470777727,
+            "within_250m": 0.7077772664519097,
+            "median_error_m": 1.222625510122108,
+            "p90_error_m": 5500.261822439419
           },
           "synthetic": {
             "n": 4238,
@@ -2265,23 +2265,14 @@
             "median_error_m": 1.1752416971059974,
             "p90_error_m": 3848.0839251738316
           },
-          "adversarial": {
-            "n": 105,
-            "found_rate": 0.8571428571428571,
-            "within_25m": 0.20952380952380953,
-            "within_100m": 0.3904761904761905,
-            "within_250m": 0.4666666666666667,
-            "median_error_m": 128.79345416181667,
-            "p90_error_m": 46308.55080671347
-          },
-          "region:flanders": {
-            "n": 2173,
-            "found_rate": 0.9967786470317533,
-            "within_25m": 0.6921306948918545,
-            "within_100m": 0.7022549470777727,
-            "within_250m": 0.7077772664519097,
-            "median_error_m": 1.222625510122108,
-            "p90_error_m": 5500.261822439419
+          "region:brussels": {
+            "n": 863,
+            "found_rate": 0.9942062572421785,
+            "within_25m": 0.7172653534183082,
+            "within_100m": 0.7381228273464658,
+            "within_250m": 0.7601390498261877,
+            "median_error_m": 1.1436198038493561,
+            "p90_error_m": 1961.5529736699382
           },
           "region:wallonia": {
             "n": 1202,
@@ -2291,6 +2282,15 @@
             "within_250m": 0.7870216306156406,
             "median_error_m": 1.1087992978681396,
             "p90_error_m": 3121.1092919210873
+          },
+          "adversarial": {
+            "n": 105,
+            "found_rate": 0.8571428571428571,
+            "within_25m": 0.20952380952380953,
+            "within_100m": 0.3904761904761905,
+            "within_250m": 0.4666666666666667,
+            "median_error_m": 128.79345416181667,
+            "p90_error_m": 46308.55080671347
           }
         },
         "cross_language_recall_at_1": 0.7413793103448276,
@@ -2359,8 +2359,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "BE-VLG": {
-            "n": 2177,
+          "BE-BRU": {
+            "n": 863,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2368,8 +2368,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "BE-BRU": {
-            "n": 863,
+          "BE-VLG": {
+            "n": 2177,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2379,7 +2379,34 @@
           }
         },
         "by_variant": {
+          "box_number": {
+            "n": 61,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "high_house_number": {
+            "n": 101,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
           "canonical": {
+            "n": 500,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0
+          },
+          "with_postal": {
             "n": 500,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -2397,24 +2424,6 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "cross_language": {
-            "n": 306,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "box_number": {
-            "n": 61,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
           "messy_punctuation": {
             "n": 500,
             "recall_at_1": 0.0,
@@ -2424,8 +2433,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "typo": {
-            "n": 487,
+          "abbreviated": {
+            "n": 289,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2433,8 +2442,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "with_postal": {
-            "n": 500,
+          "cross_language": {
+            "n": 306,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2460,17 +2469,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "abbreviated": {
-            "n": 289,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0
-          },
-          "high_house_number": {
-            "n": 101,
+          "typo": {
+            "n": 487,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2489,8 +2489,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "de": {
-            "n": 24,
+          "fr": {
+            "n": 1140,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2498,8 +2498,8 @@
             "building_group_recall_at_1": 0.0,
             "strict_match_rate": 0.0
           },
-          "fr": {
-            "n": 1140,
+          "de": {
+            "n": 24,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
             "recall_at_10": 0.0,
@@ -2509,7 +2509,44 @@
           }
         },
         "by_adversarial_category": {
-          "cross_language": {
+          "landmark": {
+            "n": 26,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality"
+            ]
+          },
+          "de_zone": {
+            "n": 9,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "facilites": {
+            "n": 6,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "street"
+            ]
+          },
+          "special_chars": {
             "n": 10,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -2521,7 +2558,20 @@
               "address"
             ]
           },
-          "special_chars": {
+          "hamlet": {
+            "n": 30,
+            "recall_at_1": 0.0,
+            "recall_at_5": 0.0,
+            "recall_at_10": 0.0,
+            "mrr": 0.0,
+            "building_group_recall_at_1": 0.0,
+            "strict_match_rate": 0.0,
+            "match_levels": [
+              "locality",
+              "street"
+            ]
+          },
+          "cross_language": {
             "n": 10,
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -2544,56 +2594,6 @@
             "match_levels": [
               "building"
             ]
-          },
-          "de_zone": {
-            "n": 9,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "locality",
-              "street"
-            ]
-          },
-          "hamlet": {
-            "n": 30,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "locality",
-              "street"
-            ]
-          },
-          "landmark": {
-            "n": 26,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "locality"
-            ]
-          },
-          "facilites": {
-            "n": 6,
-            "recall_at_1": 0.0,
-            "recall_at_5": 0.0,
-            "recall_at_10": 0.0,
-            "mrr": 0.0,
-            "building_group_recall_at_1": 0.0,
-            "strict_match_rate": 0.0,
-            "match_levels": [
-              "street"
-            ]
           }
         },
         "by_realworld_source": {},
@@ -2607,15 +2607,6 @@
           "p90_error_m": 24.959980553987428
         },
         "distance_by": {
-          "synthetic": {
-            "n": 4244,
-            "found_rate": 0.6819038642789821,
-            "within_25m": 0.6135721017907634,
-            "within_100m": 0.6444392082940622,
-            "within_250m": 0.6515080113100848,
-            "median_error_m": 0.44384628487718236,
-            "p90_error_m": 25.005678104154
-          },
           "region:brussels": {
             "n": 863,
             "found_rate": 0.7578215527230591,
@@ -2634,15 +2625,6 @@
             "median_error_m": 0.4564277634957736,
             "p90_error_m": 3.589785874946058
           },
-          "region:wallonia": {
-            "n": 1204,
-            "found_rate": 0.643687707641196,
-            "within_25m": 0.5556478405315615,
-            "within_100m": 0.5996677740863787,
-            "within_250m": 0.6121262458471761,
-            "median_error_m": 0.4546783627774371,
-            "p90_error_m": 53.64310510895561
-          },
           "region:flanders": {
             "n": 2177,
             "found_rate": 0.6729444189251264,
@@ -2651,6 +2633,24 @@
             "within_250m": 0.6371152962792834,
             "median_error_m": 0.4344643852766008,
             "p90_error_m": 24.959980553987428
+          },
+          "synthetic": {
+            "n": 4244,
+            "found_rate": 0.6819038642789821,
+            "within_25m": 0.6135721017907634,
+            "within_100m": 0.6444392082940622,
+            "within_250m": 0.6515080113100848,
+            "median_error_m": 0.44384628487718236,
+            "p90_error_m": 25.005678104154
+          },
+          "region:wallonia": {
+            "n": 1204,
+            "found_rate": 0.643687707641196,
+            "within_25m": 0.5556478405315615,
+            "within_100m": 0.5996677740863787,
+            "within_250m": 0.6121262458471761,
+            "median_error_m": 0.4546783627774371,
+            "p90_error_m": 53.64310510895561
           }
         },
         "cross_language_recall_at_1": 0.0,

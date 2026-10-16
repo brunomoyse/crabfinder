@@ -4,6 +4,8 @@
 
 crabfinder turns Belgian addresses into geographic coordinates (latitude / longitude WGS84) and vice versa. It uses the official **BeSt Address** dataset, covering all three regions and ~6.9M addresses (as of the 2026-10 dump). Everything is local: no third-party calls, no quota, no data leaving your machine.
 
+**BeSt Address is the only official source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt Address. OpenStreetMap can optionally be switched on — off by default — to *interpret* queries naming a hamlet (`--places`, at indexing) or a landmark (`--pois`, in the service). It only tells crabfinder where to look: it never adds to or alters an address, and is never returned as a result.
+
 There are two concrete ways to use it:
 
 ### Mode 1 — online search (interactive)
@@ -38,7 +40,7 @@ This is the right mode for enriching an existing database, geocoding an Excel ex
 Worth knowing before adopting it:
 
 - **No countries beyond Belgium.** The index is fixed on BeSt Address. No France, no Luxembourg, no Netherlands even across the border.
-- **No POIs.** No station names, no shops, no landmark names. Searching for "Atomium" will match its postal address if it's in BeSt — not the Atomium-as-a-monument. Place names *are* understood: municipalities, parts of municipalities, postal areas, and villages and hamlets from OpenStreetMap ("Maredsous", "Spontin").
+- **No POIs as results.** Nothing but BeSt addresses comes out: no stations, shops or monuments as such. By default, place names are understood as far as BeSt knows them — municipalities, parts of municipalities, postal areas ("Spontin", "Han-sur-Lesse"). The optional OpenStreetMap helpers extend that to hamlets ("Maredsous", `--places`) and landmarks ("Manneken Pis", `--pois`), and even then the answer is the nearest BeSt address.
 - **No public hosted API.** crabfinder is a binary you install and run yourself. No SaaS.
 - **No authentication.** The service listens on `127.0.0.1:8080` by default. To expose it on the internet, front it with a reverse proxy + auth. Local or intra-LAN use is fine as-is.
 - **No automatic data refresh.** When BeSt publishes a new dump, you run `scripts/refresh_best.sh` (download, rebuild ~1.5-3 min, check, swap) and restart the service.
@@ -54,7 +56,8 @@ Depending on the case, crabfinder returns coordinates at different precision lev
 | Street centroid (median) | No house number, or none close enough | `median_street` |
 | Building or street in a neighbouring commune | Nothing inside the given postal code, the same street just next door | `adjacent_commune` |
 | Exact building, approximately matched street | Typo or partial match on the street name | `fuzzy_street` |
-| Village / municipality centre | The query only names a place | `locality` |
+| BeSt address nearest to a place | The query only names a place (municipality, part of municipality, postal area; hamlets with `--places`) | `locality` |
+| BeSt address nearest to a landmark | The query only names a landmark ("Manneken Pis", "Gare du Midi"), with `--pois` | `landmark` |
 | No coordinates | Nothing plausible | `not_found` |
 
 The recipient of a geocoded CSV can therefore sort rows by confidence and inspect the tail manually. Two more flags complete the picture: `ambiguous` (another, almost as good answer exists elsewhere) and `position_source` (whether the point was published by BeSt or estimated from the neighbours, for the ~140k Walloon addresses BeSt publishes without a position).

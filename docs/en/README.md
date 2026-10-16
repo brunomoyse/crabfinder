@@ -13,6 +13,8 @@ A Belgian geocoding service backed by the federal **BeSt Address** dataset (6.9M
 
 Everything runs locally. No external calls. Single ~2.2 GB index on disk.
 
+**BeSt Address is the only source.** Every address, identifier, coordinate and label crabfinder returns comes from BeSt. OpenStreetMap is an optional aid, off by default, for understanding queries that name a hamlet (`--places`, indexer) or a landmark (`--pois`, service): it only decides where to look. It never adds or alters an address and is never returned as a result — the answer is still the nearest BeSt address, flagged `confidence: locality` / `landmark`.
+
 ## Quickstart
 
 ```bash
@@ -23,8 +25,7 @@ cargo build --release
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv
+    --notability-whitelist data/notability-whitelist-v1.yaml
 
 # 3a. Online search — start the service
 ./target/release/crabfinder-service \
@@ -63,4 +64,4 @@ If any of these commands doesn't work, jump straight to [`02-installation.md`](0
 
 ## License
 
-crabfinder code: MIT OR Apache-2.0. BeSt Address data: © Belgian federal authorities, open-data licence (redistribute per their terms). `data/osm-places-be-v1.csv`: © OpenStreetMap contributors, ODbL 1.0.
+crabfinder code: MIT OR Apache-2.0. BeSt Address data: © Belgian federal authorities, open-data licence (redistribute per their terms). Optional OpenStreetMap helpers `data/osm-places-be-v1.csv` and `data/osm-pois-be-v1.csv`: © OpenStreetMap contributors, ODbL 1.0.

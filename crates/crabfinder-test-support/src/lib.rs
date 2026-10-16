@@ -79,7 +79,6 @@ pub struct AddressBuilder {
     status: Status,
     lat: f64,
     lon: f64,
-    place: Option<MultilingualName>,
     position_source: PositionSource,
 }
 
@@ -100,7 +99,6 @@ impl AddressBuilder {
             status: Status::Current,
             lat: 50.8466,
             lon: 4.3525,
-            place: None,
             position_source: PositionSource::Measured,
         }
     }
@@ -157,12 +155,6 @@ impl AddressBuilder {
         self
     }
 
-    /// OSM place name (schema v8), as the `--places` join would attach it.
-    pub fn place(mut self, fr: Option<&str>, nl: Option<&str>) -> Self {
-        self.place = Some(name(fr, nl, None));
-        self
-    }
-
     /// Mark the position as imputed (schema v9).
     pub fn position_source(mut self, p: PositionSource) -> Self {
         self.position_source = p;
@@ -208,7 +200,6 @@ impl AddressBuilder {
                 lon: self.lon,
             }),
             building_group_id,
-            place_name: self.place,
             position_source: self.position_source,
         }
     }

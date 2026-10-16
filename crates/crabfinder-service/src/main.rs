@@ -44,6 +44,12 @@ struct Args {
     #[arg(long, env = "CRABFINDER_ABBREVIATION_DICT")]
     abbreviation_dict: Option<PathBuf>,
 
+    /// Path to the OSM landmarks CSV (`data/osm-pois-be-v1.csv`): queries
+    /// naming a landmark ("Manneken Pis") answer with the BeSt addresses
+    /// around it. Optional, off by default; only helps interpret queries.
+    #[arg(long, env = "CRABFINDER_POIS")]
+    pois: Option<PathBuf>,
+
     /// Deadline of a request (queueing for a slot included), milliseconds;
     /// past it the service answers 503.
     #[arg(long, env = "CRABFINDER_REQUEST_TIMEOUT_MS", default_value_t = 10_000)]
@@ -85,6 +91,7 @@ async fn main() -> Result<()> {
 
     let mut opts = LoadOptions::new(&args.index);
     opts.abbreviation_dict = args.abbreviation_dict;
+    opts.pois = args.pois;
     opts.notability_enabled = !args.no_notability_boost;
     // Bind only after the state (incl. the R-tree) is fully built, so the
     // first request always sees a ready index.

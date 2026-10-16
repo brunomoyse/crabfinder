@@ -78,7 +78,7 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Recopiés de l'entrée**, pour l'audit (`street` vide sur les lignes en texte libre). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | Ce que crabfinder a réellement trouvé dans BeSt. Montre les écarts (faute corrigée, numéro voisin…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Vides si `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark` ou `not_found`. Détail dans [`05-comprendre-resultats.md`](05-comprendre-resultats.md). |
 | `fallback_reason` | Vide si `confidence == exact`. Sinon `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` ou `no_match`. |
 | `house_number_delta` | Numéro trouvé moins numéro demandé : `0` quand le numéro demandé existe, par ex. `26` quand on demande le 33 et que le 59 est renvoyé. Vide pour les résultats au niveau de la rue ou d'un lieu. |
 | `street_match_score` | Score BM25 brut. Indicateur de qualité du match textuel. Plus haut = meilleur match. Vide si `not_found`. |
@@ -102,7 +102,9 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 
 Ligne 4 : le 33 n'existe pas en 1050, crabfinder renvoie donc le numéro impair le plus proche sur cette rue (`nearest_same_side`, `house_number_delta=26`).
 
-**Lignes de lieu** : une ligne qui ne nomme qu'un lieu (`Spontin`, `Maredsous`, `Han-sur-Lesse 5580`) ressort avec `confidence=locality`, `fallback_reason=street_missing`, les coordonnées du centre du lieu et un label comme `5530 Spontin` ; `matched_street`, `building_group_id` et `best_id` restent vides puisqu'aucune adresse précise n'a été choisie.
+**Lignes de lieu** : une ligne qui ne nomme qu'un lieu (`Spontin`, `Han-sur-Lesse 5580` ; un hameau comme `Maredsous` demande l'index facultatif `--places`) ressort comme **l'adresse BeSt la plus proche** de ce lieu, à sa propre position BeSt : rue, numéro, `best_id`, `building_group_id` et label viennent tous de BeSt (`Spontin` → par ex. `Chaussée de Dinant 47, 5530 Yvoir`). `confidence=locality` et `fallback_reason=street_missing` t'indiquent que cette adresse n'a pas été demandée par sa rue.
+
+**Lignes de point d'intérêt** (avec l'option facultative `--pois`) : une ligne qui ne nomme qu'un monument ou un lieu connu (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) ressort de la même façon — l'adresse BeSt la plus proche, par ex. `Rue du Chêne 2, 1000 Bruxelles` pour `Manneken Pis` — avec `confidence=landmark`. Le nom et la position du point d'intérêt lui-même ne sont jamais renvoyés.
 
 **Garantie 1-in-1-out** : même nombre de lignes, même ordre en entrée et en sortie. Une ligne non géocodée sort avec `confidence=not_found` et des `lat,lng,matched_*` vides — elle n'est **pas** retirée du fichier.
 
@@ -158,6 +160,7 @@ Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le r�
 |---|---|---|
 | `--index CHEMIN` | — (obligatoire) | Dossier de l'index Tantivy. Variable d'environnement : `CRABFINDER_INDEX`. |
 | `--abbreviation-dict CHEMIN` | (aucun) | YAML des abréviations. Sans lui, « Av. Louise » n'est pas étendu en « Avenue Louise ». **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
+| `--pois CHEMIN` | (aucun) | Aide OpenStreetMap facultative (`data/osm-pois-be-v1.csv`) : comprendre les lignes qui nomment un point d'intérêt ; elles reçoivent l'adresse BeSt la plus proche, `confidence=landmark`. Variable d'environnement : `CRABFINDER_POIS`. |
 | `-i, --input CHEMIN` | `stdin` | CSV d'entrée. `-` = stdin. |
 | `-o, --output CHEMIN` | `stdout` | Fichier de sortie. `-` = stdout. |
 | `--delimiter ,` ou `;` | auto | Force le délimiteur d'entrée (sinon détecté). |
@@ -329,7 +332,7 @@ Voir [`05-comprendre-resultats.md`](05-comprendre-resultats.md#adjacent_commune-
 
 ### Adresses avec seulement un nom de lieu (pas de rue)
 
-Supporté, sous les deux formes : `address=Spontin`, ou `street=Maredsous` avec un `house_number` vide. Quand tout le texte est un nom de lieu connu (commune, section de commune, zone postale, village ou hameau OpenStreetMap), tu obtiens une ligne `locality` au centre du lieu (`5537 Maredsous`).
+Supporté, sous les deux formes : `address=Spontin`, ou `street=Maredsous` avec un `house_number` vide. Quand tout le texte est un nom de lieu connu — une commune, section de commune ou zone postale BeSt, ou, avec l'index facultatif `--places`, un village ou hameau OpenStreetMap (`Maredsous`) — tu obtiens une ligne `locality` : l'adresse BeSt la plus proche du lieu. Avec l'option facultative `--pois`, un nom de point d'intérêt (`Manneken Pis`, `Gare du Midi`, éventuellement suivi de sa localité : `Gravensteen Gent`) donne une ligne `landmark`, là aussi l'adresse BeSt la plus proche — sauf si une rue porte ce nom (`Atomium` → Avenue de l'Atomium, `median_street`).
 
 ### Numéros de boîte
 

@@ -101,9 +101,10 @@ pub struct FeatureCollection {
     pub raw_hits: usize,
     #[serde(rename = "_note")]
     pub note: &'static str,
-    /// The place the query names, when it only names a place ("Spontin",
-    /// "Celles Houyet"): its centre and postal codes. The features are
-    /// then the buildings around that centre (`confidence: locality`).
+    /// The place the query was understood to name, when it only names a
+    /// place ("Spontin", "Celles Houyet", "Manneken Pis"). The features
+    /// are then the BeSt addresses around it (`confidence: locality` /
+    /// `landmark`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locality: Option<LocalityEcho>,
     pub features: Vec<Feature>,
@@ -112,12 +113,16 @@ pub struct FeatureCollection {
 #[derive(Serialize)]
 pub struct LocalityEcho {
     /// `municipality`, `part_of_municipality`, `postal_area`, `village`,
-    /// `hamlet`, `locality` or `isolated_dwelling`.
+    /// `hamlet`, `locality`, `isolated_dwelling` or `landmark`.
     pub kind: &'static str,
     pub name: MultilingualName,
     pub postal_codes: Vec<String>,
-    /// `[lon, lat]`, as in GeoJSON.
-    pub coordinates: [f64; 2],
+    /// Where the place's name comes from: `best` (a BeSt municipality,
+    /// part of municipality or postal area) or `osm` (an optional
+    /// OpenStreetMap helper). Only an interpretation of the query: the
+    /// features are BeSt addresses whatever the source, and no OSM
+    /// position is returned.
+    pub source: &'static str,
 }
 
 impl From<Locality> for LocalityEcho {
@@ -126,7 +131,7 @@ impl From<Locality> for LocalityEcho {
             kind: l.kind.as_str(),
             name: l.name,
             postal_codes: l.postal_codes,
-            coordinates: [l.lon, l.lat],
+            source: if l.kind.is_osm() { "osm" } else { "best" },
         }
     }
 }

@@ -1,28 +1,37 @@
 {
   "report_version": "1",
-  "service_url": "http://127.0.0.1:8080",
+  "service_url": "http://127.0.0.1:8083",
   "metrics": {
-    "query_count": 4342,
-    "aggregated_query_count": 4339,
+    "query_count": 4368,
+    "aggregated_query_count": 4365,
     "error_count": 0,
     "overall": {
-      "n": 4339,
-      "recall_at_1": 0.9691173081355151,
-      "recall_at_5": 0.9845586540677576,
-      "recall_at_10": 0.988476607513252,
-      "mrr": 0.9757868830869524,
-      "building_group_recall_at_1": 0.9691173081355151,
-      "strict_match_rate": 0.87923484673888
+      "n": 4365,
+      "recall_at_1": 0.9638029782359679,
+      "recall_at_5": 0.9791523482245131,
+      "recall_at_10": 0.9830469644902634,
+      "mrr": 0.9704328260513829,
+      "building_group_recall_at_1": 0.9638029782359679,
+      "strict_match_rate": 0.8824742268041237
     },
     "latency": {
-      "n": 4342,
-      "p50_ms": 2.051958,
-      "p95_ms": 10.321541999999999,
-      "p99_ms": 19.636208,
-      "mean_ms": 3.5100923007830467,
-      "max_ms": 96.458375
+      "n": 4368,
+      "p50_ms": 1.675875,
+      "p95_ms": 7.714625,
+      "p99_ms": 12.781333,
+      "mean_ms": 2.693930264423079,
+      "max_ms": 122.094542
     },
     "by_region": {
+      "BE-WAL": {
+        "n": 1204,
+        "recall_at_1": 0.9692691029900332,
+        "recall_at_5": 0.9883720930232558,
+        "recall_at_10": 0.9925249169435216,
+        "mrr": 0.9774208326741549,
+        "building_group_recall_at_1": 0.9692691029900332,
+        "strict_match_rate": 0.8853820598006644
+      },
       "BE-VLG": {
         "n": 2177,
         "recall_at_1": 0.9614147909967846,
@@ -40,83 +49,11 @@
         "mrr": 0.9906334492081884,
         "building_group_recall_at_1": 0.9884125144843569,
         "strict_match_rate": 0.8794901506373117
-      },
-      "BE-WAL": {
-        "n": 1204,
-        "recall_at_1": 0.9692691029900332,
-        "recall_at_5": 0.9883720930232558,
-        "recall_at_10": 0.9925249169435216,
-        "mrr": 0.9774208326741549,
-        "building_group_recall_at_1": 0.9692691029900332,
-        "strict_match_rate": 0.8853820598006644
       }
     },
     "by_variant": {
-      "minimal": {
-        "n": 500,
-        "recall_at_1": 0.792,
-        "recall_at_5": 0.912,
-        "recall_at_10": 0.946,
-        "mrr": 0.8437119047619047,
-        "building_group_recall_at_1": 0.792,
-        "strict_match_rate": 1.0
-      },
       "high_house_number": {
         "n": 101,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 1.0
-      },
-      "wrong_postal": {
-        "n": 500,
-        "recall_at_1": 0.958,
-        "recall_at_5": 0.966,
-        "recall_at_10": 0.966,
-        "mrr": 0.962,
-        "building_group_recall_at_1": 0.958,
-        "strict_match_rate": 1.0
-      },
-      "cross_language": {
-        "n": 306,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 1.0
-      },
-      "typo": {
-        "n": 487,
-        "recall_at_1": 0.9876796714579056,
-        "recall_at_5": 0.9938398357289527,
-        "recall_at_10": 0.9938398357289527,
-        "mrr": 0.9899041752224503,
-        "building_group_recall_at_1": 0.9876796714579056,
-        "strict_match_rate": 0.0
-      },
-      "messy_punctuation": {
-        "n": 500,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 1.0
-      },
-      "canonical": {
-        "n": 500,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 1.0
-      },
-      "casing": {
-        "n": 500,
         "recall_at_1": 1.0,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
@@ -132,6 +69,42 @@
         "mrr": 1.0,
         "building_group_recall_at_1": 1.0,
         "strict_match_rate": 0.9896193771626297
+      },
+      "wrong_postal": {
+        "n": 500,
+        "recall_at_1": 0.958,
+        "recall_at_5": 0.966,
+        "recall_at_10": 0.966,
+        "mrr": 0.962,
+        "building_group_recall_at_1": 0.958,
+        "strict_match_rate": 1.0
+      },
+      "casing": {
+        "n": 500,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "building_group_recall_at_1": 1.0,
+        "strict_match_rate": 1.0
+      },
+      "cross_language": {
+        "n": 306,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "building_group_recall_at_1": 1.0,
+        "strict_match_rate": 1.0
+      },
+      "canonical": {
+        "n": 500,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "building_group_recall_at_1": 1.0,
+        "strict_match_rate": 1.0
       },
       "with_postal": {
         "n": 500,
@@ -150,17 +123,44 @@
         "mrr": 1.0,
         "building_group_recall_at_1": 1.0,
         "strict_match_rate": 0.9672131147540983
+      },
+      "typo": {
+        "n": 487,
+        "recall_at_1": 0.9876796714579056,
+        "recall_at_5": 0.9938398357289527,
+        "recall_at_10": 0.9938398357289527,
+        "mrr": 0.9899041752224503,
+        "building_group_recall_at_1": 0.9876796714579056,
+        "strict_match_rate": 0.0
+      },
+      "minimal": {
+        "n": 500,
+        "recall_at_1": 0.792,
+        "recall_at_5": 0.912,
+        "recall_at_10": 0.946,
+        "mrr": 0.8437119047619047,
+        "building_group_recall_at_1": 0.792,
+        "strict_match_rate": 1.0
+      },
+      "messy_punctuation": {
+        "n": 500,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "building_group_recall_at_1": 1.0,
+        "strict_match_rate": 1.0
       }
     },
     "by_language": {
-      "fr": {
-        "n": 1140,
-        "recall_at_1": 0.9701754385964912,
-        "recall_at_5": 0.9885964912280701,
-        "recall_at_10": 0.9921052631578947,
-        "mrr": 0.9780454608744082,
-        "building_group_recall_at_1": 0.9701754385964912,
-        "strict_match_rate": 0.8850877192982456
+      "de": {
+        "n": 24,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "building_group_recall_at_1": 1.0,
+        "strict_match_rate": 0.9166666666666666
       },
       "nl": {
         "n": 3080,
@@ -171,29 +171,17 @@
         "building_group_recall_at_1": 0.9685064935064935,
         "strict_match_rate": 0.8834415584415585
       },
-      "de": {
-        "n": 24,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 0.9166666666666666
+      "fr": {
+        "n": 1140,
+        "recall_at_1": 0.9701754385964912,
+        "recall_at_5": 0.9885964912280701,
+        "recall_at_10": 0.9921052631578947,
+        "mrr": 0.9780454608744082,
+        "building_group_recall_at_1": 0.9701754385964912,
+        "strict_match_rate": 0.8850877192982456
       }
     },
     "by_adversarial_category": {
-      "cross_language": {
-        "n": 10,
-        "recall_at_1": 1.0,
-        "recall_at_5": 1.0,
-        "recall_at_10": 1.0,
-        "mrr": 1.0,
-        "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 1.0,
-        "match_levels": [
-          "address"
-        ]
-      },
       "special_chars": {
         "n": 10,
         "recall_at_1": 1.0,
@@ -206,29 +194,16 @@
           "address"
         ]
       },
-      "hamlet": {
-        "n": 30,
+      "cross_language": {
+        "n": 10,
         "recall_at_1": 1.0,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
         "mrr": 1.0,
         "building_group_recall_at_1": 1.0,
-        "strict_match_rate": 0.0,
+        "strict_match_rate": 1.0,
         "match_levels": [
-          "locality",
-          "street"
-        ]
-      },
-      "de_zone": {
-        "n": 9,
-        "recall_at_1": 0.7777777777777778,
-        "recall_at_5": 0.7777777777777778,
-        "recall_at_10": 0.7777777777777778,
-        "mrr": 0.7777777777777778,
-        "building_group_recall_at_1": 0.7777777777777778,
-        "strict_match_rate": 0.8888888888888888,
-        "match_levels": [
-          "street"
+          "address"
         ]
       },
       "notability": {
@@ -241,6 +216,43 @@
         "strict_match_rate": 1.0,
         "match_levels": [
           "building"
+        ]
+      },
+      "de_zone": {
+        "n": 9,
+        "recall_at_1": 0.7777777777777778,
+        "recall_at_5": 0.7777777777777778,
+        "recall_at_10": 0.7777777777777778,
+        "mrr": 0.7777777777777778,
+        "building_group_recall_at_1": 0.7777777777777778,
+        "strict_match_rate": 1.0,
+        "match_levels": [
+          "street"
+        ]
+      },
+      "landmark": {
+        "n": 26,
+        "recall_at_1": 0.2692307692307692,
+        "recall_at_5": 0.2692307692307692,
+        "recall_at_10": 0.2692307692307692,
+        "mrr": 0.2692307692307692,
+        "building_group_recall_at_1": 0.2692307692307692,
+        "strict_match_rate": 0.3076923076923077,
+        "match_levels": [
+          "locality"
+        ]
+      },
+      "hamlet": {
+        "n": 30,
+        "recall_at_1": 0.8333333333333334,
+        "recall_at_5": 0.8333333333333334,
+        "recall_at_10": 0.8333333333333334,
+        "mrr": 0.8333333333333334,
+        "building_group_recall_at_1": 0.8333333333333334,
+        "strict_match_rate": 0.9333333333333333,
+        "match_levels": [
+          "locality",
+          "street"
         ]
       },
       "facilites": {
@@ -284,5 +296,5 @@
       }
     ]
   },
-  "wall_clock_seconds": 1.9051025962499957
+  "wall_clock_seconds": 1.470885924375006
 }

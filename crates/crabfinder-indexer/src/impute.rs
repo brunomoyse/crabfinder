@@ -214,7 +214,6 @@ mod tests {
                     northing: 0.0,
                 }),
             },
-            place_name: None,
             position_source: PositionSource::Measured,
         }
     }

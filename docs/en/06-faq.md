@@ -13,11 +13,10 @@ You built the index with an older `crabfinder-indexer`, or you updated the code 
     --best-dir ./best-full-latest \
     --output ./index-belgium \
     --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv \
     --overwrite
 ```
 
-`--overwrite` deletes the old index in `--output` before building (without it, the indexer refuses a folder that already holds one). Expect ~1.5-3 min on a full dump. Or run `scripts/refresh_best.sh`, which also downloads a fresh dump (see [`02-installation.md`](02-installation.md#refreshing-the-data)).
+`--overwrite` deletes the old index in `--output` before building (without it, the indexer refuses a folder that already holds one). If you use the optional OpenStreetMap places helper, add `--places data/osm-places-be-v1.csv` again. Expect ~1.5-3 min on a full dump. Or run `scripts/refresh_best.sh`, which also downloads a fresh dump (see [`02-installation.md`](02-installation.md#refreshing-the-data)).
 
 ### "index at … is missing .crab-meta.json"
 
@@ -270,7 +269,7 @@ A request waited longer than `--request-timeout-ms` (default 10 s), slot wait in
 
 Check:
 - That you've read [`02-installation.md`](02-installation.md) if it's a setup problem.
-- That your index is `schema_version=10` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
+- That your index is `schema_version=11` (`cat ./index-belgium/.crab-meta.json`, or `/health`).
 - That the binaries are release builds (`./target/release/...`, not `./target/debug/...`).
 
 Then capture:

@@ -399,8 +399,10 @@ async fn locality_query_returns_the_place_and_its_centre_buildings() {
     assert_eq!(loc["kind"], "part_of_municipality");
     assert_eq!(loc["name"]["fr"], "Spontin");
     assert_eq!(loc["postal_codes"][0], "5530");
-    // Centred on the OSM node, not the address centroid.
-    assert_eq!(loc["coordinates"][1], 50.3226);
+    // Named by BeSt (the OSM node only centred the search); no OSM
+    // position in the response.
+    assert_eq!(loc["source"], "best");
+    assert!(loc.get("coordinates").is_none(), "{loc}");
     let fs = features(&body);
     assert_eq!(street_fr(&fs[0]), "rue haute");
     assert_eq!(fs[0]["confidence"], "locality");

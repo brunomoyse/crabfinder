@@ -172,7 +172,6 @@ where
                 postal_name,
                 part_of_municipality_name: pom.map(|p| p.names.clone()),
                 // Attached later by the `--places` join (cli::run).
-                place_name: None,
                 position_source: Default::default(),
 
                 // Anything that isn't a WGS84 point inside Belgium stays

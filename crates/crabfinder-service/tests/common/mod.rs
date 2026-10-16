@@ -41,6 +41,16 @@ impl App {
         Self { index, state }
     }
 
+    /// `with_places`, plus an OSM landmarks CSV loaded through
+    /// `LoadOptions::pois` (written next to the index).
+    pub fn with_pois(addrs: &[Address], places_csv: &str, pois_csv: &str) -> Self {
+        let index = TestIndex::build_with_places(addrs, places_csv);
+        let pois = index.path().join("pois-test.csv");
+        std::fs::write(&pois, pois_csv).unwrap();
+        let state = AppState::load(&LoadOptions::new(index.path()).pois(pois)).expect("load state");
+        Self { index, state }
+    }
+
     pub fn router(&self) -> Router {
         http::router(self.state.clone())
     }

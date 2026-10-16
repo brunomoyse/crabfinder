@@ -30,6 +30,7 @@ use crate::addr_count::SharedAddressCountIndex;
 use crate::dedup::{MatchType, RAW_HIT_CAP, RawHit, group_by_building, raw_limit};
 use crate::focus::{FOCUS_HALF_LIFE_M, LOCALITY_DECAY_M, apply_decay};
 use crate::hydrate::{HydratedHit, hydrate};
+use crate::landmarks::{Landmark, SharedLandmarkIndex};
 use crate::localities::{Province, SharedLocalityIndex};
 use crate::mid_street::{MidStreetIndex, street_key_from_bgid};
 use crate::query_builder::{
@@ -141,9 +142,13 @@ pub enum Confidence {
     /// (absent).
     AdjacentCommune,
     /// The query only names a locality (village, hamlet, municipality…):
-    /// candidates are the buildings around its centre, and `resolve()`
-    /// places the point at the centre itself (v2 Phase 6).
+    /// candidates are the BeSt addresses around its centre, nearest first,
+    /// each at its own BeSt position (v2 Phase 6).
     Locality,
+    /// The query only names a landmark ("Atomium", "Gare du Midi") from
+    /// `--pois`: candidates are the BeSt addresses around it, nearest
+    /// first, each at its own BeSt position (v2 Phase 10).
+    Landmark,
     /// No match.
     NotFound,
 }
@@ -158,6 +163,7 @@ impl Confidence {
             Confidence::FuzzyStreet => "fuzzy_street",
             Confidence::AdjacentCommune => "adjacent_commune",
             Confidence::Locality => "locality",
+            Confidence::Landmark => "landmark",
             Confidence::NotFound => "not_found",
         }
     }
@@ -225,8 +231,9 @@ pub struct ResolvedAddress {
     /// The runner-up is a near-tie on another street
     /// (`CandidateSet::ambiguity`).
     pub ambiguous: bool,
-    /// For `Confidence::Locality`: the locality, whose centre `hit` carries;
-    /// `address` is then only the building nearest to it.
+    /// For `Confidence::Locality` / `Landmark`: the place the query was
+    /// understood to name. `address` / `hit` are the BeSt address nearest
+    /// to it, with their own BeSt position.
     pub locality: Option<Locality>,
 }
 
@@ -267,6 +274,9 @@ pub struct ResolverContext<'a> {
     /// Named places (v8 `localities-v1.json`) behind the locality step.
     /// Empty when the index has no localities file: the step never fires.
     pub localities: SharedLocalityIndex,
+    /// OSM landmarks (`--pois`) behind the landmark step; empty when not
+    /// loaded.
+    pub landmarks: SharedLandmarkIndex,
 }
 
 /// Per-call knobs for `search`.
@@ -548,6 +558,13 @@ fn search_readings(
     let readings = std::iter::once(query).chain(query.alternatives.iter());
     for (reading, q) in readings.enumerate() {
         if let Some(set) = search_tiers(q, opts, ctx, Tier::is_strict)? {
+            // An exact landmark name beats a typo-corrected street
+            // ("Gravensteen" is not a misspelt Galerie Ravenstein).
+            if matches!(set.tier, Tier::Typo | Tier::TypoStreet)
+                && let Some(lm) = search_landmark(query, opts, ctx)?
+            {
+                return Ok(lm);
+            }
             // The street exists in the postal code but not the number: the
             // exact number just across the postal boundary may be the
             // likelier address (`prefer_exact_nearby`).
@@ -575,6 +592,9 @@ fn search_readings(
         if let Some(set) = search_tiers(&r, opts, ctx, Tier::is_strict)? {
             return Ok(set);
         }
+    }
+    if let Some(set) = search_landmark(query, opts, ctx)? {
+        return Ok(set);
     }
     if let Some(set) = search_postal_relaxed(query, opts, ctx, Tier::is_strict)? {
         return Ok(set);
@@ -892,6 +912,7 @@ fn locality_radius_m(kind: LocalityKind) -> f64 {
         LocalityKind::Hamlet => 1_500.0,
         LocalityKind::Locality => 1_000.0,
         LocalityKind::IsolatedDwelling => 800.0,
+        LocalityKind::Landmark => LANDMARK_RADIUS_M,
     }
 }
 
@@ -1115,6 +1136,110 @@ fn search_locality(
     Ok(None)
 }
 
+// --- Landmark step (v2 Phase 10) -----------------------------------------
+
+/// Buildings around a landmark are searched within this radius (in rings,
+/// as for a locality with a precise centre).
+const LANDMARK_RADIUS_M: f64 = 600.0;
+
+/// A landmark must lie this close to the query's postal code centre, or
+/// to the locality named after it ("Gravensteen Gent").
+const LANDMARK_NEAR_M: f64 = 15_000.0;
+
+/// The landmark a house-number-less query names, if any: the whole street
+/// text is a landmark name (`"atomium"`, `"bruxelles midi"`), or a
+/// landmark name followed by a locality it lies near (`"gravensteen
+/// gent"`). A postal code in the query must have its centre within
+/// `LANDMARK_NEAR_M`; with a `focus_point` the nearest same-name landmark
+/// wins, else `LandmarkIndex::lookup` order (sights before churches).
+fn named_landmark(query: &AddressQuery, ctx: &ResolverContext<'_>) -> Option<Landmark> {
+    if query.house_number.is_some() || query.street_tokens.is_empty() || ctx.landmarks.is_empty() {
+        return None;
+    }
+    let postal_centre = query
+        .postal_code
+        .as_deref()
+        .map(|pc| ctx.localities.postal_centre(pc));
+    let ok = |l: &&Landmark| {
+        let near = |(lat, lon): (f64, f64)| haversine_m(lat, lon, l.lat, l.lon) < LANDMARK_NEAR_M;
+        postal_centre.is_none_or(|c| c.is_some_and(near))
+            && query.bbox.is_none_or(|b| {
+                (b.min_lat..=b.max_lat).contains(&l.lat) && (b.min_lon..=b.max_lon).contains(&l.lon)
+            })
+    };
+    let pick = |hits: Vec<&Landmark>| -> Option<Landmark> {
+        let best = match query.focus_point {
+            Some((lat, lon)) => hits.into_iter().min_by(|a, b| {
+                haversine_m(lat, lon, a.lat, a.lon).total_cmp(&haversine_m(lat, lon, b.lat, b.lon))
+            }),
+            None => hits.into_iter().next(),
+        };
+        best.cloned()
+    };
+    let toks = &query.street_tokens;
+    let whole: Vec<&Landmark> = ctx.landmarks.lookup(toks).iter().filter(ok).collect();
+    if !whole.is_empty() {
+        return pick(whole);
+    }
+    for k in (1..toks.len()).rev() {
+        let (name, place) = toks.split_at(k);
+        let places = ctx.localities.lookup(place);
+        let near: Vec<&Landmark> = ctx
+            .landmarks
+            .lookup(name)
+            .iter()
+            .filter(ok)
+            .filter(|l| {
+                places
+                    .iter()
+                    .any(|p| haversine_m(p.lat, p.lon, l.lat, l.lon) < LANDMARK_NEAR_M)
+            })
+            .collect();
+        if !near.is_empty() {
+            return pick(near);
+        }
+    }
+    None
+}
+
+/// Answer a landmark query (`named_landmark`) with the buildings nearest
+/// to it, labelled `Confidence::Landmark` / `StreetMissing`. Runs after
+/// every strict reading, so a street of the same name ("Avenue de
+/// l'Atomium") still wins — unless only typo correction found it — and
+/// before the postal relaxation and the OR tiers, which would match stray
+/// words ("Gare" in every Rue de la Gare).
+/// The postal code only vouches for the landmark: buildings across the
+/// boundary from it count.
+fn search_landmark(
+    query: &AddressQuery,
+    opts: &SearchOptions,
+    ctx: &ResolverContext<'_>,
+) -> tantivy::Result<Option<CandidateSet>> {
+    let Some(lm) = named_landmark(query, ctx) else {
+        return Ok(None);
+    };
+    let loc = Locality {
+        kind: LocalityKind::Landmark,
+        name: lm.name,
+        lat: lm.lat,
+        lon: lm.lon,
+        postal_codes: Vec::new(),
+        address_count: 0,
+        region: None,
+    };
+    let unfiltered = AddressQuery {
+        postal_code: None,
+        ..query.clone()
+    };
+    let Some(mut set) = search_locality(&unfiltered, (&loc, 0, true), opts, ctx)? else {
+        return Ok(None);
+    };
+    for c in &mut set.candidates {
+        c.confidence = Confidence::Landmark;
+    }
+    Ok(Some(set))
+}
+
 /// Most units the Nearest tier reads for one street (Belgian streets rarely
 /// exceed a few hundred).
 const NEAREST_MAX_UNITS: usize = 5000;
@@ -1330,10 +1455,10 @@ pub fn resolve_with(
         return ResolvedAddress::not_found();
     };
     let mut hit = c.hit;
-    if let Some(loc) = &set.locality {
-        hit.lat = loc.lat;
-        hit.lon = loc.lon;
-    } else if !set.tier.uses_house_number()
+    // A locality or landmark answer is the BeSt address nearest to it, at
+    // its own BeSt position: BeSt is the only source of what is returned.
+    if set.locality.is_none()
+        && !set.tier.uses_house_number()
         && let Some((lat, lon)) = street_key_from_bgid(&hit.building_group_id)
             .and_then(|k| ctx.mid_street.lookup(k, &address.postal_code))
     {
@@ -1382,6 +1507,7 @@ mod tests {
             notability_enabled: true,
             mid_street,
             localities: Arc::new(crate::localities::LocalityIndex::empty()),
+            landmarks: Arc::new(crate::landmarks::LandmarkIndex::empty()),
         }
     }
 
@@ -2381,11 +2507,14 @@ mod tests {
             (LocalityKind::PartOfMunicipality, 50.3226, 5.0069)
         );
 
-        // `resolve` answers with the centre itself.
+        // `resolve` answers with the nearest BeSt address, at its own BeSt
+        // position — never the OSM node.
         let r = resolve(&parsed_query(&ti, "Spontin"), &c);
         assert_eq!(r.confidence, Confidence::Locality);
         let hit = r.hit.unwrap();
-        assert_eq!((hit.lat, hit.lon), (50.3226, 5.0069));
+        let first = &set.candidates[0].hit;
+        assert_eq!((hit.lat, hit.lon), (first.lat, first.lon));
+        assert_ne!((hit.lat, hit.lon), (50.3226, 5.0069));
         assert_eq!(r.address.unwrap().postal_code, "5530");
     }
 

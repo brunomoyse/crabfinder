@@ -230,7 +230,6 @@ mod tests {
             part_of_municipality_name: None,
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
             building_group_id,
-            place_name: None,
             position_source: Default::default(),
         }
     }

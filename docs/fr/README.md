@@ -13,6 +13,8 @@ Un service de géocodage belge basé sur les données fédérales **BeSt Address
 
 Tout tourne en local. Pas d'appel externe. Index unique d'environ 2,2 Go sur disque.
 
+**BeSt Address est la seule source.** Chaque adresse, identifiant, coordonnée et label renvoyé par crabfinder vient de BeSt. OpenStreetMap est une aide facultative, désactivée par défaut, pour comprendre les requêtes qui nomment un hameau (`--places`, indexeur) ou un point d'intérêt (`--pois`, service) : il sert seulement à décider où chercher. Il n'ajoute ni ne modifie jamais une adresse et n'est jamais renvoyé comme résultat — la réponse reste l'adresse BeSt la plus proche, signalée par `confidence: locality` / `landmark`.
+
 ## Quickstart
 
 ```bash
@@ -23,8 +25,7 @@ cargo build --release
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv
+    --notability-whitelist data/notability-whitelist-v1.yaml
 
 # 3a. Recherche en ligne — démarrer le service
 ./target/release/crabfinder-service \
@@ -63,4 +64,4 @@ Si l'une de ces commandes ne tourne pas chez toi, va directement à [`02-install
 
 ## Licence
 
-Code crabfinder : MIT OR Apache-2.0. Données BeSt Address : © autorités fédérales belges, licence open data (à redistribuer selon leurs conditions). `data/osm-places-be-v1.csv` : © les contributeurs d'OpenStreetMap, ODbL 1.0.
+Code crabfinder : MIT OR Apache-2.0. Données BeSt Address : © autorités fédérales belges, licence open data (à redistribuer selon leurs conditions). Aides OpenStreetMap facultatives `data/osm-places-be-v1.csv` et `data/osm-pois-be-v1.csv` : © les contributeurs d'OpenStreetMap, ODbL 1.0.

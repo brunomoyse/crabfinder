@@ -321,3 +321,35 @@ fn format_and_lang_flags_parse() {
     let e = Args::try_parse_from(["crabfinder-batch", "--index", "x", "--lang", "en"]).unwrap_err();
     assert!(e.to_string().contains("unknown lang 'en'"), "{e}");
 }
+
+// --- Phase 10: landmarks -----------------------------------------------------
+
+#[test]
+fn pois_flag_resolves_landmark_rows() {
+    let ti = index();
+    let pois = ti.path().join("pois.csv");
+    std::fs::write(
+        &pois,
+        "osm_type,osm_id,kind,name,name_fr,name_nl,name_de,name_en,lat,lon\n\
+         node,1,tourism=attraction,Hôtel de Ville,Hôtel de Ville,Stadhuis,,Town Hall,50.8466,4.3519\n",
+    )
+    .unwrap();
+    let csv = "id,address\n1,Hôtel de Ville\n";
+    let mut args = Args::for_index(ti.path());
+    let (_, body) = run_csv(&args, csv);
+    let (h, rows) = parse_csv(&body);
+    assert_ne!(col(&h, &rows[0], "confidence"), "landmark");
+
+    args.pois = Some(pois);
+    let (_, body) = run_csv(&args, csv);
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(col(&h, &rows[0], "confidence"), "landmark");
+    // The nearest BeSt address (Grand-Place), at its BeSt position.
+    assert_eq!(col(&h, &rows[0], "lat"), "50.8467");
+    assert_eq!(col(&h, &rows[0], "matched_street"), "Grand-Place");
+
+    args.pois = Some(ti.path().join("missing.csv"));
+    let mut out = Vec::new();
+    let err = run_with_io(&args, csv.as_bytes(), &mut out).unwrap_err();
+    assert!(format!("{err:#}").contains("missing.csv"), "{err:#}");
+}

@@ -2070,6 +2070,216 @@ queries:
       - "https://databrussels.be/id/streetname|2461|49"
     notes: "Bruxelles \u2014 anchor='Grand Sablon 1000 Bruxelles'; street match='sablon'"
 
+# ---------- Landmarks (OSM, --pois) — 26 entries — scored at match_level: locality
+  - id: adv-landmark-001
+    category: landmark
+    match_level: locality
+    expected_point: [50.844986, 4.349993]  # OSM node/240866019 tourism=attraction
+    within_m: 600
+    subcategory: manneken-pis
+    query: "Manneken Pis"
+    notes: "Manneken Pis"
+  - id: adv-landmark-002
+    category: landmark
+    match_level: locality
+    expected_point: [50.894921, 4.341501]  # OSM relation/19189218 tourism=attraction
+    within_m: 600
+    subcategory: atomium-street-wins
+    query: "Atomium"
+    notes: "Atomium"
+  - id: adv-landmark-003
+    category: landmark
+    match_level: locality
+    expected_point: [50.835775, 4.336054]  # OSM node/17401552 railway=station
+    within_m: 600
+    subcategory: bruxelles-midi-fr
+    query: "Gare du Midi"
+    notes: "Bruxelles-Midi - Brussel-Zuid"
+  - id: adv-landmark-004
+    category: landmark
+    match_level: locality
+    expected_point: [50.835775, 4.336054]  # OSM node/17401552 railway=station
+    within_m: 600
+    subcategory: bruxelles-midi-nl
+    query: "Zuidstation"
+    notes: "Bruxelles-Midi - Brussel-Zuid"
+  - id: adv-landmark-005
+    category: landmark
+    match_level: locality
+    expected_point: [50.845464, 4.356987]  # OSM node/3266203405 railway=station
+    within_m: 600
+    subcategory: bruxelles-central-nl
+    query: "Brussel-Centraal"
+    notes: "Bruxelles-Central - Brussel-Centraal"
+  - id: adv-landmark-006
+    category: landmark
+    match_level: locality
+    expected_point: [50.846548, 4.358640]  # OSM node/142700522 railway=station
+    within_m: 600
+    subcategory: gare-centrale-namesakes
+    query: "Gare Centrale"
+    notes: "Gare Centrale - Centraal Station"
+  - id: adv-landmark-007
+    category: landmark
+    match_level: locality
+    expected_point: [51.215995, 4.421101]  # OSM node/348421822 railway=station
+    within_m: 600
+    subcategory: antwerpen-centraal
+    query: "Antwerpen-Centraal"
+    notes: "Antwerpen-Centraal"
+  - id: adv-landmark-008
+    category: landmark
+    match_level: locality
+    expected_point: [50.678446, 4.404822]  # OSM node/267878387 tourism=attraction
+    within_m: 600
+    subcategory: butte-du-lion
+    query: "Butte du Lion"
+    notes: "Butte du Lion"
+  - id: adv-landmark-009
+    category: landmark
+    match_level: locality
+    expected_point: [50.678446, 4.404822]  # OSM node/267878387 tourism=attraction
+    within_m: 600
+    subcategory: butte-du-lion-nl
+    query: "Leeuwenheuvel"
+    notes: "Butte du Lion"
+  - id: adv-landmark-010
+    category: landmark
+    match_level: locality
+    expected_point: [50.841929, 4.362445]  # OSM relation/3299902 tourism=attraction
+    within_m: 600
+    subcategory: palais-royal-fr
+    query: "Palais Royal"
+    notes: "Palais Royal - Koninklijk Paleis"
+  - id: adv-landmark-011
+    category: landmark
+    match_level: locality
+    expected_point: [50.841929, 4.362445]  # OSM relation/3299902 tourism=attraction
+    within_m: 600
+    subcategory: palais-royal-nl
+    query: "Koninklijk Paleis"
+    notes: "Palais Royal - Koninklijk Paleis"
+  - id: adv-landmark-012
+    category: landmark
+    match_level: locality
+    expected_point: [50.847844, 4.360052]  # OSM way/13431536 tourism=attraction
+    within_m: 600
+    subcategory: st-gudule
+    query: "Cathédrale Saints-Michel-et-Gudule"
+    notes: "Cathédrale Saints-Michel-et-Gudule - Sint-Michiels-en-Goedelekathedraal"
+  - id: adv-landmark-013
+    category: landmark
+    match_level: locality
+    expected_point: [50.867081, 4.317051]  # OSM way/30163817 tourism=attraction
+    within_m: 600
+    subcategory: koekelberg
+    query: "Basilique du Sacré-Coeur"
+    notes: "Basilique du Sacré-Coeur - Basiliek van het Heilig Hart"
+  - id: adv-landmark-014
+    category: landmark
+    match_level: locality
+    expected_point: [51.208232, 3.224785]  # OSM way/182727710 tourism=attraction
+    within_m: 600
+    subcategory: belfort-brugge-locality
+    query: "Belfort Brugge"
+    notes: "Belfort"
+  - id: adv-landmark-015
+    category: landmark
+    match_level: locality
+    expected_point: [51.216258, 4.423570]  # OSM way/5088713 tourism=zoo
+    within_m: 600
+    subcategory: zoo-antwerpen
+    query: "Zoo Antwerpen"
+    notes: "Zoo Antwerpen"
+  - id: adv-landmark-016
+    category: landmark
+    match_level: locality
+    expected_point: [50.999946, 4.516436]  # OSM relation/6126643 tourism=zoo
+    within_m: 600
+    subcategory: planckendael
+    query: "Planckendael"
+    notes: "Planckendael"
+  - id: adv-landmark-017
+    category: landmark
+    match_level: locality
+    expected_point: [50.261866, 4.913236]  # OSM relation/1432379 tourism=attraction
+    within_m: 600
+    subcategory: citadelle-dinant
+    query: "Citadelle de Dinant"
+    notes: "Citadelle de Dinant"
+  - id: adv-landmark-018
+    category: landmark
+    match_level: locality
+    expected_point: [50.651146, 5.577166]  # OSM node/10151611846 historic=castle
+    within_m: 600
+    subcategory: citadelle-liege
+    query: "Citadelle de Liège"
+    notes: "Citadelle de Liège"
+  - id: adv-landmark-019
+    category: landmark
+    match_level: locality
+    expected_point: [51.054513, 3.724904]  # OSM relation/7340960 amenity=townhall
+    within_m: 600
+    subcategory: stadhuis-gent
+    query: "Stadhuis Gent"
+    notes: "Stadhuis Gent"
+  - id: adv-landmark-020
+    category: landmark
+    match_level: locality
+    expected_point: [50.844986, 4.349993]  # OSM node/240866019 tourism=attraction
+    within_m: 600
+    subcategory: manneken-pis-locality
+    query: "Manneken Pis Bruxelles"
+    notes: "Manneken Pis"
+  - id: adv-landmark-021
+    category: landmark
+    match_level: locality
+    expected_point: [51.057176, 3.720651]  # OSM way/493778720 tourism=attraction
+    within_m: 600
+    subcategory: gravensteen
+    query: "Gravensteen"
+    notes: "Gravensteen"
+  - id: adv-landmark-022
+    category: landmark
+    match_level: locality
+    expected_point: [51.057176, 3.720651]  # OSM way/493778720 tourism=attraction
+    within_m: 600
+    subcategory: gravensteen-locality
+    query: "Gravensteen Gent"
+    notes: "Gravensteen"
+  - id: adv-landmark-023
+    category: landmark
+    match_level: locality
+    expected_point: [50.900931, 4.485804]  # OSM way/370594935 aeroway=aerodrome
+    within_m: 600
+    subcategory: brussels-airport
+    query: "Brussels Airport"
+    notes: "Brussels Airport"
+  - id: adv-landmark-024
+    category: landmark
+    match_level: locality
+    expected_point: [50.584806, 3.886873]  # OSM way/251508700 tourism=zoo
+    within_m: 600
+    subcategory: pairi-daiza
+    query: "Pairi Daiza"
+    notes: "Pairi Daiza"
+  - id: adv-landmark-025
+    category: landmark
+    match_level: locality
+    expected_point: [50.698847, 4.590038]  # OSM way/292839139 tourism=theme_park
+    within_m: 600
+    subcategory: walibi
+    query: "Walibi Belgium"
+    notes: "Walibi Belgium"
+  - id: adv-landmark-026
+    category: landmark
+    match_level: locality
+    expected_point: [50.894153, 4.338668]  # OSM way/208501459 tourism=theme_park
+    within_m: 600
+    subcategory: mini-europe
+    query: "Mini-Europe"
+    notes: "Mini-Europe"
+
 # ---------- Known failures — 3 entries — tracked, NOT aggregated
   - id: adv-known-001
     category: known_failure

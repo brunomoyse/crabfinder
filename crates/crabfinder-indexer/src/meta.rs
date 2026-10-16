@@ -48,7 +48,10 @@ use thiserror::Error;
 ///        analyzed and space-joined) so a query naming a street exactly
 ///        ("Markt") outranks streets that merely contain its words
 ///        ("Grote Markt").
-pub const SCHEMA_VERSION: u32 = 10;
+///   v11 — v2 Phase 10: BeSt is the only source of what an address carries:
+///        the OSM `place_name` payload field (v8) is gone. OSM places stay
+///        in `localities-v1.json`, for interpreting queries only.
+pub const SCHEMA_VERSION: u32 = 11;
 
 /// Filename under the index directory.
 pub const SIDECAR_FILENAME: &str = ".crab-meta.json";

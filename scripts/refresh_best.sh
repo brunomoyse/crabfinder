@@ -6,6 +6,11 @@
 #   DATA_DIR=/srv/crab scripts/refresh_best.sh  # somewhere else
 #   SKIP_DOWNLOAD=1 scripts/refresh_best.sh     # reuse today's best-<date>/
 #   SKIP_VALIDATE=1 scripts/refresh_best.sh     # don't start a service to validate
+#   WITH_OSM=1 scripts/refresh_best.sh          # also index the optional OSM places
+#
+# BeSt Address is the only source of the index. With WITH_OSM=1 the
+# OpenStreetMap places CSV (data/osm-places-be-v1.csv) is added as a
+# query-interpretation aid for hamlet names; it never alters an address.
 #
 # The running service keeps serving the old index (it mmaps it at startup);
 # restart it against `index-current` to pick up the new one.
@@ -41,11 +46,11 @@ cargo build --release -p crabfinder-indexer -p crabfinder-service -p crabfinder-
 log "indexing into $index_dir"
 rm -rf "$index_dir"
 places_args=()
-if [[ -f data/osm-places-be-v1.csv ]]; then
+if [[ -n "${WITH_OSM:-}" ]]; then
     places_args=(--places data/osm-places-be-v1.csv)
 fi
 ./target/release/crabfinder-indexer --best-dir "$best_dir" --output "$index_dir" \
-    --notability-whitelist data/notability-whitelist-v1.yaml "${places_args[@]}"
+    --notability-whitelist data/notability-whitelist-v1.yaml ${places_args[@]+"${places_args[@]}"}
 
 # 3. Validate: every expected id in the eval sets must still resolve.
 if [[ -z "${SKIP_VALIDATE:-}" ]]; then

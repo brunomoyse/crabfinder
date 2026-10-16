@@ -844,7 +844,6 @@ mod tests {
                 lon: 4.0,
             }),
             building_group_id: BuildingGroupId("bgid-1".into()),
-            place_name: None,
             position_source: Default::default(),
         }
     }

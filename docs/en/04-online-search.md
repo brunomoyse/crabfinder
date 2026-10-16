@@ -84,7 +84,7 @@ curl "http://127.0.0.1:8080/geocode?q=Avenue+Loiuse+32+1050"
 # Structured, with Dutch labels
 curl "http://127.0.0.1:8080/geocode?street=Grote+Markt&housenumber=1&city=Antwerpen&lang=nl"
 
-# A hamlet
+# A hamlet (needs the optional --places index)
 curl "http://127.0.0.1:8080/geocode?q=Maredsous"
 
 # Region-restricted
@@ -164,7 +164,7 @@ q=Grand-Place 1000&lang=de   → "Grand-Place 2, 1000 Bruxelles"   (no German na
 
 ### Place names: villages, hamlets, municipalities
 
-A query that is only a place name — a municipality, a part of municipality, a postal area, or an OpenStreetMap village or hamlet — returns the addresses around that place, plus a top-level `locality` object describing it:
+A query that is only a place name — a BeSt municipality, part of municipality or postal area, or, if the index was built with the optional `--places` helper, an OpenStreetMap village or hamlet such as Maredsous — returns the BeSt addresses nearest to that place. A top-level `locality` object echoes how the query was understood (`source: "best"` or `"osm"`); it carries no position, and nothing in the features comes from OpenStreetMap:
 
 ```bash
 curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
@@ -173,10 +173,10 @@ curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
 ```jsonc
 {
   "locality": {
-    "kind": "hamlet",            // municipality, part_of_municipality, postal_area, village, hamlet, locality, isolated_dwelling
+    "kind": "hamlet",            // municipality, part_of_municipality, postal_area, village, hamlet, locality, isolated_dwelling, landmark
     "name": { "fr": "Maredsous", "nl": null, "de": null },
     "postal_codes": ["5537"],
-    "coordinates": [4.769483, 50.304636]   // [lng, lat] of the place
+    "source": "osm"              // "best" for municipality, part_of_municipality, postal_area
   },
   "features": [
     { "properties": { "label": "Rue des Abbayes 20, 5537 Anhée", ... },
@@ -187,6 +187,34 @@ curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
 ```
 
 A street plus a place name also works when the place isn't the address's official municipality: `Rue de la Loi 17, 1040 Etterbeek` finds `Rue de la Loi 17, 1040 Bruxelles` (that stretch of 1040 belongs to the City of Brussels) as `exact`.
+
+### Landmarks
+
+With the optional `--pois` helper (OpenStreetMap landmarks: sights, castles, stations, airports, town halls, museums, parks, churches…), a query that only names a landmark returns the BeSt addresses nearest to it (within 600 m), with `confidence: landmark` and a `locality` echo of kind `landmark`. The landmark's name and position are only used to know where to look; they are never returned:
+
+```bash
+curl "http://127.0.0.1:8080/geocode?q=Manneken+Pis&limit=1"
+```
+
+```jsonc
+{
+  "locality": {
+    "kind": "landmark",
+    "name": { "fr": "Manneken-Pis", "nl": "Manneken Pis", "de": "Manneken Pis" },
+    "postal_codes": [],
+    "source": "osm"
+  },
+  "features": [
+    { "match_type": "spatial", "confidence": "landmark", "fallback_reason": "street_missing", ... }
+  ]
+}
+```
+
+- Any of its names works (`Gare du Midi`, `Zuidstation`), and so does a landmark followed by its locality (`Gravensteen Gent`).
+- A street with that name wins: `Atomium` returns Avenue de l'Atomium (`median_street`), right next to it.
+- A postal code in the query must lie within 15 km of the landmark (`Manneken Pis 1000` works, `Manneken Pis 9000` doesn't).
+- Several landmarks with the same name: the one nearest `focus_point`, otherwise sights first, then stations and institutions, churches last.
+- A house number turns the query back into an address search.
 
 ### Response shape
 
@@ -303,7 +331,8 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8467&lng=4.3525&limit=1&lang=nl"
 | `lng` | float | required | WGS84 longitude |
 | `limit` | int | `1` | Max results. Max 100. |
 | `radius_m` | float | — | If set, drops results beyond `radius_m` metres. |
-| `lang` | string | each address's own | Language of `properties.label`. |
+| `lang` | string | each address's own | Language of `properties.label` (and of `interpolation.label`). |
+| `interpolate` | bool | `false` | `true`: estimate the house number of a point lying between two known addresses (see below). |
 
 ### Response
 
@@ -343,6 +372,38 @@ For mobile geolocation (~10-50 m accuracy), filtering with `radius_m=50` avoids 
 ```bash
 curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&radius_m=50&limit=3"
 ```
+
+### Estimating a missing number: `interpolate=true`
+
+Sometimes the clicked point lies between two known addresses — a vacant plot, a new building BeSt doesn't list yet. With `interpolate=true`, the response gets an extra top-level `interpolation` object estimating the number that point would carry:
+
+```bash
+curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
+```
+
+```jsonc
+{
+  "type": "FeatureCollection",
+  "interpolation": {
+    "house_number": "22",
+    "between": ["6", "38"],                  // the known numbers on either side
+    "street_name": { "fr": "Rue Caporal Claes", "nl": "Korporaal Claesstraat", "de": null },
+    "postal_code": "1030",
+    "municipality_name": { "fr": "Schaerbeek", "nl": "Schaarbeek", "de": null },
+    "coordinates": [4.388972, 50.867267],    // [lng, lat] on the segment between them
+    "distance_m": 3.47,                      // query point → segment, metres
+    "label": "Rue Caporal Claes 22, 1030 Schaerbeek"
+  },
+  "features": [ ... ]                        // unchanged: the nearest existing addresses
+}
+```
+
+- **Opt-in**: without `interpolate=true`, nothing changes. With it, `features` stay exactly the same; only `interpolation` is added.
+- It only appears when the point lies in a **gap between two known numbers on the same side of a street** (same street, postal code and parity, e.g. 6 and 38 with nothing in between), at most 400 m apart, the point at most 60 m off the line joining them and within 200 m. The number is proportional to the position along that line, rounded to the side's parity.
+- And only when the point is nearer to that gap than to any existing address: otherwise the first feature already is the answer, and `interpolation` is absent.
+- `label` follows `lang`, like the features' labels.
+
+**It's an estimate**: the number may not officially exist. Treat it like an approximation (comparable to `nearest_*`), never as a BeSt address — it has no `best_id` or `building_group_id`.
 
 ## `GET /building/{id}/units` — all units in a building
 

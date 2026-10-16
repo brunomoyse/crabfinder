@@ -33,6 +33,9 @@ pub enum LocalityKind {
     Hamlet,
     Locality,
     IsolatedDwelling,
+    /// An OSM landmark (`--pois`, service side only: never written to the
+    /// localities file).
+    Landmark,
 }
 
 impl LocalityKind {
@@ -45,6 +48,7 @@ impl LocalityKind {
             Self::Hamlet => "hamlet",
             Self::Locality => "locality",
             Self::IsolatedDwelling => "isolated_dwelling",
+            Self::Landmark => "landmark",
         }
     }
 
@@ -52,7 +56,7 @@ impl LocalityKind {
     pub fn is_osm(self) -> bool {
         matches!(
             self,
-            Self::Village | Self::Hamlet | Self::Locality | Self::IsolatedDwelling
+            Self::Village | Self::Hamlet | Self::Locality | Self::IsolatedDwelling | Self::Landmark
         )
     }
 }
@@ -338,7 +342,6 @@ mod tests {
             postal_name: MultilingualName::default(),
             part_of_municipality_name: pom.map(|p| ml(p.1)),
             coordinates: Coordinates::Wgs84(WgsCoord { lat, lon }),
-            place_name: None,
             position_source: Default::default(),
         }
     }

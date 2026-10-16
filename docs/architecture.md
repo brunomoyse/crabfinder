@@ -1,9 +1,28 @@
 # Architecture
 
 crabfinder is a Belgium-only geocoder backed by the federal BeSt Address
-dump (~6.9M addresses, Brussels + Flanders + Wallonia), optionally
-enriched with OpenStreetMap place names. One index, multilingual,
-forward / reverse / batch.
+dump (~6.9M addresses, Brussels + Flanders + Wallonia). One index,
+multilingual, forward / reverse / batch.
+
+## Data sources
+
+BeSt Address is the only source of what crabfinder returns: every
+address, identifier, coordinate and label in a response, and every
+document in the index, is BeSt's (positions BeSt lacks are imputed from
+BeSt positions, `impute.rs`).
+
+OpenStreetMap is an optional, off-by-default aid to *interpret* queries,
+never a source of results:
+
+- `--places` (indexer): hamlet and village names and their nodes go into
+  `localities-v1.json` only, to recognise "Maredsous" and decide where to
+  search.
+- `--pois` (service): landmark names and positions, held in memory, to
+  recognise "Manneken Pis".
+
+Either way the answer is the nearest BeSt address with its BeSt position
+(`Confidence::Locality` / `Landmark`). The `/geocode` `locality` echo
+names the place as understood, with `source: osm`, and no OSM position.
 
 ## Crates
 
@@ -31,13 +50,13 @@ every reader uses the same field handles and the same `crab` analyzer.
 ## Data flow
 
 ```
-BeSt zip bundle                     data/osm-places-be-v1.csv (optional, ODbL)
+BeSt zip bundle                     data/osm-places-be-v1.csv (optional, off by default)
         │                                   │
         ▼                                   ▼
 crabfinder-indexer  pass 1: dictionaries (Municipality, PostalInfo, StreetName,
                             PartOfMunicipality)
                     pass 2: stream Addresses, join, reproject Lambert72→WGS84,
-                            attach nearest OSM place, notability multiplier
+                            notability multiplier; OSM place → localities file only
                     then:   impute the positions BeSt leaves at `0 0`
         │
         ▼
@@ -56,9 +75,9 @@ AppState::load      open index, check sidecar, build R-tree + address-count
         └── crabfinder-eval     --batch-mode (in-process)
 ```
 
-## Index (schema v10)
+## Index (schema v11)
 
-`crabfinder_indexer::meta::SCHEMA_VERSION` is **10**; every reader checks
+`crabfinder_indexer::meta::SCHEMA_VERSION` is **11**; every reader checks
 `.crab-meta.json` and refuses a mismatch. Recent bumps:
 
 - **v7** — `mid-street-v1.bin` side-file (lower-median house number per
@@ -69,6 +88,8 @@ AppState::load      open index, check sidecar, build R-tree + address-count
   of reprojected into France; `Address::position_source` + a FAST
   `position_source` field.
 - **v10** — raw `street_exact` field for the exact-name bonus.
+- **v11** — the OSM `Address::place_name` payload field (v8) is gone:
+  addresses carry BeSt data only.
 
 The indexer refuses an output directory that already holds an index
 (Tantivy would append a second copy) unless `--overwrite`.
@@ -116,14 +137,17 @@ streamed, `PositionImputer` assigns, in order:
 ### OSM places (`places.rs`) and localities (`localities.rs`)
 
 `scripts/build_osm_places.py` extracts `place=village|hamlet|locality|
-isolated_dwelling` nodes. With `--places`, each address gets the nearest
-place within 3 km (village), 1.5 km (hamlet) or 1 km (locality,
-isolated dwelling), unless BeSt already names it.
+isolated_dwelling` nodes. With `--places`, each address is matched to the
+nearest place within 3 km (village), 1.5 km (hamlet) or 1 km (locality,
+isolated dwelling), unless BeSt already names it — only to give the
+place its postal codes in the localities file; the address itself is
+left untouched.
 
 `localities-v1.json` (JSON) lists every name a query can mean without a
 street — municipalities, Walloon parts of municipality, Flemish postal
-areas, OSM places — with a centre (address mean, or the OSM node) and
-postal codes. The service loads it into a name → localities map
+areas, and with `--places` OSM places — with a centre (address mean, or
+the OSM node) and postal codes. Centres only steer the search; they are
+never returned. The service loads it into a name → localities map
 (exact and name-prefix lookup).
 
 ### Notability
@@ -166,7 +190,17 @@ batch mode.
 4. **Locality-suffix readings**: `<street> <place>` where the place isn't
    in the street's text (an OSM hamlet, another commune): the street
    searched inside the place's area (≥ 3 km), focused on its centre.
-5. **Postal-code relaxation** (`search_postal_relaxed`): nothing matched
+5. **Landmark step** (`search_landmark`, `--pois`): no house number and
+   the words are a landmark name, or a landmark + a locality within
+   15 km of it (`landmarks::LandmarkIndex`, keyed by every analyzed
+   name form and each side of a bilingual `"A - B"` name). A postal code
+   must have its centre within 15 km. Among namesakes: nearest the focus
+   point, else kind rank (attractions, castles/monuments, stations and
+   institutions, museums, other heritage, churches). Answered like an
+   OSM locality (`LocalityKind::Landmark`, rings up to 600 m,
+   `Tier::Area`), labelled `Confidence::Landmark`. Loaded by the service,
+   not indexed: refreshing the CSV needs no reindex.
+6. **Postal-code relaxation** (`search_postal_relaxed`): nothing matched
    inside the query's postal code → the strict tiers without it, inside
    20 km of the code's centre (`indexer::localities::postal_centres`)
    with a 5 km distance decay, labelled `adjacent_commune` /
@@ -175,7 +209,7 @@ batch mode.
    off, and the exact number exists across the boundary; and a parser
    alternative that doesn't match its number exactly. Skipped for the
    hard `postal_code=` filter (`AddressQuery::postal_code_strict`).
-6. **OR tiers**: any word, with then without the number
+7. **OR tiers**: any word, with then without the number
    (`fuzzy_street`).
 
 The strict query is a phrase + AND-of-OR-forms (`analyze` + abbreviation
@@ -214,6 +248,13 @@ At startup `SpatialIndex` walks every doc's `lat`/`lon` FAST columns
 `rstar::RTree` (~100 MB, ~5–6 s for the full index; the service binds
 after). Queries over-search, then re-sort by Haversine distance.
 
+`interpolate=true` (`interpolate.rs`, pure geometry): the addresses
+within 200 m are grouped by street side (street key + postal code +
+parity); for consecutive numbers with a gap, the point is projected on
+the segment between them (equirectangular metres) and the number taken
+proportionally, rounded to the parity. The nearest segment wins if the
+point is nearer to it than to any address.
+
 ## Batch (`crabfinder_service::batch`)
 
 `io` reads CSV (delimiter sniffed; clean columns or free-text
@@ -227,5 +268,5 @@ index directly (mmap read-sharing makes it safe next to a live service).
 - Per-language searchable fields (removed in v3).
 - A prefix / autocomplete field (v5 attempt removed, see
   `reports/archive/phase7a-removed/`).
-- OSM names in `searchable` (see above).
+- Anything from OSM in `searchable` or in the payload.
 - A persisted R-tree: it is rebuilt at every startup.

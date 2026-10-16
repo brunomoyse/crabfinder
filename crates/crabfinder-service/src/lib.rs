@@ -15,6 +15,7 @@ pub mod focus;
 pub mod http;
 pub mod hydrate;
 pub mod interpolate;
+pub mod landmarks;
 pub mod localities;
 pub mod mid_street;
 pub mod query_builder;

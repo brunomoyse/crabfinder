@@ -4,6 +4,14 @@ Base URL: `http://127.0.0.1:8080` (default; `--host` / `--port`). The
 service binds IPv4 only, and accepts connections once the index and the
 R-tree are loaded (~5–6 s on the full index).
 
+**Data source.** Every address, identifier, coordinate and label in a
+response comes from BeSt Address. The optional OpenStreetMap helpers
+(indexer `--places`, service `--pois`, both off by default) only help
+*interpret* a query naming a hamlet or a landmark: the answer is then the
+BeSt address nearest to it (`confidence: locality` / `landmark`), and the
+`locality` echo says how the query was understood (`source: osm`), with no
+OSM position.
+
 There is no authentication — bind to localhost or front this with your
 own gateway in production. CORS allows any origin unless `--cors-origin`
 is set (any method, any header).
@@ -26,6 +34,7 @@ is set (any method, any header).
 | `--host` | `CRABFINDER_HOST` | `127.0.0.1` | `0.0.0.0` in containers |
 | `--port` | `CRABFINDER_PORT` | `8080` | |
 | `--abbreviation-dict` | `CRABFINDER_ABBREVIATION_DICT` | — | `data/street-type-abbreviations-v1.yaml`; without it, no `av` → `avenue` expansion |
+| `--pois` | `CRABFINDER_POIS` | off | Optional OSM helper: `data/osm-pois-be-v1.csv` (landmarks, `scripts/build_osm_pois.py`) to understand queries naming a landmark; answers stay BeSt addresses. Without it, landmark names aren't recognised |
 | `--no-notability-boost` | `CRABFINDER_NO_NOTABILITY_BOOST` | off | Plain BM25 (A/B the boost on the same index) |
 | `--request-timeout-ms` | `CRABFINDER_REQUEST_TIMEOUT_MS` | `10000` | Deadline per request, queueing included → 503 |
 | `--batch-timeout-secs` | `CRABFINDER_BATCH_TIMEOUT_SECS` | `600` | Deadline of `/batch/geocode` until its response starts streaming |
@@ -112,16 +121,28 @@ order (`query.parsed.alternatives`; `query.reading` says which one won).
 The search tries, in order, and the first step with hits wins:
 
 1. **Locality** — the query only names a place (`Spontin`, `Celles
-   Houyet`, `Han-sur-Lesse 5580`): buildings around its centre
-   (`confidence: locality`).
+   Houyet`, `Han-sur-Lesse 5580`): the BeSt addresses around its centre
+   (`confidence: locality`). Places are BeSt municipalities, parts of
+   municipality and postal areas; with the optional `--places` index,
+   OSM hamlets and villages too (`Maredsous`).
 2. **Strict tiers**, for each parser reading: exact street + number →
    typo-corrected street + number → nearest existing number on the
    street → street without the number → typo-corrected street without
    the number.
 3. **Street + locality** — `<street> <place>` where the place isn't the
-   street's municipality (an OSM hamlet, a neighbouring commune): the
+   street's municipality (a neighbouring commune, or an OSM hamlet with
+   `--places`): the
    street searched inside that place's area.
-4. **Around the postal code** — nothing matched inside the given postal
+4. **Landmark** — with `--pois`, a query that only names a landmark
+   (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`): the BeSt
+   addresses nearest to it, within 600 m (`confidence: landmark`). An
+   exact landmark name beats a typo-corrected street (`Gravensteen` is not
+   Galerie Ravenstein). A street of the
+   same name found in step 2 wins (`Atomium` → Avenue de l'Atomium). A
+   postal code must lie within 15 km of the landmark; among namesakes,
+   the one nearest `focus_point`, else sights before stations and
+   institutions, before churches.
+5. **Around the postal code** — nothing matched inside the given postal
    code: the strict tiers again without it, within 20 km of the code's
    centre and nearest first (`confidence: adjacent_commune`,
    `fallback_reason: postal_code_mismatch`). `Avenue Louise 54 1000` →
@@ -129,7 +150,7 @@ The search tries, in order, and the first step with hits wins:
    street (or a nearest number on another street object, or one 20 or
    more away): the exact number just across the boundary wins. Not with
    `postal_code=` (a hard filter) or an unknown postal code.
-5. **OR fallback** — any query word, with then without the number.
+6. **OR fallback** — any query word, with then without the number.
 
 Strict ranking is `(BM25 + bonuses) × notability × (1 + 0.005 × ln(1 +
 addresses on the street))`. Bonuses: adjacent word pairs, and a constant
@@ -184,8 +205,7 @@ address):
         "coordinates": { "crs": "EPSG:4326", "lat": 50.84216, "lon": 4.38593 },
         // … street_id, municipality_id, postal_info_id, postal_name,
         //   part_of_municipality_*, officially_assigned, street_type,
-        //   building_group_id; place_name (OSM) and position_source
-        //   only when set
+        //   building_group_id; position_source only when set
         "label": "Rue de la Loi 248, 1040 Bruxelles"
       },
       "score": 44.0,
@@ -210,16 +230,16 @@ Top-level fields:
 | `match_type` | `strict` if any feature is strict, else `fuzzy` (empty result: `strict`) |
 | `deduplicated` | `false` with `expand=true` |
 | `raw_hits` | Raw BeSt rows the winning step considered, before dedup |
-| `locality` | Only when the query names a place: `{kind, name, postal_codes, coordinates}`; `kind` is `municipality`, `part_of_municipality`, `postal_area`, `village`, `hamlet`, `locality` or `isolated_dwelling`, `coordinates` is `[lon, lat]` |
+| `locality` | Only when the query names a place: how it was understood, `{kind, name, postal_codes, source}`. `kind` is `municipality`, `part_of_municipality`, `postal_area` (`source: best`) or `village`, `hamlet`, `locality`, `isolated_dwelling`, `landmark` (`source: osm`, from the optional helpers; a landmark has no postal codes). No position: the features are the BeSt addresses around the place |
 
 Per-feature fields:
 
 | Field | Meaning |
 |---|---|
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` (see table below) |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark` (see table below) |
 | `fallback_reason` | Absent when `exact`; else `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` |
 | `house_number_delta` | Matched − requested number when a number was honoured (`0` = exact); absent otherwise |
-| `match_type` | `strict` (every street word matched), `typo` (edit-distance corrected), `fuzzy` (OR fallback), `spatial` (nearest buildings to a locality centre), `id` (`/lookup`) |
+| `match_type` | `strict` (every street word matched), `typo` (edit-distance corrected), `fuzzy` (OR fallback), `spatial` (nearest buildings to a locality centre or landmark), `id` (`/lookup`) |
 | `unit_count` | BeSt rows collapsed into this feature (1 with `expand`) |
 | `building_group_id` | `{street namespace}\|{street id}\|{house number}`; pass it to `/building/…/units` |
 | `properties.label` | The address on one line in `lang` (`Wetstraat 16 bus 3, 1000 Brussel`) |
@@ -233,7 +253,8 @@ Per-feature fields:
 | `median_street` | the street (median house number); number missing or too far |
 | `fuzzy_street` | a typo-corrected or OR-fallback street match (with the number when it exists) |
 | `adjacent_commune` | found outside the given postal code, near it; `house_number_delta` says whether the number matched (`0`), was approximated, or was ignored (absent) |
-| `locality` | a building near the centre of the place the query names |
+| `locality` | the BeSt address nearest to the centre of the place the query names |
+| `landmark` | the BeSt address nearest to the landmark the query names (`--pois`) |
 
 More examples: `Avenue Loiuse 32 Ixelles` → Avenue Louise 32,
 `match_type: typo`, `confidence: fuzzy_street`, `fallback_reason:
@@ -241,8 +262,8 @@ street_spelling_fuzzy`. `Spontin` →
 
 ```json
 "locality": {"kind": "part_of_municipality", "name": {"fr": "Spontin", "nl": null, "de": null},
-             "postal_codes": ["5530"], "coordinates": [5.006949, 50.322619]},
-"features": [{"properties": {"label": "Chaussée de Dinant 18, 5530 Yvoir", "…": "…"},
+             "postal_codes": ["5530"], "source": "best"},
+"features": [{"properties": {"label": "Chaussée de Dinant 47, 5530 Yvoir", "…": "…"},
               "match_type": "spatial", "confidence": "locality", "fallback_reason": "street_missing", "…": "…"}]
 ```
 
@@ -275,6 +296,7 @@ index under `missing`:
 | `limit` | int | 1 | Buildings returned, clamped to 1–100 |
 | `radius_m` | float | — | Drop results farther than this (non-negative) |
 | `lang` | string | — | As for `/geocode` |
+| `interpolate` | bool | `false` | Also estimate the house number at the point when it lies in a gap between two known numbers (see below) |
 
 ```jsonc
 // /reverse?lat=50.8467&lng=4.3525&lang=nl
@@ -301,6 +323,35 @@ index under `missing`:
 Nearest first, collapsed by building. Only addresses with a point-accurate
 position (BeSt's own, or imputed from the same number / interpolation)
 are candidates; street- and locality-level guesses are skipped.
+
+### Interpolation
+
+With `interpolate=true`, a top-level `interpolation` object estimates
+the number the point would carry — a vacant plot, a building BeSt
+doesn't list yet:
+
+```jsonc
+// /reverse?lat=50.86730&lng=4.38900&interpolate=true
+"interpolation": {
+  "house_number": "22",
+  "between": ["6", "38"],               // the known numbers either side
+  "street_name": {"fr": "Rue Caporal Claes", "nl": "Korporaal Claesstraat", "de": null},
+  "postal_code": "1030",
+  "municipality_name": {"fr": "Schaerbeek", "nl": "Schaarbeek", "de": null},
+  "coordinates": [4.388972, 50.867267], // on the segment between them
+  "distance_m": 3.47,                   // query point → segment
+  "label": "Rue Caporal Claes 22, 1030 Schaerbeek"
+}
+```
+
+Every street side (street object, postal code, parity) with numbers
+within 200 m is tried: two consecutive numbers of the side with a gap
+(`23 − 3 > 2`), at most 400 m apart, the point projecting between them
+and at most 60 m off the segment; the number is proportional to the
+position along it, rounded to the side's parity. The nearest such
+segment wins, and only when the point is nearer to it than to any
+existing address — otherwise that address (the first feature) is the
+answer and `interpolation` is absent. `features` are unchanged.
 
 ## `GET /building/{building_group_id}/units`
 
@@ -373,13 +424,14 @@ first fifteen are unchanged from v1.
 $ curl -X POST -H 'Content-Type: text/csv' --data-binary @in.csv '127.0.0.1:8080/batch/geocode?lang=nl'
 id,street,house_number,postal_code,matched_street,…,confidence,fallback_reason,house_number_delta,…,address,label,position_source,ambiguous
 1,,,,Rue de la Loi,16,1000,50.84616,4.36653,exact,,0,218.12,…|1679|16,…/address/210225/1,"Rue de la Loi 16 bte 3, B-1000 Bruxelles","Wetstraat 16, 1000 Brussel",measured,false
-2,,,,,,5530,50.322619,5.006949,locality,street_missing,,1.93,,,Spontin,5530 Spontin,measured,false
+2,,,,Chaussée de Dinant,47,5530,50.32165,5.00100,locality,street_missing,,16.51,…|7750832|47,…/Address/322784/2,Spontin,"Chaussée de Dinant 47, 5530 Yvoir",measured,false
 3,,,,,,,,,not_found,no_match,,,,,zzzz qqqq,,,false
 ```
 
 `confidence` adds `not_found` (with `fallback_reason: no_match`) to the
-`/geocode` values. A `locality` row carries the place's centre and its
-postal code, and no street / building / address id.
+`/geocode` values. A `locality` or `landmark` row is the BeSt address
+nearest to the place (street, number, ids, position and label all
+BeSt's); its `confidence` says it was not asked for by street.
 
 With `format=geojson`: one `application/geo+json` FeatureCollection,
 one Point feature per row (`geometry: null` when not found), the CSV

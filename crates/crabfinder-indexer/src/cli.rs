@@ -142,8 +142,9 @@ pub struct RegionReport {
     pub pass2_ms: u128,
     pub stream: StreamReport,
     pub notability_stamped: u64,
-    /// Addresses that received an OSM place name.
-    pub places_attached: u64,
+    /// Addresses whose nearest OSM place adds a name BeSt doesn't carry
+    /// (counted for the localities side-file; addresses stay BeSt-only).
+    pub osm_place_matches: u64,
     /// `Some(actual_pct)` when the status-skip share drifted beyond
     /// `DRIFT_THRESHOLD_PCT` from the expected baseline.
     pub status_drift_pct: Option<f64>,
@@ -186,8 +187,13 @@ impl IndexReport {
         for r in &self.regions {
             let _ = writeln!(
                 s,
-                "  {:>9?}: pass1={:>5}ms  pass2={:>7}ms  {}  notability_stamped={}  places_attached={}",
-                r.region, r.pass1_ms, r.pass2_ms, r.stream, r.notability_stamped, r.places_attached
+                "  {:>9?}: pass1={:>5}ms  pass2={:>7}ms  {}  notability_stamped={}  osm_place_matches={}",
+                r.region,
+                r.pass1_ms,
+                r.pass2_ms,
+                r.stream,
+                r.notability_stamped,
+                r.osm_place_matches
             );
         }
         let stamped: u64 = self.regions.iter().map(|r| r.notability_stamped).sum();
@@ -307,18 +313,19 @@ pub fn run(args: &Args) -> Result<IndexReport> {
 
         let t_pass2 = Instant::now();
         let mut stamped: u64 = 0;
-        let mut attached: u64 = 0;
+        let mut matched: u64 = 0;
         let stream =
-            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |mut addr| {
+            stream_resolved_addresses(&args.best_dir, *region, &dicts, args.limit, |addr| {
                 // Schema v9: positioned after every measured address is in.
                 if needs_position(&addr) {
                     imputer.defer(addr);
                     return Ok(true);
                 }
+                // The OSM place only feeds the localities side-file (query
+                // interpretation); nothing OSM enters the address (v11).
                 let assignment = places.assign(&addr);
-                if let Some(a) = assignment.filter(|a| a.attach) {
-                    addr.place_name = Some(places.places()[a.idx].names_for(addr.region));
-                    attached += 1;
+                if assignment.is_some_and(|a| a.attach) {
+                    matched += 1;
                 }
                 localities.record(&addr, assignment.map(|a| a.idx));
                 if samples_printed < args.print_samples {
@@ -356,7 +363,7 @@ pub fn run(args: &Args) -> Result<IndexReport> {
             pass2_ms,
             stream,
             notability_stamped: stamped,
-            places_attached: attached,
+            osm_place_matches: matched,
             status_drift_pct,
         });
     }
@@ -366,15 +373,11 @@ pub fn run(args: &Args) -> Result<IndexReport> {
     let deferred = imputer.len();
     let (imputed, impute) = imputer.impute(&mid_street_builder, &localities);
     info!(deferred, %impute, "positions imputed");
-    for mut addr in imputed {
+    for addr in imputed {
         // Street- and locality-level guesses would skew place assignment
         // and locality centroids.
         if addr.position_source.is_point_accurate() {
-            let assignment = places.assign(&addr);
-            if let Some(a) = assignment.filter(|a| a.attach) {
-                addr.place_name = Some(places.places()[a.idx].names_for(addr.region));
-            }
-            localities.record(&addr, assignment.map(|a| a.idx));
+            localities.record(&addr, places.assign(&addr).map(|a| a.idx));
         }
         let boost = notability_map.boost_for(addr.building_group_id.as_str());
         writer.add_address_with_notability(&addr, boost)?;

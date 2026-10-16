@@ -10,8 +10,8 @@ Seuils d'acceptation typiques :
 
 | Usage | Acceptable | À vérifier | À rejeter |
 |---|---|---|---|
-| Carte avec un marqueur par bâtiment | `exact` | `fuzzy_street`, `nearest_*` | `median_street`, `locality`, `not_found` |
-| Agrégation par quartier / commune | `exact`, `nearest_*`, `median_street`, `fuzzy_street` | `locality` | `not_found` |
+| Carte avec un marqueur par bâtiment | `exact` | `fuzzy_street`, `nearest_*` | `median_street`, `landmark`, `locality`, `not_found` |
+| Agrégation par quartier / commune | `exact`, `nearest_*`, `median_street`, `fuzzy_street`, `landmark` | `locality` | `not_found` |
 | Jointure spatiale avec des polygones (densité, secteur) | tout sauf `not_found` | `locality` | `not_found` |
 | Adresse de facturation | `exact` uniquement | tout le reste | tout le reste |
 
@@ -19,7 +19,7 @@ Ajoute deux contrôles à chacun de ces cas : les lignes avec `ambiguous=true` m
 
 ## La taxonomie `confidence`
 
-Huit valeurs, de la plus forte à la plus faible.
+Neuf valeurs, de la plus forte à la plus faible.
 
 | `confidence` | Précision spatiale | En bref |
 |---|---|---|
@@ -28,7 +28,8 @@ Huit valeurs, de la plus forte à la plus faible.
 | `nearest_any_side` | bâtiment (un voisin) | Numéro absent ; ce côté n'a pas de numéro assez proche, le plus proche de l'autre côté. |
 | `median_street` | rue | Pas de numéro, ou un numéro trop loin de tout numéro existant. |
 | `fuzzy_street` | bâtiment ou rue | Nom de rue mal orthographié ou trouvé partiellement. |
-| `locality` | village / commune | La requête ne nomme qu'un lieu. |
+| `landmark` | rue (adresse BeSt à côté du point d'intérêt) | La requête ne nomme qu'un point d'intérêt (`--pois` facultatif). |
+| `locality` | village / commune (adresse BeSt la plus proche du lieu) | La requête ne nomme qu'un lieu. |
 | `adjacent_commune` | bâtiment ou rue | Rien ne correspond dans le code postal donné ; trouvé juste de l'autre côté de sa limite. |
 | `not_found` | aucune | Rien de plausible. |
 
@@ -102,21 +103,37 @@ trouvé :  Avenue Louise 32, 1050 Ixelles   lat=50.83451 lng=4.35670
 
 **Action** : à vérifier, surtout en `match_type=fuzzy`. Compare `matched_street` avec ton entrée ; un `street_match_score` bas (sous ~10) suggère un faux positif.
 
-### `locality` — un lieu, pas une adresse
+### `locality` — l'adresse BeSt la plus proche d'un lieu
 
-La requête ne nommait qu'un lieu — une commune, une section de commune, une zone postale, ou un village ou hameau OpenStreetMap (« Spontin », « Maredsous », « Han-sur-Lesse 5580 »). Il n'y a pas de rue où placer le point.
+La requête ne nommait qu'un lieu — une commune, section de commune ou zone postale BeSt (« Spontin », « Han-sur-Lesse 5580 »), ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap (« Maredsous »). Aucune rue n'était demandée : crabfinder renvoie donc **l'adresse BeSt la plus proche du lieu**, à sa propre position BeSt.
 
-- Batch : la ligne reçoit le **centre du lieu**, le label `5530 Spontin`, le code postal ; `matched_street`, `building_group_id` et `best_id` restent vides.
-- `/geocode` : les features sont les adresses les plus proches du lieu (`match_type=spatial`), et l'objet `locality` de premier niveau décrit le lieu lui-même (type, noms, codes postaux, centre).
+- Batch : une ligne BeSt normale — rue, numéro, `best_id`, `building_group_id`, label et position viennent tous de BeSt. Seul `confidence=locality` t'indique qu'elle n'a pas été demandée par sa rue.
+- `/geocode` : les features sont les adresses BeSt les plus proches du lieu (`match_type=spatial`) ; l'objet `locality` de premier niveau rappelle seulement comment la requête a été comprise (type, noms, codes postaux, `source: best` ou `osm`), sans position.
 
 ```
 entrée :  Spontin
-trouvé :  5530 Spontin   lat=50.32262 lng=5.00695
+trouvé :  Chaussée de Dinant 47, 5530 Yvoir   (une adresse BeSt de Spontin)
           confidence = locality
           fallback_reason = street_missing
 ```
 
-**Action** : précision au village (de quelques centaines de mètres à quelques km). Bien pour savoir « quelle commune », pas pour une livraison.
+**Action** : l'adresse est réelle, mais elle représente le lieu : traite-la comme une précision au village (de quelques centaines de mètres à quelques km). Bien pour savoir « quelle commune », pas pour une livraison.
+
+### `landmark` — l'adresse BeSt la plus proche d'un point d'intérêt
+
+Avec l'aide facultative `--pois`, la requête ne nommait qu'un point d'intérêt OpenStreetMap — site touristique, château, monument, gare, aéroport, hôtel de ville, musée, parc ou église (« Manneken Pis », « Gare du Midi », « Gravensteen Gent »). Une rue du même nom passe avant (`Atomium` → Avenue de l'Atomium, `median_street`). Le point d'intérêt sert seulement à savoir où chercher : la réponse est **l'adresse BeSt la plus proche** (dans un rayon de 600 m), et ni le nom ni la position du point d'intérêt ne sont jamais renvoyés.
+
+- Batch : une ligne BeSt normale (rue, numéro, identifiants, label, position), avec `confidence=landmark`.
+- `/geocode` : les features sont les adresses BeSt les plus proches du point d'intérêt (`match_type=spatial`) ; le rappel `locality` de premier niveau est de type `landmark`, `source: osm`, sans position.
+
+```
+entrée :  Manneken Pis
+trouvé :  Rue du Chêne 2, 1000 Bruxelles   (l'adresse BeSt juste à côté)
+          confidence = landmark
+          fallback_reason = street_missing
+```
+
+**Action** : une adresse réelle à quelques dizaines de mètres du monument — bien sur une carte, mais ce n'est pas l'adresse du monument lui-même : à vérifier avant une livraison. Pour les grands sites (un parc, un aéroport), l'adresse renvoyée peut être à plusieurs centaines de mètres.
 
 ### `not_found` — aucune coordonnée
 
@@ -174,7 +191,7 @@ Plus fine que `confidence`. Quand `confidence != exact`, elle dit **pourquoi** :
 | `house_number_missing` | L'entrée n'avait pas de numéro. | `median_street`, `fuzzy_street` |
 | `house_number_out_of_range` | Un numéro était fourni mais n'existe pas pour cette rue dans BeSt. | `nearest_*`, `median_street` |
 | `street_spelling_fuzzy` | La rue n'a été trouvée qu'après correction de faute ou partiellement. | `fuzzy_street` |
-| `street_missing` | La requête nomme un lieu mais pas de rue. | `locality` |
+| `street_missing` | La requête nomme un lieu ou un point d'intérêt mais pas de rue. | `locality`, `landmark` |
 | `postal_code_mismatch` | Trouvé hors du code postal donné, à proximité. | `adjacent_commune` |
 | `no_match` | Rien trouvé du tout. | `not_found` |
 
@@ -186,7 +203,7 @@ Numéro trouvé moins numéro demandé, rempli chaque fois que le numéro demand
 
 - `0` : le numéro demandé a été trouvé (`exact`, et `fuzzy_street` sur le bon bâtiment).
 - non nul : un voisin a été renvoyé (`nearest_*`) ; `26` = 26 numéros plus loin dans la rue, `-2` = 2 numéros plus bas.
-- vide : résultats à la rue et de lieu (y compris un `adjacent_commune` à la rue), `not_found`.
+- vide : résultats à la rue, de lieu et de point d'intérêt (y compris un `adjacent_commune` à la rue), `not_found`.
 
 ## D'où viennent les coordonnées : `position_source`
 
@@ -207,7 +224,7 @@ Où la trouver :
 - Batch : la colonne `position_source`, toujours remplie.
 - `/geocode`, `/building` : `properties.position_source`, présent seulement quand la position a été imputée (absent = `measured`).
 
-Attention : `confidence` porte sur le **match textuel**, `position_source` sur le **point**. Une ligne `exact` peut très bien porter une position `locality` — la bonne adresse, placée au centre de son village. Pour un usage au bâtiment, accepte `measured`, `same_number` et `interpolated`, et traite `street` / `locality` comme des résultats `median_street` / `locality`. `/reverse` ne renvoie jamais d'adresse dont la position est `street` ou `locality`.
+Attention : `confidence` porte sur le **match textuel**, `position_source` sur le **point**. Une ligne `exact` peut très bien porter une position `locality` — la bonne adresse, placée au centre de son village. Pour un usage au bâtiment, accepte `measured`, `same_number` et `interpolated`, et traite `street` / `locality` comme des résultats `median_street` / `locality`. `/reverse` ne renvoie jamais d'adresse dont la position est `street` ou `locality`. Son objet optionnel `interpolation` (`interpolate=true`, voir [`04-recherche-en-ligne.md`](04-recherche-en-ligne.md#estimer-un-numéro-manquant--interpolatetrue)) est encore autre chose : un numéro *estimé* entre deux numéros connus, qui n'existe peut-être pas officiellement — traite-le comme une approximation `nearest_*`, jamais comme une adresse BeSt.
 
 ## Ambiguïté : `ambiguous` et `score_gap`
 
@@ -256,7 +273,7 @@ awk -F, 'NR==1 {print; next} {
   rank = ($10=="exact") ? 1 :
          ($10 ~ /^nearest_/) ? 2 :
          ($10=="fuzzy_street" || $10=="adjacent_commune") ? 3 :
-         ($10=="median_street") ? 4 :
+         ($10=="median_street" || $10=="landmark") ? 4 :
          ($10=="locality") ? 5 : 9
   print rank","$0
 }' geocode.csv | sort -t, -k1n | cut -d, -f2-
@@ -276,6 +293,7 @@ ORDER BY CASE confidence
            WHEN 'fuzzy_street'      THEN 3
            WHEN 'adjacent_commune'  THEN 3
            WHEN 'median_street'     THEN 4
+           WHEN 'landmark'          THEN 4
            WHEN 'locality'          THEN 5
            WHEN 'not_found'         THEN 9
            ELSE 6

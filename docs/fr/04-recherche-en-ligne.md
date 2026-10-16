@@ -84,7 +84,7 @@ curl "http://127.0.0.1:8080/geocode?q=Avenue+Loiuse+32+1050"
 # Structurée, avec labels en néerlandais
 curl "http://127.0.0.1:8080/geocode?street=Grote+Markt&housenumber=1&city=Antwerpen&lang=nl"
 
-# Un hameau
+# Un hameau (demande l'index facultatif --places)
 curl "http://127.0.0.1:8080/geocode?q=Maredsous"
 
 # Restriction à une région
@@ -164,7 +164,7 @@ q=Grand-Place 1000&lang=de   → "Grand-Place 2, 1000 Bruxelles"   (pas de nom a
 
 ### Noms de lieux : villages, hameaux, communes
 
-Une requête qui n'est qu'un nom de lieu — une commune, une section de commune, une zone postale, ou un village ou hameau OpenStreetMap — renvoie les adresses autour de ce lieu, plus un objet `locality` au premier niveau qui le décrit :
+Une requête qui n'est qu'un nom de lieu — une commune, section de commune ou zone postale BeSt, ou, si l'index a été construit avec l'aide facultative `--places`, un village ou hameau OpenStreetMap comme Maredsous — renvoie les adresses BeSt les plus proches de ce lieu. Un objet `locality` de premier niveau rappelle comment la requête a été comprise (`source: "best"` ou `"osm"`) ; il ne porte aucune position, et rien dans les features ne vient d'OpenStreetMap :
 
 ```bash
 curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
@@ -173,10 +173,10 @@ curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
 ```jsonc
 {
   "locality": {
-    "kind": "hamlet",            // municipality, part_of_municipality, postal_area, village, hamlet, locality, isolated_dwelling
+    "kind": "hamlet",            // municipality, part_of_municipality, postal_area, village, hamlet, locality, isolated_dwelling, landmark
     "name": { "fr": "Maredsous", "nl": null, "de": null },
     "postal_codes": ["5537"],
-    "coordinates": [4.769483, 50.304636]   // [lng, lat] du lieu
+    "source": "osm"              // "best" pour municipality, part_of_municipality, postal_area
   },
   "features": [
     { "properties": { "label": "Rue des Abbayes 20, 5537 Anhée", ... },
@@ -187,6 +187,34 @@ curl "http://127.0.0.1:8080/geocode?q=Maredsous&limit=2"
 ```
 
 Une rue suivie d'un nom de lieu marche aussi quand ce lieu n'est pas la commune officielle de l'adresse : `Rue de la Loi 17, 1040 Etterbeek` trouve `Rue de la Loi 17, 1040 Bruxelles` (ce tronçon du 1040 appartient à la Ville de Bruxelles) en `exact`.
+
+### Points d'intérêt
+
+Avec l'aide facultative `--pois` (points d'intérêt OpenStreetMap : sites touristiques, châteaux, gares, aéroports, hôtels de ville, musées, parcs, églises…), une requête qui ne nomme qu'un point d'intérêt renvoie les adresses BeSt les plus proches (dans un rayon de 600 m), avec `confidence: landmark` et un rappel `locality` de type `landmark`. Le nom et la position du point d'intérêt servent seulement à savoir où chercher ; ils ne sont jamais renvoyés :
+
+```bash
+curl "http://127.0.0.1:8080/geocode?q=Manneken+Pis&limit=1"
+```
+
+```jsonc
+{
+  "locality": {
+    "kind": "landmark",
+    "name": { "fr": "Manneken-Pis", "nl": "Manneken Pis", "de": "Manneken Pis" },
+    "postal_codes": [],
+    "source": "osm"
+  },
+  "features": [
+    { "match_type": "spatial", "confidence": "landmark", "fallback_reason": "street_missing", ... }
+  ]
+}
+```
+
+- Tous ses noms marchent (`Gare du Midi`, `Zuidstation`), de même qu'un point d'intérêt suivi de sa localité (`Gravensteen Gent`).
+- Une rue qui porte ce nom l'emporte : `Atomium` renvoie l'Avenue de l'Atomium (`median_street`), juste à côté.
+- Un code postal dans la requête doit se trouver à moins de 15 km du point d'intérêt (`Manneken Pis 1000` marche, `Manneken Pis 9000` non).
+- Plusieurs points d'intérêt du même nom : celui le plus proche de `focus_point`, sinon les sites touristiques d'abord, puis les gares et institutions, les églises en dernier.
+- Un numéro de maison refait de la requête une recherche d'adresse.
 
 ### Forme de la réponse
 
@@ -303,7 +331,8 @@ curl "http://127.0.0.1:8080/reverse?lat=50.8467&lng=4.3525&limit=1&lang=nl"
 | `lng` | float | obligatoire | Longitude WGS84 |
 | `limit` | int | `1` | Nombre max de résultats. Max 100. |
 | `radius_m` | float | — | Si fourni, écarte les résultats au-delà de `radius_m` mètres. |
-| `lang` | string | langue de chaque adresse | Langue de `properties.label`. |
+| `lang` | string | langue de chaque adresse | Langue de `properties.label` (et de `interpolation.label`). |
+| `interpolate` | bool | `false` | `true` : estimer le numéro d'un point situé entre deux adresses connues (voir plus bas). |
 
 ### Réponse
 
@@ -343,6 +372,38 @@ Pour une géolocalisation mobile (~10-50 m de précision), filtrer avec `radius_
 ```bash
 curl "http://127.0.0.1:8080/reverse?lat=50.8466&lng=4.3525&radius_m=50&limit=3"
 ```
+
+### Estimer un numéro manquant : `interpolate=true`
+
+Il arrive que le point cliqué tombe entre deux adresses connues — une parcelle vide, un nouveau bâtiment que BeSt ne liste pas encore. Avec `interpolate=true`, la réponse reçoit en plus un objet `interpolation` de premier niveau qui estime le numéro que porterait ce point :
+
+```bash
+curl "http://127.0.0.1:8080/reverse?lat=50.86730&lng=4.38900&interpolate=true"
+```
+
+```jsonc
+{
+  "type": "FeatureCollection",
+  "interpolation": {
+    "house_number": "22",
+    "between": ["6", "38"],                  // les numéros connus de part et d'autre
+    "street_name": { "fr": "Rue Caporal Claes", "nl": "Korporaal Claesstraat", "de": null },
+    "postal_code": "1030",
+    "municipality_name": { "fr": "Schaerbeek", "nl": "Schaarbeek", "de": null },
+    "coordinates": [4.388972, 50.867267],    // [lng, lat] sur le segment qui les relie
+    "distance_m": 3.47,                      // point demandé → segment, en mètres
+    "label": "Rue Caporal Claes 22, 1030 Schaerbeek"
+  },
+  "features": [ ... ]                        // inchangées : les adresses existantes les plus proches
+}
+```
+
+- **Optionnel** : sans `interpolate=true`, rien ne change. Avec, les `features` restent identiques ; seul `interpolation` s'ajoute.
+- Il n'apparaît que si le point tombe dans un **trou entre deux numéros connus du même côté d'une rue** (même rue, même code postal, même parité, par ex. 6 et 38 sans rien entre les deux), distants d'au plus 400 m, le point à 60 m au plus de la ligne qui les relie et à moins de 200 m. Le numéro est proportionnel à la position le long de cette ligne, arrondi à la parité du côté.
+- Et seulement si le point est plus proche de ce trou que de toute adresse existante : sinon la première feature est déjà la réponse, et `interpolation` est absent.
+- `label` suit `lang`, comme les labels des features.
+
+**C'est une estimation** : le numéro n'existe peut-être pas officiellement. Traite-le comme une approximation (comparable à `nearest_*`), jamais comme une adresse BeSt — il n'a ni `best_id` ni `building_group_id`.
 
 ## `GET /building/{id}/units` — toutes les unités d'un bâtiment
 

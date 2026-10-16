@@ -314,10 +314,11 @@ fn build_searchable_tokens(addr: &Address) -> Vec<String> {
     if let Some(pom) = &addr.part_of_municipality_name {
         push_multilingual(pom, &mut out);
     }
-    // `place_name` is deliberately not searchable: hamlet words joining
-    // street words would satisfy the strict AND on the wrong street
-    // ("Rue de Gilly" near Châtelineau matching "Rue de Châtelineau").
-    // Place words are resolved through the localities side-file instead.
+    // OSM place names are deliberately not searchable (nor, since v11,
+    // in the payload): hamlet words joining street words would satisfy the
+    // strict AND on the wrong street ("Rue de Gilly" near Châtelineau
+    // matching "Rue de Châtelineau"). Place words are resolved through the
+    // localities side-file instead.
     out.push(addr.house_number.clone());
     if let Some(b) = &addr.box_number {
         out.push(b.clone());

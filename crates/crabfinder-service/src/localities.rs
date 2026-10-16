@@ -194,6 +194,7 @@ fn rank(k: LocalityKind) -> u8 {
         LocalityKind::Hamlet => 4,
         LocalityKind::Locality => 5,
         LocalityKind::IsolatedDwelling => 6,
+        LocalityKind::Landmark => 7,
     }
 }
 

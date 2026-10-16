@@ -78,7 +78,7 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 | `id`, `street`, `house_number`, `postal_code` | **Copied from input**, audit trail (empty `street` on free-text rows). |
 | `matched_street`, `matched_house_number`, `matched_postal_code` | What crabfinder actually found in BeSt. Shows divergences (typo corrected, nearest number…). |
 | `lat`, `lng` | WGS84 (EPSG:4326). Empty on `not_found`. |
-| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality` or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
+| `confidence` | `exact`, `nearest_same_side`, `nearest_any_side`, `median_street`, `fuzzy_street`, `adjacent_commune`, `locality`, `landmark` or `not_found`. Detail in [`05-understanding-results.md`](05-understanding-results.md). |
 | `fallback_reason` | Empty if `confidence == exact`. Otherwise `house_number_missing`, `house_number_out_of_range`, `street_spelling_fuzzy`, `postal_code_mismatch`, `street_missing` or `no_match`. |
 | `house_number_delta` | Matched number minus requested number: `0` when the requested number was found, e.g. `26` when 33 was asked and 59 returned. Empty for street-level and locality results. |
 | `street_match_score` | Raw BM25 score. Text-match quality indicator. Higher = better match. Empty on `not_found`. |
@@ -102,7 +102,9 @@ id,street,house_number,postal_code,matched_street,matched_house_number,matched_p
 
 Row 4: 33 doesn't exist in 1050, so crabfinder returned the nearest odd number on that street (`nearest_same_side`, `house_number_delta=26`).
 
-**Locality rows**: a row that only names a place (`Spontin`, `Maredsous`, `Han-sur-Lesse 5580`) comes back with `confidence=locality`, `fallback_reason=street_missing`, the coordinates of the place's centre and a label such as `5530 Spontin`; `matched_street`, `building_group_id` and `best_id` stay empty because no single address was chosen.
+**Locality rows**: a row that only names a place (`Spontin`, `Han-sur-Lesse 5580`; a hamlet such as `Maredsous` needs the optional `--places` index) comes back as the **nearest BeSt address** to that place, at its own BeSt position: street, number, `best_id`, `building_group_id` and label are all BeSt's (`Spontin` → e.g. `Chaussée de Dinant 47, 5530 Yvoir`). `confidence=locality` and `fallback_reason=street_missing` tell you that address wasn't asked for by street.
+
+**Landmark rows** (with the optional `--pois`): a row that only names a landmark (`Manneken Pis`, `Gare du Midi`, `Gravensteen Gent`) comes back the same way — the nearest BeSt address to it, e.g. `Rue du Chêne 2, 1000 Bruxelles` for `Manneken Pis` — with `confidence=landmark`. The landmark's own name and position are never returned.
 
 **1-in-1-out guarantee**: same row count, same order in and out. A non-geocoded row exits with `confidence=not_found` and empty `lat,lng,matched_*` — **not** dropped from the file.
 
@@ -158,6 +160,7 @@ The binary opens the Tantivy index read-only, iterates the CSV, writes the resul
 |---|---|---|
 | `--index PATH` | — (required) | Tantivy index directory. Env var: `CRABFINDER_INDEX`. |
 | `--abbreviation-dict PATH` | (none) | Abbreviations YAML. Without it, queries like "Av. Louise" don't expand to "Avenue Louise". **Recommended**: `data/street-type-abbreviations-v1.yaml`. |
+| `--pois PATH` | (none) | Optional OpenStreetMap helper (`data/osm-pois-be-v1.csv`): understand rows naming a landmark; they get the nearest BeSt address, `confidence=landmark`. Env var: `CRABFINDER_POIS`. |
 | `-i, --input PATH` | `stdin` | Input CSV. `-` = stdin. |
 | `-o, --output PATH` | `stdout` | Output file. `-` = stdout. |
 | `--delimiter ,` or `;` | auto | Force the input delimiter (otherwise auto-sniffed). |
@@ -329,7 +332,7 @@ See [`05-understanding-results.md`](05-understanding-results.md#adjacent_commune
 
 ### Addresses with only a place name (no street)
 
-Supported, in either shape: `address=Spontin`, or `street=Maredsous` with an empty `house_number`. When the whole text is a known place name (municipality, part of municipality, postal area, OpenStreetMap village or hamlet), you get a `locality` row at the place's centre (`5537 Maredsous`).
+Supported, in either shape: `address=Spontin`, or `street=Maredsous` with an empty `house_number`. When the whole text is a known place name — a BeSt municipality, part of municipality or postal area, or, with the optional `--places` index, an OpenStreetMap village or hamlet (`Maredsous`) — you get a `locality` row: the nearest BeSt address to the place. With the optional `--pois`, a landmark name (`Manneken Pis`, `Gare du Midi`, optionally followed by its locality: `Gravensteen Gent`) gives a `landmark` row, again the nearest BeSt address — unless a street has that name (`Atomium` → Avenue de l'Atomium, `median_street`).
 
 ### Box numbers
 

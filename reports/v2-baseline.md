@@ -1,27 +1,27 @@
 # crabfinder eval — single report
 
-- Service: `http://127.0.0.1:8080`
-- Total queries: **4342**
-- Aggregated queries (excludes known_failure): 4339
+- Service: `http://127.0.0.1:8083`
+- Total queries: **4368**
+- Aggregated queries (excludes known_failure): 4365
 - Transport/HTTP errors: 0
 
 ## Overall (Tier A)
 
 | Metric | Value |
 |---|---|
-| n | 4339 |
-| recall@1 | 0.969 |
-| recall@5 | 0.985 |
-| recall@10 | 0.988 |
-| building_group_recall@1 | 0.969 |
-| MRR | 0.976 |
-| strict_match_rate | 0.879 |
+| n | 4365 |
+| recall@1 | 0.964 |
+| recall@5 | 0.979 |
+| recall@10 | 0.983 |
+| building_group_recall@1 | 0.964 |
+| MRR | 0.970 |
+| strict_match_rate | 0.882 |
 
 ## Latency (HTTP mode; under contention)
 
 | | n | p50 | p95 | p99 | mean | max |
 |---|---|---|---|---|---|---|
-| ms | 4342 | 2.1 | 10.3 | 19.6 | 3.5 | 96.5 |
+| ms | 4368 | 1.7 | 7.7 | 12.8 | 2.7 | 122.1 |
 
 _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on sub-3 ms strict queries, negligible on fuzzy. Measures user-perceived end-to-end latency, not search-engine latency._
 
@@ -67,9 +67,10 @@ _Methodology: HTTP loopback. Loopback adds ~0.5–1 ms/query — significant on 
 | Category | n | recall@1 | recall@5 | bgid_recall@1 | MRR | strict |
 |---|---|---|---|---|---|---|
 | cross_language (address) | 10 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
-| de_zone (street) | 9 | 0.778 | 0.778 | 0.778 | 0.778 | 0.889 |
+| de_zone (street) | 9 | 0.778 | 0.778 | 0.778 | 0.778 | 1.000 |
 | facilites (street) | 6 | 0.833 | 0.833 | 0.833 | 0.833 | 1.000 |
-| hamlet (locality, street) | 30 | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 |
+| hamlet (locality, street) | 30 | 0.833 | 0.833 | 0.833 | 0.833 | 0.933 |
+| landmark (locality) | 26 | 0.269 | 0.269 | 0.269 | 0.269 | 0.308 |
 | notability (building) | 30 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
 | special_chars (address) | 10 | 1.000 | 1.000 | 1.000 | 1.000 | 0.900 |
 

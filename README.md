@@ -5,6 +5,13 @@ Address** open dataset (6.9M addresses, three regions) into a single
 Tantivy index and serves forward, reverse and batch geocoding over HTTP
 and from the command line.
 
+**BeSt Address is the only source.** Every address, identifier,
+coordinate and label crabfinder returns comes from BeSt. OpenStreetMap
+can optionally be switched on (`--places`, `--pois`, both off by default)
+to *understand* queries that name a hamlet or a landmark. It is only used
+to decide where to look: the answer is still the nearest BeSt address,
+flagged `confidence: locality` / `landmark`.
+
 ```
 GET /geocode?q=Rue de la Loi 16 bte 3, B-1000 Bruxelles
 GET /geocode?street=Grote Markt&housenumber=1&city=Antwerpen&lang=nl
@@ -31,8 +38,14 @@ What it handles:
   54, 1050) and flagged `adjacent_commune`.
 - **Exact names first** — `Markt` is Bruges' Markt, not every Grote
   Markt; `Grand-Place` is Brussels.
-- **Hamlets and villages** — OpenStreetMap places (`Maredsous`,
-  `Spontin`) resolve to the locality when no street is named.
+- **Municipalities and villages** — a query naming only a place
+  (`Spontin`, `Celles Houyet`, `Han-sur-Lesse 5580`) returns the BeSt
+  addresses at its centre, flagged `confidence: locality`. Optional
+  OpenStreetMap helpers (off by default) extend the names understood to
+  hamlets (`--places`: `Maredsous`) and landmarks (`--pois`: `Manneken
+  Pis`, `Gare du Midi`, `Gravensteen Gent`).
+- **Reverse interpolation** — `/reverse?interpolate=true` estimates the
+  house number of a point lying between two known numbers of a street.
 - **Positions for every address** — the ~140k Walloon addresses BeSt
   ships without coordinates are imputed (same number, interpolation,
   locality centroid) and flagged with `position_source`.
@@ -71,9 +84,13 @@ To index a bundle you already have:
 
 ```bash
 ./target/release/crabfinder-indexer --best-dir ./best-full-latest --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv          # ~1.5 min
+    --notability-whitelist data/notability-whitelist-v1.yaml   # ~1.5 min
 ```
+
+Optional OpenStreetMap helpers (hamlet and landmark names; BeSt remains
+the only source of results): add `--places data/osm-places-be-v1.csv` to
+the indexer (or `WITH_OSM=1 scripts/refresh_best.sh`) and `--pois
+data/osm-pois-be-v1.csv` to the service.
 
 The service binds IPv4 loopback by default (`--host 0.0.0.0` in
 containers), so hit it with `127.0.0.1`, not `localhost`. It accepts
@@ -92,14 +109,28 @@ cases, 3,840 queries; [`reports/v2-vs-pre-v2.md`](reports/v2-vs-pre-v2.md)):
 | typo variant recall@1 | 0.366 | **0.988** |
 | 4-digit house numbers | 0.158 | **1.000** |
 | messy punctuation (`Street, 10, B-1150, City`) | 0.884 | **1.000** |
-| hamlets (adversarial) | 0.667 | **1.000** |
-| landmarks (adversarial notability) | 0.933 | **1.000** |
+| hamlets (adversarial; with the optional OSM `--places`) | 0.667 | **1.000** |
+| iconic places (adversarial notability) | 0.933 | **1.000** |
 | p95 / p99 `/geocode` latency | 19.0 / 51.1 ms | **7.2 / 11.9 ms** |
 
 The promoted baseline [`reports/v2-baseline.md`](reports/v2-baseline.md)
 adds 500 `wrong_postal` queries (the neighbouring commune's postal code):
 recall@1 0.004 before the postal-code relaxation, **0.958** after; 0.969 overall
 on its 4,342 queries.
+
+BeSt-only (the default, no OpenStreetMap aid) vs with both optional OSM
+aids, on the full v3 set + 26 landmark queries (4,365 queries; schema
+v11):
+
+| | BeSt only | + OSM `--places` / `--pois` |
+|---|---|---|
+| recall@1 | 0.964 | **0.969** |
+| hamlets (30, adversarial) | 0.833 | **1.000** |
+| landmarks (26, `Manneken Pis`, `Gare du Midi`, …) | 0.269 | **1.000** |
+| p95 / p99 latency | 7.7 / 12.8 ms | 7.5 / 14.7 ms |
+
+Either way every result is a BeSt address; the OSM aids only change
+which BeSt addresses a hamlet or landmark name leads to.
 
 Latency is HTTP loopback, 8 concurrent clients. The `minimal` variant
 (street + number, no postal code or municipality: 0.792) is bounded by
@@ -129,9 +160,6 @@ Technical references:
   by `scripts/refresh_best.sh` (or drop the `*Address*.zip`,
   `Municipality*`, `PostalInfo*`, `StreetName*`, `PartOfMunicipality*`
   zips into one directory and pass `--best-dir`).
-- **OSM places** (`data/osm-places-be-v1.csv`) — hamlets, villages and
-  localities extracted from OpenStreetMap by
-  `scripts/build_osm_places.py`; powers locality queries.
 - **Notability whitelist** (`data/notability-whitelist-v1.yaml`) — a
   curated `building_group_id → multiplier` map that lifts iconic
   toponyms (Grand-Place, Atomium, …) above look-alikes elsewhere.
@@ -139,9 +167,19 @@ Technical references:
   — expands user-typed abbreviations at query time
   (`Av. Louise` → `Avenue Louise`, `Stationsstr.` → `Stationsstraat`).
 
-All three extra inputs are optional; without them the engine still runs,
-with lower scores on locality, notability-sensitive and abbreviated
-queries.
+Both are optional; without them the engine still runs, with lower
+scores on notability-sensitive and abbreviated queries.
+
+Optional OpenStreetMap helpers, off by default. They are never a source
+of results, only of query understanding:
+
+- **OSM places** (`data/osm-places-be-v1.csv`, indexer `--places`) —
+  hamlet and village names (`scripts/build_osm_places.py`), so
+  `Maredsous` finds the BeSt addresses of that hamlet.
+- **OSM landmarks** (`data/osm-pois-be-v1.csv`, service `--pois`) —
+  ~5,000 sights, stations, castles, town halls… with a Wikidata entry
+  (`scripts/build_osm_pois.py`), so `Manneken Pis` finds the BeSt
+  addresses next to it. Loaded at startup, no reindex needed.
 
 ## Development
 
@@ -159,8 +197,9 @@ Data:
 
 - BeSt address data is © the Belgian federal and regional authorities;
   redistribute per their open-data licence.
-- `data/osm-places-be-v1.csv` contains data from © OpenStreetMap
-  contributors, available under the
+- `data/osm-places-be-v1.csv` and `data/osm-pois-be-v1.csv` contain
+  data from © OpenStreetMap contributors, available under the
   [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
-  Indices built with `--places` contain derived data under the same
-  licence.
+  Indices built with `--places` contain derived data (place names in
+  `localities-v1.json`) under the same licence; addresses and payloads
+  are BeSt only.

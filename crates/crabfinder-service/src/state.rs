@@ -19,6 +19,7 @@ use crabfinder_indexer::mid_street::MID_STREET_FILENAME;
 
 use crate::abbreviation::AbbreviationMap;
 use crate::addr_count::{AddressCountIndex, SharedAddressCountIndex};
+use crate::landmarks::{LandmarkIndex, SharedLandmarkIndex};
 use crate::localities::{LocalityIndex, SharedLocalityIndex};
 use crate::mid_street::MidStreetIndex;
 use crate::resolver::ResolverContext;
@@ -32,6 +33,9 @@ pub struct LoadOptions {
     /// Optional `street-type-abbreviations-v1.yaml`. `None` → identity
     /// expansion.
     pub abbreviation_dict: Option<PathBuf>,
+    /// Optional OSM landmarks CSV (`--pois`, `data/osm-pois-be-v1.csv`).
+    /// `None` → no landmark search.
+    pub pois: Option<PathBuf>,
     /// `false` → rank by plain BM25 (`--no-notability-boost`).
     pub notability_enabled: bool,
     /// `false` → skip the mid-street side-file (`--no-mid-street`).
@@ -48,6 +52,7 @@ impl LoadOptions {
         Self {
             index: index.into(),
             abbreviation_dict: None,
+            pois: None,
             notability_enabled: true,
             mid_street: true,
             spatial: true,
@@ -56,6 +61,11 @@ impl LoadOptions {
 
     pub fn abbreviation_dict(mut self, p: impl Into<PathBuf>) -> Self {
         self.abbreviation_dict = Some(p.into());
+        self
+    }
+
+    pub fn pois(mut self, p: impl Into<PathBuf>) -> Self {
+        self.pois = Some(p.into());
         self
     }
 }
@@ -89,6 +99,8 @@ pub struct AppState {
     pub mid_street: Arc<MidStreetIndex>,
     /// Schema-v8 localities (`localities-v1.json`); empty when absent.
     pub localities: SharedLocalityIndex,
+    /// OSM landmarks from `--pois`; empty when not supplied.
+    pub landmarks: SharedLandmarkIndex,
 }
 
 impl AppState {
@@ -159,6 +171,15 @@ impl AppState {
         let localities = LocalityIndex::load(&index, &opts.index)?;
         info!(entries = localities.len(), "localities loaded");
 
+        let landmarks = match opts.pois.as_ref() {
+            Some(p) => {
+                let l = LandmarkIndex::load(&index, p)?;
+                info!(landmarks = l.len(), "landmarks loaded");
+                l
+            }
+            None => LandmarkIndex::empty(),
+        };
+
         if !opts.notability_enabled {
             info!("notability boost disabled: ranking falls back to pure BM25");
         }
@@ -176,6 +197,7 @@ impl AppState {
             addr_counts: Arc::new(addr_counts),
             mid_street: Arc::new(mid_street),
             localities: Arc::new(localities),
+            landmarks: Arc::new(landmarks),
         })
     }
 
@@ -190,6 +212,7 @@ impl AppState {
             notability_enabled: self.notability_enabled,
             mid_street: self.mid_street.clone(),
             localities: self.localities.clone(),
+            landmarks: self.landmarks.clone(),
         }
     }
 }

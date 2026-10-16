@@ -89,12 +89,6 @@ pub struct Address {
 
     pub building_group_id: BuildingGroupId,
 
-    /// Nearest OpenStreetMap place (hamlet, village, …) when it adds a name
-    /// the BeSt hierarchy doesn't carry (schema v8, `--places`). Absent in
-    /// payloads written before v8.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub place_name: Option<MultilingualName>,
-
     /// How `coordinates` were obtained (schema v9). Omitted from payloads
     /// when `Measured`, so older payloads read back as measured.
     #[serde(default, skip_serializing_if = "PositionSource::is_measured")]
@@ -198,7 +192,6 @@ mod tests {
                 lat: 50.8,
                 lon: 4.3,
             }),
-            place_name: None,
             position_source: PositionSource::Measured,
         }
     }

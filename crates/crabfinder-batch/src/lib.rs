@@ -46,6 +46,10 @@ pub struct Args {
     #[arg(long, env = "CRABFINDER_ABBREVIATION_DICT")]
     pub abbreviation_dict: Option<PathBuf>,
 
+    /// Path to the OSM landmarks CSV (`data/osm-pois-be-v1.csv`). Optional.
+    #[arg(long, env = "CRABFINDER_POIS")]
+    pub pois: Option<PathBuf>,
+
     /// Input CSV path. Use `-` (or omit) to read from stdin.
     #[arg(long, short)]
     pub input: Option<PathBuf>,
@@ -97,6 +101,7 @@ impl Args {
         Self {
             index: index.into(),
             abbreviation_dict: None,
+            pois: None,
             input: None,
             output: None,
             delimiter: None,
@@ -139,6 +144,7 @@ fn non_dash(p: Option<&Path>) -> Option<&Path> {
 pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Result<Summary> {
     let mut opts = LoadOptions::new(&args.index);
     opts.abbreviation_dict = args.abbreviation_dict.clone();
+    opts.pois = args.pois.clone();
     opts.spatial = false;
     let state = AppState::load(&opts)?;
 

@@ -376,7 +376,7 @@ fn cli_run_attaches_osm_places_and_writes_localities() {
     args.places = Some(csv.clone());
     let report = cli::run(&args).unwrap();
     assert_eq!(report.places_loaded, 2);
-    assert_eq!(report.regions[0].places_attached, 1);
+    assert_eq!(report.regions[0].osm_place_matches, 1);
     assert!(report.summary().contains("localities: "));
 
     let idx = out.path().join("idx");
@@ -394,8 +394,9 @@ fn cli_run_attaches_osm_places_and_writes_localities() {
     let payload = tantivy::schema::Value::as_str(&doc.get_first(schema.payload).unwrap())
         .unwrap()
         .to_string();
-    let a: crabfinder_core::Address = serde_json::from_str(&payload).unwrap();
-    assert_eq!(a.place_name.unwrap().fr.as_deref(), Some("Maupas"));
+    // Nothing from OSM in the address itself (schema v11).
+    assert!(!payload.contains("Maupas"), "{payload}");
+    let _: crabfinder_core::Address = serde_json::from_str(&payload).unwrap();
     assert!(idx.join(LOCALITIES_FILENAME).exists());
     let ls = read_localities(&idx).unwrap();
     assert_eq!(report.localities_entries, ls.len());

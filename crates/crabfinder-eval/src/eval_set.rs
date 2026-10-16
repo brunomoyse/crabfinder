@@ -114,6 +114,9 @@ pub enum AdversarialCategory {
     CrossLanguage,
     SpecialChars,
     Notability,
+    /// A landmark named without a street ("Atomium", "Gare du Midi"),
+    /// scored at `match_level: locality` (v2 Phase 10).
+    Landmark,
     KnownFailure,
 }
 
@@ -126,6 +129,7 @@ impl AdversarialCategory {
             AdversarialCategory::CrossLanguage => "cross_language",
             AdversarialCategory::SpecialChars => "special_chars",
             AdversarialCategory::Notability => "notability",
+            AdversarialCategory::Landmark => "landmark",
             AdversarialCategory::KnownFailure => "known_failure",
         }
     }

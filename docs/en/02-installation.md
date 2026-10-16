@@ -89,21 +89,20 @@ ls best-full-latest/      # check the ~10 ZIPs are there
 ./target/release/crabfinder-indexer \
     --best-dir ./best-full-latest \
     --output ./index-belgium \
-    --notability-whitelist data/notability-whitelist-v1.yaml \
-    --places data/osm-places-be-v1.csv
+    --notability-whitelist data/notability-whitelist-v1.yaml
 ```
 
 Typical output (2026-10-15 dump, Apple Silicon laptop):
 
 ```
 ====== indexing summary ======
-  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=845464 skipped_status=3361 ... places_attached=414804
-  Flanders: pass1=  265ms  pass2=  52383ms  parsed=4218617 emitted=3933743 skipped_status=284874 ... places_attached=3014584
+  Brussels: pass1=   49ms  pass2=   9772ms  parsed=848825 emitted=845464 skipped_status=3361
+  Flanders: pass1=  265ms  pass2=  52383ms  parsed=4218617 emitted=3933743 skipped_status=284874
   Wallonia: pass1=  192ms  pass2=  25818ms  parsed=2107430 emitted=2107430 skipped_status=0 ... missing_position=140263 ...
      TOTAL: parsed=7174872 emitted=6886637 skipped_status=288235 skipped_unresolved=0 missing_position=140263 ...
   mid_street entries: 145123
   imputed positions: same_number=44909 interpolated=87293 street=0 locality=8061 dropped=0
-  localities: 16045 (OSM places loaded: 12980)
+  localities: 3065 (OSM places loaded: 0)
   commit: 856ms
   wall-clock total: 93063ms (1.6 min)
   index size on disk: 2394290026 bytes (2283.4 MB / 2.23 GB)
@@ -113,14 +112,14 @@ How to read it:
 
 - `skipped_status`: retired / proposed addresses, deliberately left out (only current addresses are indexed).
 - `missing_position` / `imputed positions`: BeSt publishes some Walloon addresses (140,263 in this dump) without a position yet (Lambert 72 `0 0`, which would land in France). The indexer gives them a position from their neighbours instead, and records how in `position_source` — see [`05-understanding-results.md`](05-understanding-results.md#where-the-coordinates-come-from-position_source).
-- `localities`: municipalities, parts of municipalities, postal areas and OpenStreetMap villages/hamlets the service can answer for a place-name query ("Maredsous", "Spontin").
+- `localities`: the place names the service understands in a place-name query: BeSt municipalities, parts of municipalities and postal areas ("Spontin", "Han-sur-Lesse"), plus OpenStreetMap villages and hamlets when built with `--places` (then `OSM places loaded` is non-zero).
 
 The `./index-belgium/` folder now contains:
 
 - Tantivy segment files (`*.idx`, `*.pos`, `*.term`, etc.).
-- A `.crab-meta.json` sidecar with the schema version (currently **10**) and the build time.
+- A `.crab-meta.json` sidecar with the schema version (currently **11**; an index built by an older version must be rebuilt) and the build time.
 - `mid-street-v1.bin` (~10 MB): the street-level points used by the `median_street` fallback.
-- `localities-v1.json` (~3 MB): the place names and centres used by locality queries.
+- `localities-v1.json` (~3 MB): the place names used to understand place-name queries.
 
 **The BeSt dump used is frozen into the index.** When a new dump comes out, redo step 4 (replace the ZIPs) then step 5 (rebuild). This is not an incremental migration. The indexer refuses an `--output` folder that already holds an index (it would otherwise append a second copy of every address): delete it first, or pass `--overwrite`.
 
@@ -133,12 +132,22 @@ The `./index-belgium/` folder now contains:
 | `--print-samples 5` | Print 5 parsed addresses before indexing to eyeball-check |
 | `--overwrite` | Replace an index already in `--output` (checked only once every input has loaded, so a bad flag never costs you the old index) |
 | `--notability-whitelist PATH` | Ranking boost for iconic places (see below) |
-| `--places PATH` | OpenStreetMap villages and hamlets (see below) |
+| `--places PATH` | Optional OpenStreetMap helper: hamlet and village names (see below) |
 
-Both data files ship in `data/`, so might as well use them:
+The whitelist ships in `data/`, so might as well use it: without `--notability-whitelist`, everything still works but iconic toponyms (Grand-Place, Atomium…) no longer get a notability boost in the ranking.
 
-- Without `--notability-whitelist`, everything still works but iconic toponyms (Grand-Place, Atomium…) no longer get a notability boost in the ranking.
-- Without `--places`, place-name queries only know BeSt municipalities, parts of municipalities and postal areas: a hamlet such as "Maredsous" (part of Anhée, no BeSt entity of its own) is no longer found. The CSV is derived from OpenStreetMap (© OpenStreetMap contributors, ODbL 1.0, see `data/README.md`).
+### OpenStreetMap helpers (optional)
+
+BeSt Address is the only source of what crabfinder returns. Two optional OpenStreetMap files, both off by default, only help it *understand* queries that BeSt alone can't place:
+
+| Helper | Flag | Lets crabfinder understand |
+|---|---|---|
+| `data/osm-places-be-v1.csv` (villages, hamlets) | indexer `--places` | "Maredsous", a hamlet with no BeSt entity of its own (part of Anhée) |
+| `data/osm-pois-be-v1.csv` (landmarks) | service / batch `--pois` (step 6) | "Manneken Pis", "Gare du Midi", "Gravensteen Gent" |
+
+Either way the answer is the nearest BeSt address (`confidence: locality` / `landmark`); no OSM name or position is ever returned, and no address is added or changed. Without them, only BeSt municipalities, parts of municipalities and postal areas are recognised as places.
+
+To use the places, add `--places data/osm-places-be-v1.csv` to the indexer command above. The landmarks are loaded by the service at startup, so updating that file never needs a reindex. Both CSVs are derived from OpenStreetMap (© OpenStreetMap contributors, ODbL 1.0, see `data/README.md`).
 
 ## Step 6 — Start the HTTP service (for online search)
 
@@ -155,12 +164,12 @@ Expected output:
 
 ```
 INFO starting crabfinder-service index=./index-belgium port=8080
-INFO index sidecar OK schema_version=10 tokenizer=crab
+INFO index sidecar OK schema_version=11 tokenizer=crab
 INFO spatial index built points=6878576 elapsed_ms=1605
 INFO abbreviation dictionary loaded path="data/street-type-abbreviations-v1.yaml" n_entries=17 ...
 INFO address-count index built elapsed_ms=20048 n_docs=6886637 n_streets=144205 max_count=5649
 INFO mid_street side-file loaded path=./index-belgium/mid-street-v1.bin entries=145123
-INFO localities loaded entries=16045
+INFO localities loaded entries=…
 INFO listening at http://127.0.0.1:8080
 ```
 
@@ -171,7 +180,7 @@ Quick test from another terminal:
 ```bash
 curl "http://127.0.0.1:8080/health"
 # {"status":"ok","index_path":"./index-belgium","index_docs":6886637,"uptime_secs":12,
-#  "schema_version":10,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
+#  "schema_version":11,"index_built_at_unix_secs":1792106077,"version":"0.1.0"}
 
 curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 ```
@@ -184,6 +193,7 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--host IP` | `127.0.0.1` | Address to bind. `0.0.0.0` to listen on every interface (containers). |
 | `--port N` | `8080` | TCP port. |
 | `--abbreviation-dict PATH` | (none) | `av` → `avenue` expansion. **Recommended**: `data/street-type-abbreviations-v1.yaml`. |
+| `--pois PATH` | (none) | Optional OpenStreetMap helper (`data/osm-pois-be-v1.csv`): understand landmark names ("Manneken Pis", "Gare du Midi"); the answer is the nearest BeSt address, `confidence: landmark`. Without it, landmark names aren't recognised. |
 | `--request-timeout-ms N` | `10000` | Deadline of a request, time waiting for a free slot included. Past it the service answers `503` with a JSON error. |
 | `--batch-timeout-secs N` | `600` | Same for `POST /batch/geocode`, until the response starts streaming. |
 | `--max-concurrency N` | `256` | Requests handled at once; the others wait for a slot (within their deadline). |
@@ -218,7 +228,7 @@ export CRABFINDER_ABBREVIATION_DICT=./data/street-type-abbreviations-v1.yaml
 ./target/release/crabfinder-service     # no flags needed
 ```
 
-Same for `crabfinder-batch` (`CRABFINDER_INDEX`, `CRABFINDER_ABBREVIATION_DICT`).
+Same for `crabfinder-batch` (`CRABFINDER_INDEX`, `CRABFINDER_ABBREVIATION_DICT`, and `CRABFINDER_POIS` for the optional landmarks helper).
 
 ## Docker (alternative to steps 1, 3, 5 and 6)
 
@@ -240,7 +250,7 @@ curl "http://127.0.0.1:8080/health"
 docker run --rm -i -v crabfinder-index:/index crabfinder crabfinder-batch < input.csv > output.csv
 ```
 
-Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured. The OpenStreetMap places CSV is not bundled: to index hamlets, mount `data/` and add `--places`:
+Inside the image the service listens on `0.0.0.0` (`CRABFINDER_HOST`) and the abbreviation dictionary is preconfigured. The optional OpenStreetMap helpers are not bundled. To index hamlet names, mount `data/` and add `--places`:
 
 ```bash
 docker run --rm -v ./best-full-latest:/best:ro -v ./data:/data:ro -v crabfinder-index:/index crabfinder \
@@ -249,12 +259,19 @@ docker run --rm -v ./best-full-latest:/best:ro -v ./data:/data:ro -v crabfinder-
     --places /data/osm-places-be-v1.csv
 ```
 
+Likewise for the optional landmarks helper, which the service loads at startup: mount `data/` on the serving container and pass `--pois`:
+
+```bash
+docker run -d --name crabfinder -p 8080:8080 -v crabfinder-index:/index -v ./data:/data:ro crabfinder \
+    crabfinder-service --pois /data/osm-pois-be-v1.csv
+```
+
 ## Refreshing the data
 
 `scripts/refresh_best.sh` does a full refresh in one go:
 
 1. downloads the BeSt bundle (`best-full-latest.zip` from opendata.bosa.be) into `best-<date>/` and unpacks it;
-2. builds the release binaries and indexes into `index-<date>/` (with the whitelist, and `--places` when `data/osm-places-be-v1.csv` is present);
+2. builds the release binaries and indexes into `index-<date>/` (with the whitelist; BeSt only, unless run with `WITH_OSM=1`, which adds `--places data/osm-places-be-v1.csv`);
 3. starts a temporary service on port 18080 and runs `crabfinder-eval --validate-eval-set`: every address the evaluation set expects must still exist (the script stops if more than 5% are missing);
 4. points the `index-current` symlink at the new index, atomically.
 
@@ -264,7 +281,7 @@ scripts/refresh_best.sh
 # [refresh] restart the service with: crabfinder-service --index ./index-current
 ```
 
-The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `BEST_URL=…` to use another download URL. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
+The running service keeps serving the old index until you restart it against `index-current`. Options (environment variables): `DATA_DIR=/srv/crab` to work elsewhere than the repo root, `SKIP_DOWNLOAD=1` to reuse today's `best-<date>/`, `SKIP_VALIDATE=1` to skip step 3, `WITH_OSM=1` to index the optional OSM places, `BEST_URL=…` to use another download URL. Old `best-*` / `index-*` folders are not deleted: remove them yourself once the new index is in service.
 
 ## Uninstall
 

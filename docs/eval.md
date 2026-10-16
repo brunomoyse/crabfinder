@@ -66,8 +66,9 @@ Hand-curated entries in `eval/adversarial-belgium-v1.yaml`:
 
 | Category | What it probes |
 |---|---|
-| `hamlet` | Hamlets whose name shadows famous municipalities |
+| `hamlet` | Hamlets whose name shadows famous municipalities; OSM-only hamlet names need the optional `--places` aid |
 | `notability` | Iconic toponyms (Grand-Place, Atomium, …) |
+| `landmark` | A landmark named without a street (Manneken Pis, Gare du Midi, Gravensteen Gent), scored at `locality` level within 600 m of its OSM position; needs the optional `--pois` aid |
 | `de_zone` | DE-speaking communes (Eupen, St. Vith, …) |
 | `facilites` | Brussels communes with FR/NL facility names |
 | `cross_language` | FR query against NL-canonical doc and vice versa |
@@ -188,10 +189,16 @@ behavior.
 
 ## Baseline
 
-`reports/v2-baseline.json` is the current promoted baseline: BeSt dump of
-2026-10-15, schema v10, `eval/belgium-2026-10-15-v3.json` +
-`eval/adversarial-belgium-v1.yaml`, OSM places, full notability
-whitelist, full abbreviation dict. `reports/pre-v2-baseline.json` is the
+`reports/v2-baseline.json` is the current promoted baseline, in the
+default BeSt-only configuration: BeSt dump of 2026-10-15, schema v11,
+`eval/belgium-2026-10-15-v3.json` + `eval/adversarial-belgium-v1.yaml`,
+full notability whitelist, full abbreviation dict, no OpenStreetMap aid.
+`reports/v2-baseline-osm.json` is the same with both optional OSM aids
+(index built with `--places`, service with `--pois`);
+`reports/v2-osm-aids.md` diffs the two (hamlets 0.833 → 1.000,
+landmarks 0.269 → 1.000). Evaluate a change in the configuration it
+affects — BeSt-only by default, against the OSM baseline when touching
+the locality or landmark steps. `reports/pre-v2-baseline.json` is the
 v1 code on the same data and the v2 set — the comparison point for the
 v2 work (`reports/v2-vs-pre-v2.md`, on the shared v2 set). `reports/mvp-v1-baseline.json` is the
 original MVP baseline on the 2026-05-19 dump; per-phase v2 diffs are in

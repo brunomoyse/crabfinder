@@ -192,9 +192,9 @@ pub fn output_row_from(
         Some(h) => (Some(h.lat), Some(h.lon)),
         None => (None, None),
     };
-    let mut building_group_id = resolved.hit.as_ref().map(|h| h.building_group_id.clone());
+    let building_group_id = resolved.hit.as_ref().map(|h| h.building_group_id.clone());
 
-    let (mut matched_street, mut matched_house_number, matched_postal_code, mut best_id) =
+    let (matched_street, matched_house_number, matched_postal_code, best_id) =
         match resolved.address.as_ref() {
             Some(a) => (
                 Some(
@@ -211,25 +211,13 @@ pub fn output_row_from(
             None => (None, None, None, None),
         };
 
-    let mut label = resolved
+    // A locality or landmark row is the BeSt address nearest to the place
+    // (`confidence` says so): street, number, ids, point and label are all
+    // BeSt's.
+    let label = resolved
         .address
         .as_ref()
         .map(|a: &Address| a.display_name(lang));
-    // A locality answer is the place itself (its centre), not the
-    // building nearest to it: no street, number or building ids.
-    if let (Some(loc), Some(a)) = (&resolved.locality, &resolved.address) {
-        let fallback = a.default_language();
-        let name = lang
-            .and_then(|l| loc.name.get(l))
-            .or_else(|| loc.name.get(fallback))
-            .or_else(|| loc.name.primary())
-            .unwrap_or_default();
-        label = Some(format!("{} {name}", a.postal_code));
-        matched_street = None;
-        matched_house_number = None;
-        best_id = None;
-        building_group_id = None;
-    }
     let position_source = resolved
         .address
         .as_ref()
@@ -524,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn locality_row_describes_the_place() {
+    fn locality_row_is_the_nearest_best_address() {
         use crate::dedup::MatchType;
         use crate::hydrate::HydratedHit;
         use crabfinder_core::MultilingualName;
@@ -572,12 +560,17 @@ mod tests {
             ..Default::default()
         };
         let out = output_row_from(row, resolved, Some(Language::Nl));
+        // The BeSt address nearest to Spontin, as BeSt has it.
         assert_eq!(out.confidence, "locality");
-        assert_eq!(out.label.as_deref(), Some("5530 Spontin"));
+        assert_eq!(
+            out.label.as_deref(),
+            Some("Chaussée de Dinant 18, 5530 Brussel")
+        );
         assert_eq!(out.matched_postal_code.as_deref(), Some("5530"));
         assert_eq!((out.lat, out.lng), (Some(50.3226), Some(5.0069)));
-        assert!(out.matched_street.is_none() && out.best_id.is_none());
-        assert!(out.building_group_id.is_none() && out.matched_house_number.is_none());
+        assert_eq!(out.matched_street.as_deref(), Some("Chaussée de Dinant"));
+        assert_eq!(out.matched_house_number.as_deref(), Some("18"));
+        assert!(out.best_id.is_some() && out.building_group_id.is_some());
         assert_eq!(out.address.as_deref(), Some("Spontin"));
     }
 

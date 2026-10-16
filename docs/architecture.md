@@ -207,7 +207,8 @@ Markt.
 | `validate` | `/validate` and the batch `corrections` columns: input vs. the resolved BeSt address, field by field (v3 Phase 11.2) |
 | `suggest` | `/autocomplete` (v3 Phase 11.5): the in-memory name index built at startup, and the prefix lookup |
 | `http` | Router, guard (deadline, concurrency), CORS and the handlers |
-| `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, `POST /batch/geocode` |
+| `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, the chunked runner (`run`), `POST /batch/geocode` |
+| `jobs` | Asynchronous batch jobs (`--jobs-dir`, v3 Phase 11.6): queue, workers, checkpoints, resume, TTL |
 
 ## Resolver (`crabfinder_service::resolver`)
 
@@ -304,7 +305,10 @@ without changing the decision.
   (`http::blocking`), so the async runtime never stalls.
 - **Guard** middleware: a deadline (`--request-timeout-ms`; batch:
   `--batch-timeout-secs`) covering both waiting for one of
-  `--max-concurrency` shared slots and handling; past it, JSON 503.
+  `--max-concurrency` shared slots and handling; past it, JSON 503. The
+  slot and the deadline also go to the handler as request extensions
+  (`Permit`, `Deadline`): the batch route keeps the slot and checks the
+  deadline while its body streams.
 - **Telemetry** (`telemetry.rs`): per-route counters and latency
   histograms, rejected requests, search outcomes by tier / confidence /
   match type (recorded in `resolver::search`), over-fetch-cap hits;
@@ -363,10 +367,52 @@ point is nearer to it than to any address.
 ## Batch (`crabfinder_service::batch`)
 
 `io` reads CSV (delimiter sniffed; clean columns or free-text
-`address`) and writes CSV or GeoJSON; `dedup` resolves each distinct
-input once and fans out with rayon; `http` is the `POST /batch/geocode`
-façade (streamed body). `crabfinder-batch` is a peer CLI opening the
-index directly (mmap read-sharing makes it safe next to a live service).
+`address`) and writes CSV or GeoJSON, one row at a time (`OutputSink`);
+`dedup` resolves each distinct input once and fans out with rayon;
+`run::resolve_chunks` (v3 Phase 11.6) drives both: 5,000 rows at a time,
+dedup within the chunk, each chunk written and flushed before the next,
+with a `keep_going` check in between. Every batch path uses it:
+
+- `http`, the `POST /batch/geocode` façade: a blocking task sends each
+  chunk down a bounded channel into the response body (backpressure, and
+  a closed channel stops the work). The handler answers once the first
+  chunk is out, so a first chunk past the deadline is still a 503; later,
+  the deadline cuts the body off with an error.
+- `crabfinder-batch`, a peer CLI opening the index directly (mmap
+  read-sharing makes it safe next to a live service): `--progress`
+  reports after each chunk.
+- `jobs`, below.
+
+## Batch jobs (`jobs.rs`, v3 Phase 11.6)
+
+Off unless `--jobs-dir`. `POST /batch/jobs` (`http/jobs.rs`) streams the
+upload into `<dir>/.upload-<id>/input.csv` (JSON bodies are written out
+as CSV), checks the options and the header, writes `state.json` and
+renames the directory to `<dir>/<id>`, then queues the job. Ids are 128
+random bits (`getrandom`).
+
+Each job is a Tokio task waiting for one of `--jobs-max-running` slots,
+then a blocking task running on the jobs' own rayon pool
+(`--jobs-threads`, half the cores), so jobs share CPU with interactive
+requests rather than take it. A run:
+
+1. counts the rows (first run only; a malformed row fails the job before
+   any output) and notes whether any has a `best_id` (the id columns are
+   on for all rows or none);
+2. opens `result.part`, cuts it back to the checkpointed length and
+   skips the rows already done (a file shorter than its checkpoint means
+   lost writes: start over);
+3. runs `resolve_chunks` into it; between chunks, flushes and saves
+   `rows_done` and the file length in `state.json` (temp file + rename),
+   and stops if the job was cancelled;
+4. at the end, renames `result.part` to `result.csv` / `result.geojson`.
+
+At startup, `Jobs::open` deletes leftover uploads, queues again every
+job left `queued` or `running`, and deletes finished jobs past
+`--jobs-ttl-hours`; a sweep repeats every 10 minutes. Cancelling a job
+sets a flag the worker reads between chunks and marks the job
+`cancelled` at once; its partial result is deleted when the worker
+stops.
 
 ## What the index does *not* contain
 

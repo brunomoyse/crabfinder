@@ -2,10 +2,11 @@
 
 Cas d'usage : tu as une liste d'adresses (CSV, export Excel, requête SQL) et tu veux en sortir un fichier enrichi avec lat / lng et une indication de qualité par ligne.
 
-Deux façons d'attaquer ce besoin, **avec exactement la même logique de résolution derrière** (le même résolveur que `/geocode`) :
+Trois façons d'attaquer ce besoin, **avec exactement la même logique de résolution derrière** (le même résolveur que `/geocode`) :
 
 - **CLI `crabfinder-batch`**: pas de serveur, pas de port, tu lances un binaire, tu lui donnes un CSV, tu récupères un CSV (ou du GeoJSON). Privilégié pour les pipelines de data, les scripts cron, les exports ponctuels.
 - **Endpoint HTTP `POST /batch/geocode`**: le service tourne déjà, tu pousses un CSV par requête HTTP, tu reçois un CSV (ou du GeoJSON) streamé. Privilégié pour les intégrations applicatives (un backend qui géocode à la demande).
+- **Jobs HTTP `/batch/jobs`**: la même chose en HTTP pour les gros fichiers. Tu envoies le fichier, le service le traite en arrière-plan (et le reprend après un redémarrage), tu récupères le résultat quand il est prêt. Voir [Gros fichiers : les jobs batch](#gros-fichiers-les-jobs-batch).
 
 Si tu hésites : la CLI est plus simple à démarrer. Va à la section [CLI](#cli-crabfinder-batch).
 
@@ -172,6 +173,7 @@ Le binaire ouvre l'index Tantivy en lecture seule, parcourt le CSV, écrit le r�
 | `--corrections` | désactivé | Ajoute les colonnes `status` et `corrections` (voir [Vérifier des adresses](#vérifier-des-adresses--corrections)). |
 | `--alternatives` | désactivé | Ajoute `score_gap` et `alternatives` : les communes des meilleures réponses, pour les lignes qui ne disent pas laquelle (`Charleroi (6000); La Louvière (7100)`). |
 | `--parallel N` | tous les cœurs | Threads de travail. `--parallel 1` pour un profilage déterministe. |
+| `--progress` | désactivé | Affiche l'avancement sur `stderr` toutes les 5 000 lignes : `rows 415000/1000000 (41.5%), 3390 rows/s, 172.6 s left`. |
 
 ### Exemples concrets
 
@@ -297,17 +299,59 @@ Les options vont dans le body JSON / la partie multipart `options`, **ou dans la
 
 ### Réponse
 
-`text/csv; charset=utf-8` (ou `application/geo+json`), **streamé**. Les premiers octets partent dès que les premières lignes sont résolues, ce qui compte sur les gros fichiers.
+`text/csv; charset=utf-8` (ou `application/geo+json`), **streamé** : les lignes sont résolues par paquets de 5 000 et chaque paquet part dès qu'il est prêt. Les premiers octets arrivent donc après le premier paquet, et le serveur ne garde jamais toute la sortie en mémoire. Si ton client se déconnecte, le travail s'arrête.
+
+`--batch-timeout-secs` (600 s par défaut) couvre toute la requête : envoi, résolution et téléchargement. S'il expire alors que la réponse a déjà commencé, la réponse est **coupée** (la connexion se termine avant la fin et ton client HTTP signale une erreur) ; tu ne reçois jamais un fichier tronqué qui aurait l'air complet. Pour les fichiers qui prennent plusieurs minutes, utilise les [jobs batch](#gros-fichiers-les-jobs-batch).
 
 ### Codes HTTP
 
 - `200` : réponse CSV / GeoJSON (une entrée réduite à l'en-tête donne un corps CSV vide, ou une FeatureCollection vide).
 - `400` : CSV ou JSON malformé, pas de colonne `street`/`address`, `format` ou `lang` inconnu. Message en texte brut, par ex. `unknown format 'xml' (expected csv or geojson)`.
 - `413` : payload JSON > 10 000 adresses.
-- `503` : la réponse n'a pas commencé dans le délai `--batch-timeout-secs` (600 s par défaut). Corps JSON `{"error": "..."}`.
+- `503` : le premier paquet n'était pas prêt dans le délai `--batch-timeout-secs` (600 s par défaut). Corps JSON `{"error": "..."}`. Au-delà, une réponse trop longue est coupée (voir ci-dessus).
 - `500` : erreur interne (à signaler ; ne devrait pas arriver).
 
 ---
+
+## Gros fichiers : les jobs batch
+
+Quand un fichier prend plusieurs minutes, une seule requête HTTP est fragile : un timeout de proxy ou une connexion coupée et le travail est perdu. Les jobs batch tournent en arrière-plan. Lance le service avec un répertoire pour eux :
+
+```bash
+./target/release/crabfinder-service --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
+    --jobs-dir ./jobs
+```
+
+Puis envoie le fichier. Mêmes entrées et options que `POST /batch/geocode` (CSV brut, multipart, JSON, `?format=`, `?lang=`, `?corrections=`…), jusqu'à 1 Gio (`--jobs-max-body-mb`) :
+
+```bash
+curl -s -X POST -H 'Content-Type: text/csv' --data-binary @adresses.csv \
+    'http://127.0.0.1:8080/batch/jobs?lang=nl'
+# {"job_id":"23b6678e4f7220b37febc7ad2dc04cd6","status":"queued",…,"status_url":"/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6"}
+```
+
+Suis-le :
+
+```bash
+curl -s http://127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6
+# {"job_id":"23b6678e…","status":"running","rows_total":1000000,"rows_done":415000,…}
+```
+
+`status` passe par `queued` → `running` → `done` (ou `failed`, avec une `error`, ou `cancelled`). Une fois `done`, télécharge le résultat, identique à ce qu'aurait renvoyé `POST /batch/geocode` :
+
+```bash
+curl -s -o geocode.csv http://127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6/result
+```
+
+Bon à savoir :
+
+- `DELETE /batch/jobs/{id}` annule un job en attente ou en cours, ou supprime un job terminé et son résultat.
+- Deux jobs tournent à la fois (`--jobs-max-running`), sur la moitié des cœurs (`--jobs-threads`) : le service continue de répondre à `/geocode` pendant ce temps. Les autres attendent leur tour.
+- Si le service s'arrête ou plante pendant un job, il le reprend au démarrage suivant, depuis le dernier point de reprise (toutes les 5 000 lignes).
+- Les jobs terminés sont supprimés après 24 heures (`--jobs-ttl-hours`). Télécharge le résultat avant.
+- Quiconque connaît l'identifiant d'un job peut lire son résultat : l'identifiant est long et aléatoire, mais ne le partage pas.
+- Une option invalide ou un CSV sans colonne `street`/`address`/`best_id` est refusé tout de suite (`400`). Une ligne malformée plus bas fait échouer le job avant toute sortie.
 
 ## Désactiver les replis au niveau de la rue
 
@@ -389,15 +433,16 @@ Utilise la colonne `box_number`, ou écris la boîte avec le numéro, dans `hous
 
 ### Doublons dans l'entrée
 
-Conservés en sortie (1-in-1-out). En interne, crabfinder ne résout que les adresses uniques et propage le résultat à chaque occurrence.
+Conservés en sortie (1-in-1-out). En interne, crabfinder résout chaque adresse distincte une fois par paquet de 5 000 lignes et propage le résultat à chaque occurrence.
 
 ### Taille recommandée d'un lot
 
 - CLI : pas de limite. 1M de lignes passe (pic mémoire de quelques centaines de Mo).
 - HTTP multipart : plafond de 50 Mo (~100k lignes).
 - HTTP JSON : plafond de 10 000 adresses.
+- Jobs batch HTTP : 1 Gio (`--jobs-max-body-mb`), quel que soit le format d'entrée.
 
-Pour aller au-delà en HTTP, découpe côté client. Ou passe à la CLI.
+Pour aller au-delà en HTTP, utilise les [jobs batch](#gros-fichiers-les-jobs-batch). Ou passe à la CLI.
 
 ## Et après ?
 

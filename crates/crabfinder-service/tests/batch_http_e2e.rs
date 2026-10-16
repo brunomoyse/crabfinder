@@ -7,9 +7,18 @@
 
 mod common;
 
-use axum::http::StatusCode;
+use std::time::{Duration, Instant};
+
+use axum::{
+    Router,
+    body::Body,
+    http::{Request, StatusCode, header::CONTENT_TYPE},
+};
 use common::{App, multipart};
+use crabfinder_service::http::{self, RouterOptions};
 use crabfinder_test_support::{col, fixtures, parse_csv};
+use http_body_util::BodyExt;
+use tower::ServiceExt;
 
 fn app() -> App {
     App::new(&fixtures::batch_small())
@@ -373,4 +382,163 @@ async fn corrections_option_adds_the_validate_columns() {
         .await;
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["features"][0]["properties"]["status"], "valid");
+}
+
+// --- Phase 11.6: chunked streaming, deadline, slot ----------------------------
+
+/// `n` rows of Avenue Louise as a CSV body.
+fn louise_rows(n: usize) -> String {
+    let mut csv = String::from(HEADER);
+    for i in 0..n {
+        csv.push_str(&format!("{i},Avenue Louise,{},1050\n", [10, 20, 30][i % 3]));
+    }
+    csv
+}
+
+fn post_csv(uri: &str, csv: String) -> Request<Body> {
+    Request::post(uri)
+        .header(CONTENT_TYPE, "text/csv")
+        .body(Body::from(csv))
+        .unwrap()
+}
+
+/// Read `body` frame by frame: the bytes received, and whether it ended
+/// with an error (a cut-off response).
+async fn drain(body: Body) -> (String, bool) {
+    let mut body = body;
+    let mut out = Vec::new();
+    while let Some(frame) = body.frame().await {
+        match frame {
+            Ok(f) => out.extend_from_slice(f.data_ref().map_or(&[][..], |b| &b[..])),
+            Err(_) => return (String::from_utf8(out).unwrap(), true),
+        }
+    }
+    (String::from_utf8(out).unwrap(), false)
+}
+
+fn tuned(app: &App, f: impl FnOnce(&mut RouterOptions)) -> Router {
+    let mut opts = RouterOptions {
+        batch_chunk_rows: 1,
+        ..RouterOptions::default()
+    };
+    f(&mut opts);
+    http::router_with(app.state.clone(), &opts)
+}
+
+#[tokio::test]
+async fn small_chunks_give_the_same_output() {
+    let app = app();
+    let csv = louise_rows(7);
+    let (_, _, whole) = app.post("/batch/geocode", "text/csv", csv.clone()).await;
+    let resp = tuned(&app, |_| {})
+        .oneshot(post_csv("/batch/geocode", csv.clone()))
+        .await
+        .unwrap();
+    let (chunked, cut) = drain(resp.into_body()).await;
+    assert!(!cut);
+    assert_eq!(chunked, whole);
+
+    let (_, _, whole) = app
+        .post("/batch/geocode?format=geojson", "text/csv", csv.clone())
+        .await;
+    let resp = tuned(&app, |_| {})
+        .oneshot(post_csv("/batch/geocode?format=geojson", csv))
+        .await
+        .unwrap();
+    let (chunked, _) = drain(resp.into_body()).await;
+    assert_eq!(chunked, whole);
+    let v: serde_json::Value = serde_json::from_str(&chunked).unwrap();
+    assert_eq!(v["features"].as_array().unwrap().len(), 7);
+}
+
+#[tokio::test]
+async fn the_batch_deadline_covers_resolution() {
+    // 20 one-row chunks of 50 ms against a 400 ms deadline: the response
+    // starts, then is cut off with an error, never a short clean body.
+    let app = app();
+    let router = tuned(&app, |o| {
+        o.batch_timeout = Duration::from_millis(400);
+        o.batch_chunk_delay = Duration::from_millis(50);
+    });
+    let resp = router
+        .oneshot(post_csv("/batch/geocode", louise_rows(20)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (body, cut) = drain(resp.into_body()).await;
+    assert!(cut, "{body}");
+    let lines = body.lines().count();
+    assert!((2..21).contains(&lines), "{lines} lines");
+}
+
+#[tokio::test]
+async fn a_first_chunk_past_the_deadline_is_503() {
+    let app = app();
+    let router = tuned(&app, |o| {
+        o.batch_timeout = Duration::from_millis(50);
+        o.batch_chunk_delay = Duration::from_millis(300);
+    });
+    let resp = router
+        .oneshot(post_csv("/batch/geocode", louise_rows(3)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn the_batch_keeps_its_slot_while_streaming() {
+    // One slot: while the batch streams, a /health request can't get in.
+    let app = app();
+    let router = tuned(&app, |o| {
+        o.max_concurrency = 1;
+        o.request_timeout = Duration::from_millis(100);
+        o.batch_chunk_delay = Duration::from_millis(60);
+    });
+    let resp = router
+        .clone()
+        .oneshot(post_csv("/batch/geocode", louise_rows(6)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let health = |r: Router| async move {
+        r.oneshot(Request::get("/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    };
+    assert_eq!(
+        health(router.clone()).await,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let (body, cut) = drain(resp.into_body()).await;
+    assert!(!cut);
+    assert_eq!(parse_csv(&body).1.len(), 6);
+    assert_eq!(health(router).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_client_that_leaves_stops_the_work() {
+    // 200 chunks of 20 ms (4 s) on the only slot: once the client drops
+    // the body, the worker stops at its next write and frees the slot.
+    let app = app();
+    let router = tuned(&app, |o| {
+        o.max_concurrency = 1;
+        o.request_timeout = Duration::from_secs(2);
+        o.batch_chunk_delay = Duration::from_millis(20);
+    });
+    let resp = router
+        .clone()
+        .oneshot(post_csv("/batch/geocode", louise_rows(200)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    drop(resp);
+    let t0 = Instant::now();
+    let status = router
+        .oneshot(Request::get("/health").body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status();
+    assert_eq!(status, StatusCode::OK);
+    assert!(t0.elapsed() < Duration::from_secs(1), "{:?}", t0.elapsed());
 }

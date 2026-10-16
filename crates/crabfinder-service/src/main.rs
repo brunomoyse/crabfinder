@@ -12,6 +12,7 @@ use tracing_subscriber::EnvFilter;
 
 use axum::http::HeaderValue;
 use crabfinder_service::http::{self, RouterOptions};
+use crabfinder_service::jobs::{Jobs, JobsConfig};
 use crabfinder_service::{AppState, LoadOptions, telemetry};
 
 #[derive(Debug, Parser)]
@@ -55,8 +56,8 @@ struct Args {
     #[arg(long, env = "CRABFINDER_REQUEST_TIMEOUT_MS", default_value_t = 10_000)]
     request_timeout_ms: u64,
 
-    /// Deadline of `POST /batch/geocode` until its response starts,
-    /// seconds.
+    /// Deadline of `POST /batch/geocode`, seconds: resolution and
+    /// streaming included (past it the response is cut off).
     #[arg(long, env = "CRABFINDER_BATCH_TIMEOUT_SECS", default_value_t = 600)]
     batch_timeout_secs: u64,
 
@@ -80,6 +81,27 @@ struct Args {
     /// memory at startup; `/autocomplete` then answers 503).
     #[arg(long, env = "CRABFINDER_NO_AUTOCOMPLETE")]
     no_autocomplete: bool,
+
+    /// Directory of the asynchronous batch jobs (`/batch/jobs`). Without
+    /// it, those routes answer 503.
+    #[arg(long, env = "CRABFINDER_JOBS_DIR")]
+    jobs_dir: Option<PathBuf>,
+
+    /// Batch jobs running at once; the others wait, queued.
+    #[arg(long, env = "CRABFINDER_JOBS_MAX_RUNNING", default_value_t = 2)]
+    jobs_max_running: usize,
+
+    /// Upload limit of `POST /batch/jobs`, MiB.
+    #[arg(long, env = "CRABFINDER_JOBS_MAX_BODY_MB", default_value_t = 1024)]
+    jobs_max_body_mb: u64,
+
+    /// Hours a finished job (and its result) is kept.
+    #[arg(long, env = "CRABFINDER_JOBS_TTL_HOURS", default_value_t = 24)]
+    jobs_ttl_hours: u64,
+
+    /// Resolver threads of the batch jobs; 0 = half the cores.
+    #[arg(long, env = "CRABFINDER_JOBS_THREADS", default_value_t = 0)]
+    jobs_threads: usize,
 }
 
 #[tokio::main]
@@ -114,12 +136,28 @@ async fn main() -> Result<()> {
         telemetry::spawn_upkeep(h.clone(), Duration::from_secs(5));
         h
     });
+    let jobs = match &args.jobs_dir {
+        Some(dir) => {
+            let cfg = JobsConfig {
+                max_running: args.jobs_max_running,
+                max_body_bytes: args.jobs_max_body_mb * 1024 * 1024,
+                ttl: Duration::from_secs(args.jobs_ttl_hours * 3600),
+                threads: args.jobs_threads,
+                ..JobsConfig::new(dir)
+            };
+            info!(dir = %dir.display(), "batch jobs on");
+            Some(Jobs::open(state.clone(), cfg)?)
+        }
+        None => None,
+    };
     let router_opts = RouterOptions {
         request_timeout: Duration::from_millis(args.request_timeout_ms),
         batch_timeout: Duration::from_secs(args.batch_timeout_secs),
         max_concurrency: args.max_concurrency,
         cors_origins,
         metrics,
+        jobs,
+        ..RouterOptions::default()
     };
 
     let addr = SocketAddr::new(args.host, args.port);

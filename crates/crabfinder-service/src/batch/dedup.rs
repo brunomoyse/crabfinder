@@ -199,6 +199,25 @@ where
     R: Resolver,
     MakeQuery: Fn(&InputRow) -> AddressQuery + Sync,
 {
+    let id_columns = rows.iter().any(|r| r.best_id.is_some());
+    dedup_then_resolve_chunk(rows, resolver, make_query, lang, id_columns)
+}
+
+/// `dedup_then_resolve` over one chunk of a larger input (v3 Phase 11.6,
+/// `batch::run`): dedup stays within the chunk, and `id_columns` (the
+/// `id_status` / `successor_best_id` columns, on every row or on none)
+/// is decided by the caller over the whole input.
+pub fn dedup_then_resolve_chunk<R, MakeQuery>(
+    rows: Vec<InputRow>,
+    resolver: &R,
+    make_query: MakeQuery,
+    lang: Option<Language>,
+    id_columns: bool,
+) -> Vec<OutputRow>
+where
+    R: Resolver,
+    MakeQuery: Fn(&InputRow) -> AddressQuery + Sync,
+{
     if rows.is_empty() {
         return Vec::new();
     }
@@ -239,8 +258,6 @@ where
     let cache: HashMap<CacheKey, ResolvedAddress> = resolved_pairs.into_iter().collect();
 
     // The id columns appear on every row, or on none (v3 Phase 11.4).
-    let id_columns = rows.iter().any(|r| r.best_id.is_some());
-
     // 4) Broadcast. One OutputRow per InputRow, preserving order.
     rows.into_iter()
         .map(|row| {

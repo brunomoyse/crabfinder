@@ -159,41 +159,104 @@ impl OutputFormat {
 /// Write `rows` as one GeoJSON FeatureCollection. Properties keep the
 /// CSV column order.
 pub fn write_geojson<W: Write>(rows: &[OutputRow], w: W) -> Result<(), BatchError> {
-    #[derive(Serialize)]
-    struct Collection<'a> {
-        #[serde(rename = "type")]
-        kind: &'static str,
-        features: Vec<Feature<'a>>,
+    let mut sink = OutputSink::new(OutputFormat::GeoJson, w, 0);
+    for r in rows {
+        sink.write_row(r)?;
     }
-    #[derive(Serialize)]
-    struct Feature<'a> {
-        #[serde(rename = "type")]
-        kind: &'static str,
-        geometry: Option<Point>,
-        properties: &'a OutputRow,
+    sink.finish().map(drop)
+}
+
+/// The opening of a GeoJSON output, up to its first feature.
+const GEOJSON_OPEN: &[u8] = br#"{"type":"FeatureCollection","features":["#;
+
+/// One row as a GeoJSON feature: a Point (null geometry when not found),
+/// the CSV columns as properties.
+#[derive(Serialize)]
+struct Feature<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    geometry: Option<Point>,
+    properties: &'a OutputRow,
+}
+
+#[derive(Serialize)]
+struct Point {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    coordinates: [f64; 2],
+}
+
+/// Row-at-a-time writer of either output format (v3 Phase 11.6): the
+/// HTTP route streams through it, batch jobs append to a file, the CLI
+/// writes to stdout. Same bytes as writing every row at once.
+pub enum OutputSink<W: Write> {
+    Csv(Box<BatchWriter<W>>),
+    GeoJson {
+        w: W,
+        /// Features already in the output.
+        rows: usize,
+    },
+}
+
+impl<W: Write> OutputSink<W> {
+    /// A sink over `w`. `rows_before` > 0 continues an output that already
+    /// holds that many rows (a resumed job): no second CSV header or
+    /// GeoJSON opening.
+    pub fn new(format: OutputFormat, w: W, rows_before: usize) -> Self {
+        match format {
+            OutputFormat::Csv if rows_before > 0 => Self::Csv(Box::new(BatchWriter::continuing(w))),
+            OutputFormat::Csv => Self::Csv(Box::new(BatchWriter::new(w))),
+            OutputFormat::GeoJson => Self::GeoJson {
+                w,
+                rows: rows_before,
+            },
+        }
     }
-    #[derive(Serialize)]
-    struct Point {
-        #[serde(rename = "type")]
-        kind: &'static str,
-        coordinates: [f64; 2],
+
+    pub fn write_row(&mut self, row: &OutputRow) -> Result<(), BatchError> {
+        match self {
+            Self::Csv(w) => w.write_row(row),
+            Self::GeoJson { w, rows } => {
+                w.write_all(if *rows == 0 { GEOJSON_OPEN } else { b"," })?;
+                let feature = Feature {
+                    kind: "Feature",
+                    geometry: row.lat.zip(row.lng).map(|(lat, lng)| Point {
+                        kind: "Point",
+                        coordinates: [lng, lat],
+                    }),
+                    properties: row,
+                };
+                serde_json::to_writer(&mut *w, &feature).map_err(|e| BatchError::Io(e.into()))?;
+                *rows += 1;
+                Ok(())
+            }
+        }
     }
-    let features = rows
-        .iter()
-        .map(|r| Feature {
-            kind: "Feature",
-            geometry: r.lat.zip(r.lng).map(|(lat, lng)| Point {
-                kind: "Point",
-                coordinates: [lng, lat],
-            }),
-            properties: r,
-        })
-        .collect();
-    let fc = Collection {
-        kind: "FeatureCollection",
-        features,
-    };
-    serde_json::to_writer(w, &fc).map_err(|e| BatchError::Io(e.into()))
+
+    /// Push what was written so far down to the underlying writer.
+    pub fn flush(&mut self) -> Result<(), BatchError> {
+        match self {
+            Self::Csv(w) => w.flush(),
+            Self::GeoJson { w, .. } => Ok(w.flush()?),
+        }
+    }
+
+    /// Close the output and return the writer, flushed. A CSV without
+    /// rows stays empty (no header); a GeoJSON one is an empty
+    /// FeatureCollection.
+    pub fn finish(self) -> Result<W, BatchError> {
+        match self {
+            Self::Csv(w) => (*w).into_inner(),
+            Self::GeoJson { mut w, rows } => {
+                if rows == 0 {
+                    w.write_all(GEOJSON_OPEN)?;
+                }
+                w.write_all(b"]}")?;
+                w.flush()?;
+                Ok(w)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -306,6 +369,15 @@ impl<W: Write> BatchWriter<W> {
         }
     }
 
+    /// A writer continuing a CSV whose header is already written (a
+    /// resumed batch job, v3 Phase 11.6).
+    pub fn continuing(w: W) -> Self {
+        Self {
+            inner: csv::WriterBuilder::new().has_headers(false).from_writer(w),
+            headers_written: true,
+        }
+    }
+
     /// Write one row. The csv crate writes the header on the first
     /// `serialize()` call because `has_headers(true)`.
     pub fn write_row(&mut self, row: &OutputRow) -> Result<(), BatchError> {
@@ -323,7 +395,6 @@ impl<W: Write> BatchWriter<W> {
     /// Consume the writer and return the inner sink. Use this when the
     /// caller wants to inspect/take ownership of the buffer (e.g. for HTTP
     /// streaming).
-    #[allow(dead_code)] // wired up by Lot E
     pub fn into_inner(self) -> Result<W, BatchError> {
         self.inner
             .into_inner()
@@ -555,6 +626,80 @@ mod tests {
         assert_eq!(fs[0]["properties"]["ambiguous"], true);
         assert!(fs[1]["geometry"].is_null());
         assert_eq!(fs[1]["properties"]["confidence"], "not_found");
+
+        // A sink continuing an output (a resumed job) writes the rest of
+        // the same bytes, in both formats.
+        let rows = [
+            OutputRow {
+                id: "3".into(),
+                ..fs_row(&v, 0)
+            },
+            OutputRow {
+                id: "4".into(),
+                ..fs_row(&v, 0)
+            },
+        ];
+        for format in [OutputFormat::Csv, OutputFormat::GeoJson] {
+            let mut whole = OutputSink::new(format, Vec::new(), 0);
+            for r in &rows {
+                whole.write_row(r).unwrap();
+            }
+            let whole = whole.finish().unwrap();
+            let mut head = OutputSink::new(format, Vec::new(), 0);
+            head.write_row(&rows[0]).unwrap();
+            head.flush().unwrap();
+            let mut out = match head {
+                OutputSink::Csv(w) => (*w).into_inner().unwrap(),
+                OutputSink::GeoJson { w, .. } => w,
+            };
+            let mut tail = OutputSink::new(format, Vec::new(), 1);
+            tail.write_row(&rows[1]).unwrap();
+            out.extend(tail.finish().unwrap());
+            assert_eq!(
+                String::from_utf8(out).unwrap(),
+                String::from_utf8(whole).unwrap()
+            );
+        }
+        // Empty outputs.
+        let csv = OutputSink::new(OutputFormat::Csv, Vec::new(), 0);
+        assert!(csv.finish().unwrap().is_empty());
+        let geo = OutputSink::new(OutputFormat::GeoJson, Vec::new(), 0);
+        assert_eq!(
+            geo.finish().unwrap(),
+            br#"{"type":"FeatureCollection","features":[]}"#
+        );
+    }
+
+    /// An `OutputRow` with the `idx`-th feature's id and coordinates.
+    fn fs_row(v: &serde_json::Value, idx: usize) -> OutputRow {
+        let f = &v["features"][idx];
+        OutputRow {
+            id: f["properties"]["id"].as_str().unwrap().into(),
+            street: "Avenue Louise".into(),
+            house_number: None,
+            postal_code: None,
+            matched_street: None,
+            matched_house_number: None,
+            matched_postal_code: None,
+            lat: f["geometry"]["coordinates"][1].as_f64(),
+            lng: f["geometry"]["coordinates"][0].as_f64(),
+            confidence: "exact".into(),
+            fallback_reason: None,
+            house_number_delta: None,
+            street_match_score: None,
+            building_group_id: None,
+            best_id: None,
+            address: None,
+            label: None,
+            position_source: None,
+            ambiguous: false,
+            status: None,
+            corrections: None,
+            score_gap: None,
+            id_status: None,
+            successor_best_id: None,
+            alternatives: None,
+        }
     }
 
     #[test]

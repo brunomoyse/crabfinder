@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crabfinder_batch::{Args, Summary, run, run_with_io};
+use crabfinder_batch::{Args, Summary, progress_line, run, run_with_io};
 use crabfinder_indexer::meta::{SCHEMA_VERSION, SIDECAR_FILENAME};
 use crabfinder_test_support::{AddressBuilder, TestIndex, col, fixtures, parse_csv};
 
@@ -398,4 +398,52 @@ fn alternatives_flag_adds_score_gap_and_alternatives() {
             .unwrap()
             .alternatives
     );
+}
+
+#[test]
+fn progress_lines_report_rate_and_time_left() {
+    use std::time::Duration;
+    assert_eq!(
+        progress_line(0, 100, Duration::ZERO),
+        "rows 0/100 (0.0%), 0 rows/s, time left unknown"
+    );
+    assert_eq!(
+        progress_line(25, 100, Duration::from_secs(5)),
+        "rows 25/100 (25.0%), 5 rows/s, 15.0 s left"
+    );
+    assert_eq!(
+        progress_line(100, 100, Duration::from_secs(4)),
+        "rows 100/100 (100.0%), 25 rows/s, done in 4.0 s"
+    );
+    assert_eq!(
+        progress_line(0, 0, Duration::from_secs(1)),
+        "rows 0/0 (100.0%), 0 rows/s, time left unknown"
+    );
+}
+
+#[test]
+fn binary_progress_goes_to_stderr() {
+    let ti = index();
+    let mut child = Command::new(batch_bin())
+        .arg("--index")
+        .arg(ti.path())
+        .arg("--progress")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn crabfinder-batch");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(format!("{HEADER}1,Avenue Louise,10,1050\n2,Avenue Louise,20,1050\n").as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("rows 0/2 (0.0%)"), "{err}");
+    assert!(err.contains("rows 2/2 (100.0%)"), "{err}");
+    let (_, rows) = parse_csv(&String::from_utf8(out.stdout).unwrap());
+    assert_eq!(rows.len(), 2);
 }

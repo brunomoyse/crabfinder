@@ -16,6 +16,7 @@ pub mod history;
 pub mod http;
 pub mod hydrate;
 pub mod interpolate;
+pub mod jobs;
 pub mod landmarks;
 pub mod localities;
 pub mod mid_street;

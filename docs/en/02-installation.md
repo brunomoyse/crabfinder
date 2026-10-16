@@ -197,12 +197,17 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--abbreviation-dict PATH` | (none) | `av` → `avenue` expansion. **Recommended**: `data/street-type-abbreviations-v1.yaml`. |
 | `--pois PATH` | (none) | Optional OpenStreetMap helper (`data/osm-pois-be-v1.csv`): understand landmark names ("Manneken Pis", "Gare du Midi"); the answer is the nearest BeSt address, `confidence: landmark`. Without it, landmark names aren't recognised. |
 | `--request-timeout-ms N` | `10000` | Deadline of a request, time waiting for a free slot included. Past it the service answers `503` with a JSON error. |
-| `--batch-timeout-secs N` | `600` | Same for `POST /batch/geocode`, until the response starts streaming. |
+| `--batch-timeout-secs N` | `600` | Same for `POST /batch/geocode`, for the whole request: past it the response is cut off. Also the upload deadline of `POST /batch/jobs`. |
 | `--max-concurrency N` | `256` | Requests handled at once; the others wait for a slot (within their deadline). |
 | `--cors-origin URL` | any (`*`) | Allowed browser origin. Repeat the flag (or separate with commas) for several. |
 | `--no-metrics` | off | Don't serve Prometheus metrics at `/metrics`. |
 | `--no-notability-boost` | off | Rank without the notability boost (A/B testing). |
 | `--no-autocomplete` | off | Don't build the `/autocomplete` suggestion index (saves about 0.8 s at startup and 80 MB); the route then answers `503`. |
+| `--jobs-dir PATH` | (none) | Turn on batch jobs (`/batch/jobs`), stored in this directory. Without it those routes answer `503`. |
+| `--jobs-max-running N` | `2` | Batch jobs running at once; the others wait. |
+| `--jobs-max-body-mb N` | `1024` | Largest file a batch job accepts, in MiB. |
+| `--jobs-ttl-hours N` | `24` | How long a finished job and its result are kept. |
+| `--jobs-threads N` | `0` | Threads the batch jobs share; `0` = half the cores. |
 
 To stop: `Ctrl+C` in the running terminal.
 

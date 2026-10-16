@@ -10,29 +10,31 @@ pub mod error;
 pub mod feature;
 pub mod geocode;
 pub mod health;
+pub mod jobs;
 pub mod lookup;
 pub mod reverse;
 pub mod validate;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::{
-    Router,
-    extract::{Request, State},
+    Extension, Router,
+    extract::{DefaultBodyLimit, Request, State},
     http::HeaderValue,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use metrics_exporter_prometheus::PrometheusHandle;
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use crate::AppState;
 use crate::batch;
+use crate::jobs::Jobs;
 use crate::telemetry;
 
 pub use error::ServiceError;
@@ -43,9 +45,15 @@ pub use error::ServiceError;
 pub struct RouterOptions {
     /// Deadline of every route but the batch one, queueing included.
     pub request_timeout: Duration,
-    /// Deadline of `POST /batch/geocode` until its response starts (the
-    /// CSV body then streams without one).
+    /// Deadline of `POST /batch/geocode`, resolution and streaming
+    /// included (v3 Phase 11.6): past it the response is cut off.
     pub batch_timeout: Duration,
+    /// Rows `POST /batch/geocode` resolves between two deadline checks
+    /// (`batch::run::CHUNK_ROWS`).
+    pub batch_chunk_rows: usize,
+    /// Test hook: a pause before each batch chunk.
+    #[doc(hidden)]
+    pub batch_chunk_delay: Duration,
     /// Requests served at once across all routes; the rest queue (and
     /// time out) until a slot frees up.
     pub max_concurrency: usize,
@@ -53,6 +61,9 @@ pub struct RouterOptions {
     pub cors_origins: Vec<HeaderValue>,
     /// Serve `GET /metrics` from this handle (`telemetry::install`).
     pub metrics: Option<PrometheusHandle>,
+    /// Serve `/batch/jobs` from these jobs (`--jobs-dir`, v3 Phase 11.6);
+    /// `None`: the routes answer 503.
+    pub jobs: Option<Arc<Jobs>>,
 }
 
 impl Default for RouterOptions {
@@ -60,9 +71,12 @@ impl Default for RouterOptions {
         Self {
             request_timeout: Duration::from_secs(10),
             batch_timeout: Duration::from_secs(600),
+            batch_chunk_rows: batch::run::CHUNK_ROWS,
+            batch_chunk_delay: Duration::ZERO,
             max_concurrency: 256,
             cors_origins: Vec::new(),
             metrics: None,
+            jobs: None,
         }
     }
 }
@@ -97,16 +111,54 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
             guard,
         ));
     // Lot E (v1 batch): body cap dialled up to 50 MiB on this route only.
+    let tuning = batch::BatchTuning {
+        chunk_rows: opts.batch_chunk_rows,
+        chunk_delay: opts.batch_chunk_delay,
+    };
     let batch = Router::new()
         .route(
             "/batch/geocode",
-            axum::routing::post(batch::batch_geocode).route_layer(batch::body_limit_layer()),
+            axum::routing::post(batch::batch_geocode)
+                .route_layer(batch::body_limit_layer())
+                .route_layer(Extension(tuning)),
         )
         .route_layer(middleware::from_fn_with_state(
             guard_for(opts.batch_timeout),
             guard,
         ));
-    let mut app = api.merge(batch);
+    let jobs = match &opts.jobs {
+        Some(j) => {
+            // The upload has the batch deadline; its size is checked
+            // while it streams to disk (`http::jobs::receive`).
+            let submit = Router::new()
+                .route(
+                    "/batch/jobs",
+                    post(jobs::submit).route_layer(DefaultBodyLimit::disable()),
+                )
+                .route_layer(middleware::from_fn_with_state(
+                    guard_for(opts.batch_timeout),
+                    guard,
+                ))
+                .with_state(j.clone());
+            let manage = Router::new()
+                .route("/batch/jobs/{id}", get(jobs::status).delete(jobs::delete))
+                .route("/batch/jobs/{id}/result", get(jobs::result))
+                .route_layer(middleware::from_fn_with_state(
+                    guard_for(opts.request_timeout),
+                    guard,
+                ))
+                .with_state(j.clone());
+            submit.merge(manage)
+        }
+        None => Router::new()
+            .route("/batch/jobs", post(jobs::disabled))
+            .route(
+                "/batch/jobs/{id}",
+                get(jobs::disabled).delete(jobs::disabled),
+            )
+            .route("/batch/jobs/{id}/result", get(jobs::disabled)),
+    };
+    let mut app = api.merge(batch).merge(jobs);
     if let Some(handle) = opts.metrics.clone() {
         app = app.route(
             "/metrics",
@@ -167,24 +219,48 @@ pub struct Guard {
     pub permits: Arc<Semaphore>,
 }
 
+/// The request's concurrency slot, as a request extension: a handler
+/// whose work outlives its response (`POST /batch/geocode` streaming)
+/// keeps a clone so the slot stays taken until the work ends.
+#[derive(Clone)]
+pub struct Permit(pub Arc<OwnedSemaphorePermit>);
+
+/// When the request's deadline falls, as a request extension (the batch
+/// route checks it between chunks, after its response has started).
+#[derive(Debug, Clone, Copy)]
+pub struct Deadline(pub Instant);
+
 /// Bound a request's wait for a concurrency slot plus its handling by
 /// `timeout`; past it, answer 503 (JSON). Handlers run their Tantivy work
 /// on the blocking pool, so the deadline fires even mid-search (the
 /// search itself finishes in the background).
-pub async fn guard(State(g): State<Guard>, req: Request, next: Next) -> Response {
+///
+/// The slot (`Permit`) and the deadline (`Deadline`) go to the handler as
+/// request extensions.
+pub async fn guard(State(g): State<Guard>, mut req: Request, next: Next) -> Response {
     let route = telemetry::route_of(&req);
-    let run = async {
-        // The semaphore is never closed.
-        let _permit = g.permits.acquire().await.ok();
-        next.run(req).await
+    let timeout = g.timeout;
+    req.extensions_mut()
+        .insert(Deadline(Instant::now() + timeout));
+    let run = async move {
+        // The semaphore is never closed. The guard holds the slot until
+        // the response (handlers may drop the request, and its
+        // extensions, before they finish).
+        let permit = g.permits.acquire_owned().await.ok().map(Arc::new);
+        if let Some(p) = &permit {
+            req.extensions_mut().insert(Permit(p.clone()));
+        }
+        let resp = next.run(req).await;
+        drop(permit);
+        resp
     };
-    match tokio::time::timeout(g.timeout, run).await {
+    match tokio::time::timeout(timeout, run).await {
         Ok(resp) => resp,
         Err(_) => {
             telemetry::record_rejected(route, "timeout");
             ServiceError::Unavailable(format!(
                 "request timed out after {} ms",
-                g.timeout.as_millis()
+                timeout.as_millis()
             ))
             .into_response()
         }

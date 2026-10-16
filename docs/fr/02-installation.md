@@ -197,12 +197,17 @@ curl "http://127.0.0.1:8080/geocode?q=Grand-Place+1000&limit=2"
 | `--abbreviation-dict CHEMIN` | (aucun) | Expansion `av` → `avenue`. **Recommandé** : `data/street-type-abbreviations-v1.yaml`. |
 | `--pois CHEMIN` | (aucun) | Aide OpenStreetMap facultative (`data/osm-pois-be-v1.csv`) : comprendre les noms de points d'intérêt (« Manneken Pis », « Gare du Midi ») ; la réponse est l'adresse BeSt la plus proche, `confidence: landmark`. Sans lui, ces noms ne sont pas reconnus. |
 | `--request-timeout-ms N` | `10000` | Délai maximal d'une requête, attente d'une place libre comprise. Au-delà, le service répond `503` avec une erreur JSON. |
-| `--batch-timeout-secs N` | `600` | Idem pour `POST /batch/geocode`, jusqu'au début de la réponse. |
+| `--batch-timeout-secs N` | `600` | Idem pour `POST /batch/geocode`, pour toute la requête : au-delà, la réponse est coupée. C'est aussi le délai d'envoi de `POST /batch/jobs`. |
 | `--max-concurrency N` | `256` | Requêtes traitées en même temps ; les autres attendent une place (dans leur délai). |
 | `--cors-origin URL` | toutes (`*`) | Origine navigateur autorisée. Répéter le flag (ou séparer par des virgules) pour en mettre plusieurs. |
 | `--no-metrics` | désactivé | Ne pas servir les métriques Prometheus sur `/metrics`. |
 | `--no-notability-boost` | désactivé | Classer sans le boost de notoriété (tests A/B). |
 | `--no-autocomplete` | désactivé | Ne pas construire l'index de suggestions de `/autocomplete` (environ 0,8 s de démarrage et 80 Mo en moins) ; la route répond alors `503`. |
+| `--jobs-dir PATH` | (aucun) | Active les jobs batch (`/batch/jobs`), stockés dans ce répertoire. Sans lui, ces routes répondent `503`. |
+| `--jobs-max-running N` | `2` | Jobs batch exécutés en même temps ; les autres attendent. |
+| `--jobs-max-body-mb N` | `1024` | Taille maximale d'un fichier de job batch, en Mio. |
+| `--jobs-ttl-hours N` | `24` | Durée de conservation d'un job terminé et de son résultat. |
+| `--jobs-threads N` | `0` | Threads partagés par les jobs batch ; `0` = la moitié des cœurs. |
 
 Pour arrêter le service : `Ctrl+C` dans le terminal où il tourne.
 

@@ -6,6 +6,7 @@ Two ways to do this, **with the exact same resolution logic underneath** (the sa
 
 - **`crabfinder-batch` CLI**: no server, no port, you run a binary, feed it a CSV, get a CSV (or GeoJSON). Preferred for data pipelines, cron scripts, one-off exports.
 - **`POST /batch/geocode` HTTP endpoint**: the service is already running, you push a CSV per HTTP request, receive a streamed CSV (or GeoJSON). Preferred for application integration (a backend that geocodes on demand).
+- **`/batch/jobs` HTTP jobs**: the same over HTTP for large files. You upload the file, the service works on it in the background (and picks it up again after a restart), you download the result when it's ready. See [Large files: batch jobs](#large-files-batch-jobs).
 
 If unsure: the CLI is simpler to start with. Jump to [CLI](#cli-crabfinder-batch).
 
@@ -172,6 +173,7 @@ The binary opens the Tantivy index read-only, iterates the CSV, writes the resul
 | `--corrections` | off | Append the `status` and `corrections` columns (see [Checking addresses](#checking-addresses-corrections)). |
 | `--alternatives` | off | Append `score_gap` and `alternatives`: the municipalities of the best answers, for rows that don't say which (`Charleroi (6000); La Louvière (7100)`). |
 | `--parallel N` | all cores | Worker threads. `--parallel 1` for deterministic profiling. |
+| `--progress` | off | Print progress on `stderr` every 5,000 rows: `rows 415000/1000000 (41.5%), 3390 rows/s, 172.6 s left`. |
 
 ### Concrete examples
 
@@ -297,17 +299,59 @@ Options go in the JSON body / the `options` multipart part, **or in the query st
 
 ### Response
 
-`text/csv; charset=utf-8` (or `application/geo+json`), **streamed**. The first bytes ship as soon as the first rows are resolved, which matters on large files.
+`text/csv; charset=utf-8` (or `application/geo+json`), **streamed**: rows are resolved 5,000 at a time and each chunk is sent as soon as it's ready, so the first bytes arrive after the first chunk and the server never holds the whole output. If your client disconnects, the work stops.
+
+`--batch-timeout-secs` (600 s by default) covers the whole request: upload, resolution and download. If it runs out after the response has started, the response is **cut off** (the connection ends early and your HTTP client reports an error); you never get a short file that looks complete. For files that take minutes, use [batch jobs](#large-files-batch-jobs).
 
 ### HTTP codes
 
 - `200`: CSV / GeoJSON response (an input with only a header gives an empty CSV body, or an empty FeatureCollection).
 - `400`: malformed CSV or JSON, no `street`/`address` column, unknown `format` or `lang`. Plain-text message, e.g. `unknown format 'xml' (expected csv or geojson)`.
 - `413`: JSON payload > 10,000 addresses.
-- `503`: the request didn't start answering within `--batch-timeout-secs` (default 600 s). JSON body `{"error": "..."}`.
+- `503`: the first chunk wasn't ready within `--batch-timeout-secs` (default 600 s). JSON body `{"error": "..."}`. Past that point a late response is cut off instead (see above).
 - `500`: internal error (please report; shouldn't happen).
 
 ---
+
+## Large files: batch jobs
+
+When a file takes minutes, a single HTTP request is fragile: a proxy timeout or a dropped connection loses the work. Batch jobs run in the background instead. Start the service with a directory for them:
+
+```bash
+./target/release/crabfinder-service --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
+    --jobs-dir ./jobs
+```
+
+Then submit the file. Same inputs and options as `POST /batch/geocode` (raw CSV, multipart, JSON, `?format=`, `?lang=`, `?corrections=`…), up to 1 GiB (`--jobs-max-body-mb`):
+
+```bash
+curl -s -X POST -H 'Content-Type: text/csv' --data-binary @addresses.csv \
+    'http://127.0.0.1:8080/batch/jobs?lang=nl'
+# {"job_id":"23b6678e4f7220b37febc7ad2dc04cd6","status":"queued",…,"status_url":"/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6"}
+```
+
+Follow it:
+
+```bash
+curl -s http://127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6
+# {"job_id":"23b6678e…","status":"running","rows_total":1000000,"rows_done":415000,…}
+```
+
+`status` goes `queued` → `running` → `done` (or `failed`, with an `error`, or `cancelled`). Once `done`, download the result, identical to what `POST /batch/geocode` would have returned:
+
+```bash
+curl -s -o geocoded.csv http://127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6/result
+```
+
+Good to know:
+
+- `DELETE /batch/jobs/{id}` cancels a job that is queued or running, or deletes a finished one and its result.
+- Two jobs run at once (`--jobs-max-running`), on half the cores (`--jobs-threads`), so the service keeps answering `/geocode` meanwhile. Others wait their turn.
+- If the service stops or crashes mid-job, it picks the job up again at the next start, from the last checkpoint (every 5,000 rows).
+- Finished jobs are deleted after 24 hours (`--jobs-ttl-hours`). Download the result before then.
+- Anyone who knows a job's id can read its result: the id is long and random, but don't share it.
+- A bad option or a CSV without `street`/`address`/`best_id` column is refused at once (`400`). A malformed row further down fails the job before any output.
 
 ## Turning off the street-level fallbacks
 
@@ -389,15 +433,16 @@ Use the `box_number` column, or write the box with the number, in `house_number`
 
 ### Duplicates in input
 
-Preserved in output (1-in-1-out). Internally, crabfinder only resolves unique addresses and propagates the result to every occurrence.
+Preserved in output (1-in-1-out). Internally, crabfinder resolves each distinct address once per chunk of 5,000 rows and propagates the result to every occurrence.
 
 ### Recommended batch size
 
 - CLI: no limit. 1M rows passes through (memory peaks at a few hundred MB).
 - HTTP multipart: 50 MB cap (~100k rows).
 - HTTP JSON: 10,000 addresses cap.
+- HTTP batch jobs: 1 GiB (`--jobs-max-body-mb`), any input format.
 
-To go further over HTTP, chunk it client-side. Or switch to the CLI.
+To go further over HTTP, use [batch jobs](#large-files-batch-jobs). Or switch to the CLI.
 
 ## What's next
 

@@ -14,8 +14,9 @@
 pub mod dedup;
 pub mod http;
 pub mod io;
+pub mod run;
 
 // Re-exports kept narrow: only what `main.rs` actually uses at the router
 // level. Sub-modules import each other directly to avoid trait/symbol
 // duplication.
-pub use http::{batch_geocode, body_limit_layer};
+pub use http::{BatchTuning, batch_geocode, body_limit_layer};

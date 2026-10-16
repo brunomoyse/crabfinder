@@ -9,7 +9,9 @@
 //!
 //! Concurrency: the resolver runs through `rayon::par_iter` (see
 //! `crabfinder_service::batch::dedup_then_resolve`) inside a pool sized by
-//! `--parallel N` (default = all available cores).
+//! `--parallel N` (default = all available cores). Rows are resolved and
+//! written 5,000 at a time (`batch::run`, v3 Phase 11.6); `--progress`
+//! reports rows/s and the time left on stderr after each chunk.
 //!
 //! Multi-process Tantivy reads (CLI alongside a running service on the same
 //! index directory) are supported because Tantivy's `MmapDirectory` is
@@ -18,19 +20,18 @@
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use tracing::{info, warn};
 
 use crabfinder_core::Language;
-use crabfinder_service::batch::dedup::{
-    ClosureResolver, RowExtras, dedup_then_resolve, resolve_row, row_query,
-};
+use crabfinder_service::batch::dedup::RowExtras;
 use crabfinder_service::batch::io::{
-    BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson,
+    InputRow, OutputFormat, OutputSink, read_rows, sniff_delimiter, write_geojson,
 };
-use crabfinder_service::resolver::{AddressQuery, SearchOptions};
+use crabfinder_service::batch::run::{CHUNK_ROWS, RunOptions, resolve_chunks};
 use crabfinder_service::{AppState, LoadOptions};
 
 #[derive(Debug, Clone, Parser)]
@@ -94,6 +95,11 @@ pub struct Args {
     /// municipalities of the best answers, for rows that don't say which.
     #[arg(long, default_value_t = false)]
     pub alternatives: bool,
+
+    /// Report progress on stderr (rows done, rows/s, time left) after
+    /// each chunk of 5,000 rows.
+    #[arg(long, default_value_t = false)]
+    pub progress: bool,
 }
 
 fn parse_format(s: &str) -> Result<OutputFormat, String> {
@@ -123,6 +129,7 @@ impl Args {
             lang: None,
             corrections: false,
             alternatives: false,
+            progress: false,
         }
     }
 }
@@ -139,11 +146,11 @@ pub fn run(args: &Args) -> Result<Summary> {
         Some(p) => Box::new(File::open(p).with_context(|| format!("reading input {p:?}"))?),
         None => Box::new(std::io::stdin().lock()),
     };
-    let output: Box<dyn Write> = match non_dash(args.output.as_deref()) {
+    let output: Box<dyn Write + Send> = match non_dash(args.output.as_deref()) {
         Some(p) => Box::new(BufWriter::new(
             File::create(p).with_context(|| format!("creating {p:?}"))?,
         )),
-        None => Box::new(BufWriter::new(std::io::stdout().lock())),
+        None => Box::new(BufWriter::new(std::io::stdout())),
     };
     run_with_io(args, input, output)
 }
@@ -155,7 +162,11 @@ fn non_dash(p: Option<&Path>) -> Option<&Path> {
 
 /// Same as `run`, with explicit I/O streams (`--input` / `--output` are
 /// ignored).
-pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Result<Summary> {
+pub fn run_with_io(
+    args: &Args,
+    mut input: impl Read,
+    output: impl Write + Send,
+) -> Result<Summary> {
     let mut opts = LoadOptions::new(&args.index);
     opts.abbreviation_dict = args.abbreviation_dict.clone();
     opts.pois = args.pois.clone();
@@ -179,41 +190,63 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
         .num_threads(args.parallel.unwrap_or(0))
         .build()
         .context("configuring rayon thread pool")?;
-    let ctx = state.resolver_context();
-    let search_opts = SearchOptions {
+    let options = RunOptions {
         mid_street_fallback: !args.no_mid_street,
-        ..SearchOptions::default()
+        format: args.format,
+        extras: RowExtras {
+            corrections: args.corrections,
+            alternatives: args.alternatives,
+            lang: args.lang,
+        },
     };
-    let extras = RowExtras {
-        corrections: args.corrections,
-        alternatives: args.alternatives,
-        lang: args.lang,
+    let total = rows.len();
+    let id_columns = rows.iter().any(|r| r.best_id.is_some());
+    let mut sink = OutputSink::new(args.format, output, 0);
+    let t0 = Instant::now();
+    let report = |done: usize| {
+        if args.progress {
+            eprintln!("{}", progress_line(done, total, t0.elapsed()));
+        }
+        true
     };
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve_row(q, &search_opts, &ctx, extras));
-    let make_query = |row: &InputRow| row_query(&state.index, row);
-    let t0 = std::time::Instant::now();
-    let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query, args.lang));
+    let end = pool.install(|| {
+        resolve_chunks(
+            &state,
+            rows.into_iter().map(Ok),
+            &options,
+            id_columns,
+            CHUNK_ROWS,
+            &mut sink,
+            &report,
+        )
+    })?;
+    report(end.rows);
+    sink.finish().context("writing output")?;
     info!(
-        out_rows = out.len(),
+        out_rows = end.rows,
         elapsed_ms = t0.elapsed().as_millis(),
         "resolution complete"
     );
+    Ok(Summary { rows: end.rows })
+}
 
-    match args.format {
-        OutputFormat::Csv => {
-            let mut w = BatchWriter::new(output);
-            for row in &out {
-                w.write_row(row).context("writing csv row")?;
-            }
-            w.flush().context("flushing csv")?;
-        }
-        OutputFormat::GeoJson => {
-            let mut output = output;
-            write_geojson(&out, &mut output).context("writing geojson")?;
-            output.flush().context("flushing geojson")?;
-        }
-    }
-    Ok(Summary { rows: out.len() })
+/// `rows 5000/20000 (25.0%), 3120 rows/s, 4.8 s left`.
+pub fn progress_line(done: usize, total: usize, elapsed: Duration) -> String {
+    let secs = elapsed.as_secs_f64();
+    let rate = if secs > 0.0 { done as f64 / secs } else { 0.0 };
+    let pct = if total > 0 {
+        100.0 * done as f64 / total as f64
+    } else {
+        100.0
+    };
+    let left = if done == 0 {
+        "time left unknown".to_string()
+    } else if done >= total {
+        format!("done in {secs:.1} s")
+    } else {
+        format!("{:.1} s left", (total - done) as f64 / rate)
+    };
+    format!("rows {done}/{total} ({pct:.1}%), {rate:.0} rows/s, {left}")
 }
 
 fn parse_rows(raw: Vec<u8>, delimiter: Option<char>) -> Result<Vec<InputRow>> {

@@ -24,7 +24,8 @@ GET /reverse?lat=50.8466&lng=4.3525&lang=de
 GET /lookup?id=https://databrussels.be/id/address/210225/1
 GET /validate?street=Av Louise&housenumber=32&postcode=1000&city=Ixelles
 GET /autocomplete?q=rue de la l&focus_point=50.85,4.35
-POST /batch/geocode            (CSV in, CSV or GeoJSON out)
+POST /batch/geocode            (CSV in, CSV or GeoJSON out, streamed)
+POST /batch/jobs               (the same as a background job, for large files)
 ```
 
 What it handles:
@@ -71,6 +72,9 @@ What it handles:
   then the street's buildings once a number is typed, in about 1 ms. With
   `focus_point` at the municipality, the expected street is among 10
   suggestions after 8 characters 95% of the time.
+- **Large batches**: `/batch/geocode` streams its output 5,000 rows at a
+  time; `/batch/jobs` (`--jobs-dir`) runs files of up to 1 GiB in the
+  background, survives restarts and keeps the result for download.
 - **Labels in any language**: `lang=fr|nl|de` and a ready-to-print
   `label` on every result.
 - **Operations**: request deadlines, a concurrency limit, CORS,

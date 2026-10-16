@@ -25,7 +25,8 @@ is set (any method, any header).
 | `GET /lookup?id=…` | Addresses by BeSt id, with each id's status (current, outdated, retired…) |
 | `GET /validate` | Is the input a real BeSt address, and what differs |
 | `GET /autocomplete?q=…` | Suggestions while typing: streets, localities, then the street's buildings |
-| `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row |
+| `POST /batch/geocode` | CSV / JSON in, CSV or GeoJSON out, 1 row per input row, streamed |
+| `POST /batch/jobs`, `GET` / `DELETE /batch/jobs/{id}`, `GET /batch/jobs/{id}/result` | The same batch as an asynchronous job, for large files (`--jobs-dir`) |
 | `GET /metrics` | Prometheus text exposition (unless `--no-metrics`) |
 
 ## Service flags
@@ -40,10 +41,15 @@ is set (any method, any header).
 | `--no-notability-boost` | `CRABFINDER_NO_NOTABILITY_BOOST` | off | Plain BM25 (A/B the boost on the same index) |
 | `--no-autocomplete` | `CRABFINDER_NO_AUTOCOMPLETE` | off | Don't build the `/autocomplete` name index (saves ~0.8 s at startup and ~80 MB); the route answers 503 |
 | `--request-timeout-ms` | `CRABFINDER_REQUEST_TIMEOUT_MS` | `10000` | Deadline per request, queueing included → 503 |
-| `--batch-timeout-secs` | `CRABFINDER_BATCH_TIMEOUT_SECS` | `600` | Deadline of `/batch/geocode` until its response starts streaming |
+| `--batch-timeout-secs` | `CRABFINDER_BATCH_TIMEOUT_SECS` | `600` | Deadline of `/batch/geocode`, resolution and streaming included (past it the response is cut off); also the upload deadline of `POST /batch/jobs` |
 | `--max-concurrency` | `CRABFINDER_MAX_CONCURRENCY` | `256` | Requests served at once (all routes); the rest wait for a slot |
 | `--cors-origin` | `CRABFINDER_CORS_ORIGIN` | any | Repeatable or comma-separated; `*` = any |
 | `--no-metrics` | `CRABFINDER_NO_METRICS` | off | Don't serve `/metrics` |
+| `--jobs-dir` | `CRABFINDER_JOBS_DIR` | off | Directory of the batch jobs; without it the `/batch/jobs` routes answer 503 |
+| `--jobs-max-running` | `CRABFINDER_JOBS_MAX_RUNNING` | `2` | Jobs running at once; the others wait, `queued` |
+| `--jobs-max-body-mb` | `CRABFINDER_JOBS_MAX_BODY_MB` | `1024` | Upload limit of `POST /batch/jobs` (413 above) |
+| `--jobs-ttl-hours` | `CRABFINDER_JOBS_TTL_HOURS` | `24` | A finished job and its result are deleted this long after it finished |
+| `--jobs-threads` | `CRABFINDER_JOBS_THREADS` | `0` | Resolver threads shared by the running jobs; `0` = half the cores |
 
 Request logs (one span per request, with status and latency) go to
 stderr at `info`; set `RUST_LOG` to change the level.
@@ -51,7 +57,7 @@ stderr at `info`; set `RUST_LOG` to change the level.
 ## Errors
 
 Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`,
-`/autocomplete`, `/building` and `/health` is JSON:
+`/autocomplete`, `/building`, `/batch/jobs` and `/health` is JSON:
 
 ```json
 {"error":"q cannot be combined with street, housenumber, box, postcode or city"}
@@ -60,13 +66,16 @@ Every error from `/geocode`, `/reverse`, `/lookup`, `/validate`,
 | Status | When |
 |---|---|
 | `400` | Missing / malformed parameter (`unknown lang 'en' (expected fr, nl or de)`, `lat out of range [-90, 90]: 99`, `postcode must be 4 digits, got '105'`, …) |
-| `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included; `/autocomplete` with `--no-autocomplete` |
+| `404` | Unknown batch job |
+| `409` | A batch job's result asked for before the job is `done` |
+| `413` | A batch job upload over `--jobs-max-body-mb` |
+| `503` | The request deadline passed (`request timed out after 10000 ms`), waiting for a concurrency slot included; `/autocomplete` with `--no-autocomplete`; `/batch/jobs` without `--jobs-dir` |
 | `500` | Internal error (Tantivy failure) |
 
-`/batch/geocode` errors are `text/plain` (`csv: csv header has neither a
-`street` nor an `address` column`, `unknown format 'xml' (expected csv
-or geojson)`): `400` for bad input or options, `413` for a JSON payload
-over 10 000 addresses.
+`/batch/geocode` errors are `text/plain` (`csv: csv header has none of
+the `street`, `address` and `best_id` columns`, `unknown format 'xml'
+(expected csv or geojson)`): `400` for bad input or options, `413` for
+a JSON payload over 10 000 addresses. Its `503` (deadline) is JSON.
 
 ## `GET /health`
 
@@ -618,6 +627,77 @@ one Point feature per row (`geometry: null` when not found), the CSV
 columns as `properties`.
 
 An empty input gives an empty body (CSV) or an empty FeatureCollection.
+
+### Streaming and the deadline
+
+Rows are resolved 5,000 at a time, and each chunk is sent as soon as it
+is resolved: the first bytes arrive after the first chunk, and the
+server never holds more than a few chunks of output. A slow client slows
+the work down rather than filling memory; a client that disconnects
+stops it. The request keeps its concurrency slot until the last chunk.
+
+`--batch-timeout-secs` (600 s) counts from the request's arrival and
+covers the upload, the resolution and the streaming:
+
+- missed before the first chunk is out: `503`, JSON, as on other routes;
+- missed later: the response, already `200`, is **cut off** (the
+  connection ends without the final chunk, so HTTP clients report an
+  error). A cut-off body is never a valid-looking short file.
+
+For files that take minutes, use `/batch/jobs`.
+
+## `/batch/jobs` (asynchronous batch)
+
+On when the service runs with `--jobs-dir DIR` (else every route
+answers 503). A job takes the same input and options as
+`POST /batch/geocode` and gives byte-for-byte the same output; the work
+runs in the background, survives a restart, and the result is fetched
+when ready.
+
+| Route | Answer |
+|---|---|
+| `POST /batch/jobs` | `202` with the job (`status: queued`) and `Location: /batch/jobs/{id}` |
+| `GET /batch/jobs/{id}` | The job: status and progress |
+| `GET /batch/jobs/{id}/result` | The output (`text/csv` or `application/geo+json`, `Content-Disposition: attachment`) once `done`; `409` before |
+| `DELETE /batch/jobs/{id}` | A `queued` or `running` job is cancelled (`202`, its partial result discarded); a finished one is deleted with its result (`204`) |
+
+Input as for `/batch/geocode` (raw CSV, multipart `file` + `options`,
+JSON `{addresses, options}`, query-string options), streamed to disk up
+to `--jobs-max-body-mb` (1 GiB; `413` above). JSON has no 10,000-row
+cap here. Bad options and a CSV header without `street`, `address` or
+`best_id` are refused at once (`400`); a malformed row further down
+fails the job (`status: failed`, `error: "csv read at line 3: …"`)
+before any output is written.
+
+```
+$ curl -s -X POST -H 'Content-Type: text/csv' --data-binary @big.csv '127.0.0.1:8080/batch/jobs?lang=nl'
+{"job_id":"23b6678e4f7220b37febc7ad2dc04cd6","status":"queued","format":"csv","rows_total":null,"rows_done":0,
+ "created_at":1792182313,"started_at":null,"finished_at":null,"status_url":"/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6"}
+
+$ curl -s 127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6
+{"job_id":"23b6678e…","status":"running","format":"csv","rows_total":1000000,"rows_done":415000,
+ "created_at":1792182313,"started_at":1792182313,"finished_at":null,"status_url":"/batch/jobs/23b6678e…"}
+
+$ curl -s -o out.csv 127.0.0.1:8080/batch/jobs/23b6678e4f7220b37febc7ad2dc04cd6/result
+```
+
+| Field | Notes |
+|---|---|
+| `job_id` | 128 random bits, hex. Knowing the id is what gives access to the job |
+| `status` | `queued`, `running`, `done`, `failed` or `cancelled` |
+| `rows_total` | Input rows, counted when the job starts (`null` before) |
+| `rows_done` | Rows in the result so far (updated every 5,000 rows) |
+| `created_at`, `started_at`, `finished_at` | Unix seconds |
+| `error` | Why a `failed` job failed |
+| `result_url` | Once `done` |
+
+At most `--jobs-max-running` jobs (2) run at once, sharing
+`--jobs-threads` resolver threads (half the cores), so jobs don't take
+the whole machine from interactive requests. The others wait, `queued`,
+in submission order. Every 5,000 rows a job checkpoints its progress; a
+service stopped or killed mid-job takes it up again from the last
+checkpoint at the next start. Finished jobs are deleted
+`--jobs-ttl-hours` (24) after they finish.
 
 ## `GET /metrics`
 

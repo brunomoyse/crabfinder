@@ -15,19 +15,26 @@
 //! query-string parameters (`?format=geojson&lang=nl`), which win. Every
 //! input path accepts free-text rows (`id,address`, see `io::InputRow`).
 //!
-//! Streaming model: the resolution phase (dedup + parallel Tantivy) runs in
-//! a `tokio::task::spawn_blocking` task; once every row is resolved, the
-//! serialised output is pushed in chunks to a `tokio::sync::mpsc` channel
-//! feeding `Body::from_stream(...)`. So the first byte only leaves after
-//! the whole batch is resolved, and the route's deadline (`--batch-timeout-
-//! secs`) covers queueing and upload, not the resolution (v2 Phase 11.0
-//! note; Phase 11.6 makes both incremental).
+//! Streaming model (v3 Phase 11.6): the body is read and parsed, then a
+//! blocking task resolves the rows `batch_chunk_rows` at a time
+//! (`run::resolve_chunks`) and sends each chunk's output down a bounded
+//! channel feeding `Body::from_stream`. The handler answers once the first
+//! chunk is out, so a request whose first chunk misses the deadline still
+//! gets the guard's 503. The task holds the request's concurrency slot
+//! until it ends, and checks the deadline (`--batch-timeout-secs`, counted
+//! from the request's arrival) between chunks: past it, the body ends with
+//! an error (the client sees a cut-off response, never a short one that
+//! looks complete). A client that goes away stops the work at its next
+//! write. Larger or longer batches belong in `/batch/jobs` (`jobs`).
 //!
 //! Caps:
 //! - JSON path refuses payloads with > 10_000 addresses (HTTP 413 — use
 //!   multipart for larger files; per design §4.6).
 //! - Request bodies are bounded at 50 MiB (`MULTIPART_BODY_LIMIT`, applied
 //!   by `body_limit_layer`).
+
+use std::io::Write;
+use std::time::{Duration, Instant};
 
 use axum::{
     body::Body,
@@ -36,33 +43,50 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use futures::Stream;
-use serde::Deserialize;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 use crabfinder_core::Language;
 
 use crate::AppState;
-use crate::resolver::{AddressQuery, SearchOptions};
+use crate::http::{Deadline, Permit};
+use crate::telemetry;
 
-use super::dedup::{ClosureResolver, RowExtras, dedup_then_resolve, resolve_row, row_query};
-use super::io::{BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson};
+use super::dedup::RowExtras;
+use super::io::{InputRow, OutputFormat, OutputSink, read_rows, sniff_delimiter};
+use super::run::{CHUNK_ROWS, RunOptions, resolve_chunks};
 
 /// Hard cap on JSON-mode payloads. Larger callers must switch to multipart
 /// (CSV file upload), per design §4.6.
 const MAX_JSON_ADDRESSES: usize = 10_000;
-/// Channel capacity between the blocking resolver and the HTTP body stream.
-/// 64 chunks ≈ 64 lines of bandwidth-head-room — plenty without ballooning
-/// in-flight memory on a slow client.
-const STREAM_CHANNEL_CAPACITY: usize = 64;
-/// How many output rows we batch into one CSV chunk before sending it on
-/// the channel. 64 keeps per-chunk overhead amortised without inflating
-/// TTFB.
-const ROWS_PER_CHUNK: usize = 64;
-/// GeoJSON has no line structure to align on: fixed-size chunks.
-const GEOJSON_CHUNK_BYTES: usize = 64 * 1024;
+/// Chunks in flight between the blocking resolver and the HTTP body
+/// stream: a slow client holds the resolver back (backpressure) instead
+/// of piling the output up in memory.
+const STREAM_CHANNEL_CAPACITY: usize = 16;
+/// Bytes collected before a send on the channel.
+const SEND_BYTES: usize = 64 * 1024;
+
+/// How the route cuts its work (`RouterOptions::batch_chunk_rows`),
+/// installed as a request extension by the router.
+#[derive(Debug, Clone, Copy)]
+pub struct BatchTuning {
+    /// Rows resolved between two deadline checks.
+    pub chunk_rows: usize,
+    /// Test hook: a pause before each chunk, to exercise the deadline.
+    pub chunk_delay: Duration,
+}
+
+impl Default for BatchTuning {
+    fn default() -> Self {
+        Self {
+            chunk_rows: CHUNK_ROWS,
+            chunk_delay: Duration::ZERO,
+        }
+    }
+}
 
 /// Per-request options. JSON callers pass these in-band; multipart callers
 /// pass them as a separate `options` field.
@@ -72,7 +96,7 @@ const GEOJSON_CHUNK_BYTES: usize = 64 * 1024;
 /// The `#[serde(default = ...)]` attributes only fire during deserialization
 /// — they don't influence the Rust `Default::default()` impl, which is what
 /// gets called when no JSON body / no `options` part is supplied.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BatchOptions {
     /// Toggle the street-level fallbacks. Default `true`. When `false`,
@@ -108,7 +132,7 @@ impl Default for BatchOptions {
 
 /// Query-string overrides of `BatchOptions`.
 #[derive(Debug, Default, Deserialize)]
-struct BatchQuery {
+pub(crate) struct BatchQuery {
     mid_street_fallback: Option<bool>,
     format: Option<String>,
     lang: Option<String>,
@@ -116,17 +140,8 @@ struct BatchQuery {
     alternatives: Option<bool>,
 }
 
-/// `BatchOptions` once checked.
-#[derive(Debug, Clone, Copy)]
-struct RunOptions {
-    mid_street_fallback: bool,
-    format: OutputFormat,
-    lang: Option<Language>,
-    extras: RowExtras,
-}
-
 impl BatchOptions {
-    fn with_query(mut self, q: BatchQuery) -> Self {
+    pub(crate) fn with_query(mut self, q: BatchQuery) -> Self {
         if let Some(m) = q.mid_street_fallback {
             self.mid_street_fallback = m;
         }
@@ -145,7 +160,8 @@ impl BatchOptions {
         self
     }
 
-    fn validate(&self) -> Result<RunOptions, HttpError> {
+    /// The options checked: a bad `format` or `lang` is a 400.
+    pub(crate) fn validate(&self) -> Result<RunOptions, HttpError> {
         let format = self.format.parse::<OutputFormat>().map_err(bad_request)?;
         let lang = self
             .lang
@@ -160,7 +176,6 @@ impl BatchOptions {
         Ok(RunOptions {
             mid_street_fallback: self.mid_street_fallback,
             format,
-            lang,
             extras: RowExtras {
                 corrections: self.corrections,
                 alternatives: self.alternatives,
@@ -171,10 +186,10 @@ impl BatchOptions {
 }
 
 #[derive(Debug, Deserialize)]
-struct JsonBody {
-    addresses: Vec<InputRow>,
+pub(crate) struct JsonBody {
+    pub(crate) addresses: Vec<InputRow>,
     #[serde(default)]
-    options: BatchOptions,
+    pub(crate) options: BatchOptions,
 }
 
 /// Maximum body size for multipart CSV uploads (50 MiB — handles a 100 k row
@@ -194,6 +209,9 @@ pub fn body_limit_layer() -> DefaultBodyLimit {
 /// without committing the body to a single extractor early — multipart
 /// and JSON both want to consume the body, just differently.
 pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>) -> Response {
+    let deadline = request.extensions().get::<Deadline>().copied();
+    let permit = request.extensions().get::<Permit>().cloned();
+    let tuning = request.extensions().get::<BatchTuning>().copied();
     let ct = request
         .headers()
         .get(CONTENT_TYPE)
@@ -256,158 +274,145 @@ pub async fn batch_geocode(State(state): State<AppState>, request: Request<Body>
         "batch_geocode: resolving"
     );
 
-    // Stream CSV bytes from a blocking resolver task.
-    let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(STREAM_CHANNEL_CAPACITY);
-    let state_for_blocking = state.clone();
-    tokio::task::spawn_blocking(move || {
-        run_resolve_to_channel(state_for_blocking, rows, options, tx);
-    });
+    let (tx, mut rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(STREAM_CHANNEL_CAPACITY);
+    let job = Worker {
+        state,
+        rows,
+        options,
+        tuning: tuning.unwrap_or_default(),
+        deadline: deadline.map_or_else(|| Instant::now() + Duration::from_secs(600), |d| d.0),
+        _permit: permit,
+    };
+    tokio::task::spawn_blocking(move || job.run(tx));
 
-    let stream: ReceiverStream<Result<Bytes, std::io::Error>> = ReceiverStream::new(rx);
-    let body = Body::from_stream(BoxedStream::new(stream));
-
+    // Answer once the first chunk is out (see the module doc).
+    let first = rx.recv().await;
+    let stream = futures::stream::iter(first).chain(ReceiverStream::new(rx));
     Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, options.format.content_type())
-        .body(body)
+        .body(Body::from_stream(stream))
         .unwrap_or_else(|e| {
             error!(error=%e, "batch_geocode: failed to assemble response");
             (StatusCode::INTERNAL_SERVER_ERROR, "response build failure").into_response()
         })
 }
 
-/// Bridging helper: `ReceiverStream` is a `Stream` but we wrap it so the
-/// item type is `Result<Bytes, ?>` instead of `Bytes` — `axum::body::Body`'s
-/// `from_stream` wants the result-shape.
-struct BoxedStream<S>(S);
-impl<S> BoxedStream<S> {
-    fn new(s: S) -> Self {
-        Self(s)
-    }
-}
-impl<S> Stream for BoxedStream<S>
-where
-    S: Stream + Unpin,
-{
-    type Item = S::Item;
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<S::Item>> {
-        std::pin::Pin::new(&mut self.0).poll_next(cx)
-    }
-}
-
-/// The blocking-thread side of the streaming pipeline. Runs the dedup +
-/// resolver, writes batches of OutputRows into CSV chunks, sends those
-/// chunks to the channel. On `tx` send-error (client disconnected) we
-/// bail out cleanly.
-fn run_resolve_to_channel(
+/// The blocking side of `batch_geocode`: resolves the rows chunk by chunk
+/// into the channel, holding the request's concurrency slot.
+struct Worker {
     state: AppState,
     rows: Vec<InputRow>,
     options: RunOptions,
-    tx: mpsc::Sender<Result<Bytes, std::io::Error>>,
-) {
-    let ctx = state.resolver_context();
-    let opts = SearchOptions {
-        mid_street_fallback: options.mid_street_fallback,
-        ..SearchOptions::default()
-    };
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve_row(q, &opts, &ctx, options.extras));
-    let make_query = |row: &InputRow| row_query(&state.index, row);
+    tuning: BatchTuning,
+    deadline: Instant,
+    _permit: Option<Permit>,
+}
 
-    let out_rows = dedup_then_resolve(rows, &resolver, make_query, options.lang);
-
-    if options.format == OutputFormat::GeoJson {
-        let mut buf: Vec<u8> = Vec::new();
-        if let Err(e) = write_geojson(&out_rows, &mut buf) {
-            send_error(&tx, format!("geojson write: {e}"));
-            return;
-        }
-        for chunk in buf.chunks(GEOJSON_CHUNK_BYTES) {
-            if tx.blocking_send(Ok(Bytes::copy_from_slice(chunk))).is_err() {
-                return;
-            }
-        }
-        return;
-    }
-
-    // Chunk into CSV bytes. We use BatchWriter into a Vec<u8> per chunk so
-    // the header is emitted on the *first* chunk; subsequent chunks have
-    // the header suppressed by `has_headers(false)` via a fresh
-    // `BatchWriter::with_delimiter`... wait — csv::Writer always emits a
-    // header before the first serialize, regardless of how many serializes
-    // have happened on the *previous* writer. So we need a header-aware
-    // approach: keep one BatchWriter across chunks. Easiest: write all
-    // rows into one Vec<u8>, then chunk the bytes (but that gives raw byte
-    // chunking which may slice mid-line). Best: build one big buffer then
-    // chunk it on \n boundaries.
-
-    let mut buf: Vec<u8> = Vec::new();
-    let mut writer = BatchWriter::new(&mut buf);
-    for row in &out_rows {
-        if let Err(e) = writer.write_row(row) {
-            send_error(&tx, format!("csv write: {e}"));
-            return;
-        }
-    }
-    if let Err(e) = writer.flush() {
-        send_error(&tx, format!("csv flush: {e}"));
-        return;
-    }
-    // Drop writer so `buf` is fully populated. (Writer borrows &mut buf.)
-    drop(writer);
-
-    // Send the result in newline-aligned chunks of ~ROWS_PER_CHUNK lines.
-    // Even if rayon already finished all the work, this still benefits
-    // huge outputs (multi-MB) by letting the client start receiving while
-    // we're still flushing.
-    let mut chunk_start = 0usize;
-    let mut lines_in_chunk = 0usize;
-    for (i, &b) in buf.iter().enumerate() {
-        if b == b'\n' {
-            lines_in_chunk += 1;
-            if lines_in_chunk >= ROWS_PER_CHUNK {
-                let chunk = Bytes::copy_from_slice(&buf[chunk_start..=i]);
-                if tx.blocking_send(Ok(chunk)).is_err() {
-                    // Client gone — abort cleanly, no further error needed.
-                    return;
+impl Worker {
+    fn run(self, tx: mpsc::Sender<Result<Bytes, std::io::Error>>) {
+        let id_columns = self.rows.iter().any(|r| r.best_id.is_some());
+        let mut sink = OutputSink::new(self.options.format, ChannelWriter::new(tx.clone()), 0);
+        let mut late = false;
+        let end = resolve_chunks(
+            &self.state,
+            self.rows.into_iter().map(Ok),
+            &self.options,
+            id_columns,
+            self.tuning.chunk_rows,
+            &mut sink,
+            |_| {
+                if !self.tuning.chunk_delay.is_zero() {
+                    std::thread::sleep(self.tuning.chunk_delay);
                 }
-                chunk_start = i + 1;
-                lines_in_chunk = 0;
+                late = Instant::now() >= self.deadline;
+                !late
+            },
+        );
+        match end {
+            Ok(end) if end.stopped => {
+                warn!(
+                    rows = end.rows,
+                    "batch_geocode: deadline reached, response cut off"
+                );
+                telemetry::record_rejected("/batch/geocode".to_owned(), "timeout");
+                let _ = tx.blocking_send(Err(std::io::Error::other(
+                    "batch deadline reached; use /batch/jobs for long batches",
+                )));
             }
+            Ok(_) => {
+                if let Err(e) = sink.finish() {
+                    debug!(error = %e, "batch_geocode: client gone");
+                }
+            }
+            // The only write error is a closed channel: the client left.
+            Err(e) => debug!(error = %e, "batch_geocode: stopped"),
         }
-    }
-    if chunk_start < buf.len() {
-        let chunk = Bytes::copy_from_slice(&buf[chunk_start..]);
-        let _ = tx.blocking_send(Ok(chunk));
     }
 }
 
-fn send_error(tx: &mpsc::Sender<Result<Bytes, std::io::Error>>, msg: String) {
-    error!("batch_geocode worker: {msg}");
-    let _ = tx.blocking_send(Err(std::io::Error::other(msg)));
+/// `Write` into the response channel, in `SEND_BYTES` pieces. A closed
+/// channel (client gone) is a write error, which stops the run.
+struct ChannelWriter {
+    tx: mpsc::Sender<Result<Bytes, std::io::Error>>,
+    buf: Vec<u8>,
+}
+
+impl ChannelWriter {
+    fn new(tx: mpsc::Sender<Result<Bytes, std::io::Error>>) -> Self {
+        Self {
+            tx,
+            buf: Vec::with_capacity(SEND_BYTES),
+        }
+    }
+
+    fn send(&mut self) -> std::io::Result<()> {
+        if self.buf.is_empty() {
+            return Ok(());
+        }
+        let chunk = Bytes::from(std::mem::replace(
+            &mut self.buf,
+            Vec::with_capacity(SEND_BYTES),
+        ));
+        self.tx
+            .blocking_send(Ok(chunk))
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "client gone"))
+    }
+}
+
+impl Write for ChannelWriter {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.buf.extend_from_slice(data);
+        if self.buf.len() >= SEND_BYTES {
+            self.send()?;
+        }
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.send()
+    }
 }
 
 // --- request parsers -------------------------------------------------------
 
 #[derive(Debug)]
-struct HttpError {
-    status: StatusCode,
-    msg: String,
+pub(crate) struct HttpError {
+    pub(crate) status: StatusCode,
+    pub(crate) msg: String,
 }
 impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
         (self.status, self.msg).into_response()
     }
 }
-fn bad_request(msg: impl Into<String>) -> HttpError {
+pub(crate) fn bad_request(msg: impl Into<String>) -> HttpError {
     HttpError {
         status: StatusCode::BAD_REQUEST,
         msg: msg.into(),
     }
 }
-fn payload_too_large(msg: impl Into<String>) -> HttpError {
+pub(crate) fn payload_too_large(msg: impl Into<String>) -> HttpError {
     HttpError {
         status: StatusCode::PAYLOAD_TOO_LARGE,
         msg: msg.into(),
@@ -519,14 +524,13 @@ mod tests {
         assert_eq!(r.extras.lang, Some(Language::Nl));
         assert!(!r.mid_street_fallback);
         assert_eq!(r.format, OutputFormat::GeoJson);
-        assert_eq!(r.lang, Some(Language::Nl));
         // Absent query values keep the body's.
         let o = BatchOptions {
             lang: Some("de".into()),
             ..BatchOptions::default()
         }
         .with_query(BatchQuery::default());
-        assert_eq!(o.validate().unwrap().lang, Some(Language::De));
+        assert_eq!(o.validate().unwrap().extras.lang, Some(Language::De));
 
         let bad = |o: BatchOptions| o.validate().unwrap_err().msg;
         assert_eq!(

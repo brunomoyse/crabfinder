@@ -16,6 +16,16 @@ pub enum ServiceError {
     /// Overloaded or too slow (the request guard's deadline): 503.
     #[error("unavailable: {0}")]
     Unavailable(String),
+    /// No such resource (an unknown batch job): 404.
+    #[error("not found: {0}")]
+    NotFound(String),
+    /// The resource isn't in a state that allows it (a job's result
+    /// before the job is done): 409.
+    #[error("conflict: {0}")]
+    Conflict(String),
+    /// Request body over its limit: 413.
+    #[error("too large: {0}")]
+    TooLarge(String),
 }
 
 impl ServiceError {
@@ -29,6 +39,9 @@ impl IntoResponse for ServiceError {
         let (code, msg) = match &self {
             ServiceError::BadQuery(s) => (StatusCode::BAD_REQUEST, s.clone()),
             ServiceError::Unavailable(s) => (StatusCode::SERVICE_UNAVAILABLE, s.clone()),
+            ServiceError::NotFound(s) => (StatusCode::NOT_FOUND, s.clone()),
+            ServiceError::Conflict(s) => (StatusCode::CONFLICT, s.clone()),
+            ServiceError::TooLarge(s) => (StatusCode::PAYLOAD_TOO_LARGE, s.clone()),
             ServiceError::Internal(e) => {
                 error!(error=%e, "internal");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())

@@ -168,6 +168,7 @@ entrance rather than the BeSt point. Share of top-1 answers within 100 m:
 | Geocoder | Covers | Within 100 m |
 |---|---|---|
 | crabfinder | Belgium (1,510 queries) | **0.929** |
+| BePelias (Smals, self-hosted) | Belgium (1,510) | 0.908 |
 | PhacochR | Belgium (1,510) | 0.907 |
 | NGI-IGN national geocoder (`geosearch.ngi.be`) | Belgium (1,510) | 0.836 |
 | Brussels regional geocoder | Brussels (496) | 0.925 |
@@ -179,8 +180,8 @@ them to crabfinder within that region: Brussels 0.935, Wallonia 0.885,
 Flanders 0.974 (Flemish API 0.963 there; its low overall figure comes
 from French-language Brussels addresses it barely covers). The synthetic
 and adversarial sets come from BeSt and from crabfinder's own failure
-history, so they favour crabfinder and are not a fair comparison. BePelias
-is not benchmarked yet. Competitor answers are only compared, never used.
+history, so they favour crabfinder and are not a fair comparison. Competitor
+answers are only compared, never used.
 
 ## Docs
 

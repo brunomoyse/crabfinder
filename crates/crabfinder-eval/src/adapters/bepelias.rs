@@ -53,12 +53,15 @@ impl HttpAdapter for BePelias {
             .flatten()
             .take(limit)
         {
+            // (0, 0) is BePelias's "no position" (a BeSt address without
+            // coordinates that its interpolation couldn't place).
             let point = (|| {
                 Some((
                     it.pointer("/coordinates/lat")?.as_f64()?,
                     it.pointer("/coordinates/lon")?.as_f64()?,
                 ))
-            })();
+            })()
+            .filter(|&p| p != (0.0, 0.0));
             let best_id = it
                 .get("bestId")
                 .and_then(Value::as_str)
@@ -82,7 +85,8 @@ mod tests {
     fn reads_best_ids_points_and_precision() {
         let body = r#"{"items":[
           {"bestId":"https://databrussels.be/id/address/219307/7","precision":"address","coordinates":{"lat":50.8355,"lon":4.3363}},
-          {"bestId":"x","precision":"street"}],"total":2}"#;
+          {"bestId":"x","precision":"street"},
+          {"bestId":"y","precision":"address","coordinates":{"lat":0.0,"lon":0.0}}],"total":3}"#;
         let b = BePelias::new(DEFAULT_BASE);
         let a = b.parse(body, 10).unwrap();
         assert_eq!(
@@ -90,7 +94,7 @@ mod tests {
             "https://databrussels.be/id/address/219307/7"
         );
         assert_eq!(a.features[0].2, "address");
-        assert_eq!(a.points, [Some((50.8355, 4.3363)), None]);
+        assert_eq!(a.points, [Some((50.8355, 4.3363)), None, None]);
         assert_eq!(b.parse(body, 1).unwrap().points.len(), 1);
         assert!(b.parse("x", 1).is_err());
     }

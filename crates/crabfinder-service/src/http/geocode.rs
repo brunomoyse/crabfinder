@@ -173,9 +173,35 @@ impl From<&ParsedQuery> for ParsedEcho {
     }
 }
 
+/// The address part of a `/geocode` or `/validate` request: `q`, or the
+/// structured fields.
+pub(crate) struct InputFields<'a> {
+    pub q: &'a Option<String>,
+    pub street: &'a Option<String>,
+    pub housenumber: &'a Option<String>,
+    pub box_number: &'a Option<String>,
+    pub postcode: &'a Option<String>,
+    pub city: &'a Option<String>,
+}
+
+impl<'a> From<&'a GeocodeParams> for InputFields<'a> {
+    fn from(p: &'a GeocodeParams) -> Self {
+        Self {
+            q: &p.q,
+            street: &p.street,
+            housenumber: &p.housenumber,
+            box_number: &p.box_number,
+            postcode: &p.postcode,
+            city: &p.city,
+        }
+    }
+}
+
 /// What the client asked for: free text, or structured fields turned into
 /// the same `ParsedQuery` shape.
-fn parsed_input(p: &GeocodeParams) -> Result<(Option<String>, ParsedQuery), ServiceError> {
+pub(crate) fn parsed_input(
+    p: InputFields<'_>,
+) -> Result<(Option<String>, ParsedQuery), ServiceError> {
     let field = |v: &Option<String>| {
         v.as_deref()
             .map(str::trim)
@@ -183,18 +209,18 @@ fn parsed_input(p: &GeocodeParams) -> Result<(Option<String>, ParsedQuery), Serv
             .map(str::to_string)
     };
     let (street, housenumber, box_number, postcode, city) = (
-        field(&p.street),
-        field(&p.housenumber),
-        field(&p.box_number),
-        field(&p.postcode),
-        field(&p.city),
+        field(p.street),
+        field(p.housenumber),
+        field(p.box_number),
+        field(p.postcode),
+        field(p.city),
     );
     let structured = street.is_some()
         || housenumber.is_some()
         || box_number.is_some()
         || postcode.is_some()
         || city.is_some();
-    match (field(&p.q), structured) {
+    match (field(p.q), structured) {
         (Some(_), true) => Err(ServiceError::BadQuery(
             "q cannot be combined with street, housenumber, box, postcode or city".into(),
         )),
@@ -244,7 +270,7 @@ pub async fn geocode(
     State(s): State<AppState>,
     ApiQuery(params): ApiQuery<GeocodeParams>,
 ) -> Result<Json<FeatureCollection>, ServiceError> {
-    let (q, mut parsed) = parsed_input(&params)?;
+    let (q, mut parsed) = parsed_input(InputFields::from(&params))?;
     let lang = parse_lang(params.lang.as_deref())?;
     let limit = params.limit.clamp(1, 100);
     let expand = params.expand;

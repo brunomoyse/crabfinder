@@ -51,7 +51,7 @@ Si l'une de ces commandes ne tourne pas chez toi, va directement à [`02-install
 | [01-introduction.md](01-introduction.md) | Ce que fait crabfinder, ce qu'il ne fait pas | Avant de l'installer |
 | [02-installation.md](02-installation.md) | Installer Rust, récupérer BeSt, construire l'index, options du service, mise à jour | Au premier setup |
 | [03-batch.md](03-batch.md) | Géocoder un CSV (CLI + endpoint HTTP) | Cas d'usage principal pour traitement de listes |
-| [04-recherche-en-ligne.md](04-recherche-en-ligne.md) | API HTTP : `/geocode`, `/reverse`, `/building/{id}/units`, `/metrics` | Pour intégrer crabfinder dans une appli |
+| [04-recherche-en-ligne.md](04-recherche-en-ligne.md) | API HTTP : `/geocode`, `/validate`, `/reverse`, `/lookup`, `/building/{id}/units`, `/metrics` | Pour intégrer crabfinder dans une appli |
 | [05-comprendre-resultats.md](05-comprendre-resultats.md) | Lire les sorties : `confidence`, `fallback_reason`, `position_source`, `ambiguous`, `score` | Avant d'exploiter un CSV géocodé |
 | [06-faq.md](06-faq.md) | Erreurs courantes, performance, dépannage | En cas de pépin |
 

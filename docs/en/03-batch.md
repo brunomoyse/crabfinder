@@ -49,6 +49,7 @@ Each `address` is parsed exactly like `/geocode?q=` (postal code, house number, 
 | `address` | `street` **or** `address` | The whole address as free text. |
 | `house_number` | no | Building number. Alphabetic suffixes (`32A`, `12b`) are fine. |
 | `postal_code` | no | Belgian 4-digit postal code. Strongly recommended: without it, homonymous streets ("Rue de la Gare", "Kerkstraat") can't be told apart. |
+| `city` | no | Municipality or locality name, matched like street words. Ignored on free-text rows. Checked against the address by `--corrections`. |
 | `box_number` | no | Box / unit. Never filters: when the building has a unit with that box (spelled as in BeSt, e.g. `b002`), that unit becomes the row's `best_id` and `label` (`Avenue Louise 32 bte b002, 1050 Ixelles`); an unknown box is simply ignored. |
 
 The header must contain `street` or `address`; otherwise the CLI stops with ``csv header has neither a `street` nor an `address` column`` (HTTP: `400`).
@@ -167,6 +168,7 @@ The binary opens the Tantivy index read-only, iterates the CSV, writes the resul
 | `--format csv` or `geojson` | `csv` | Output format. |
 | `--lang fr`, `nl` or `de` | each address's own | Language of the `label` column. An address without a name in that language falls back to its own. |
 | `--no-mid-street` | off | Disable the street-level fallbacks (see below). |
+| `--corrections` | off | Append the `status` and `corrections` columns (see [Checking addresses](#checking-addresses-corrections)). |
 | `--parallel N` | all cores | Worker threads. `--parallel 1` for deterministic profiling. |
 
 ### Concrete examples
@@ -288,6 +290,7 @@ Options go in the JSON body / the `options` multipart part, **or in the query st
 | `mid_street_fallback` | bool | `true` | When `false`, disables the street-level fallbacks (same as `--no-mid-street` on the CLI). |
 | `format` | string | `"csv"` | `"csv"` or `"geojson"`. Anything else is a 400. |
 | `lang` | string | each address's own | `"fr"`, `"nl"` or `"de"`: language of the `label` column. Anything else is a 400. |
+| `corrections` | bool | `false` | When `true`, appends the `status` and `corrections` columns (same as `--corrections`). |
 
 ### Response
 
@@ -312,6 +315,25 @@ By default, a row whose house number can't be matched still gets coordinates on 
 ```
 
 On the split-column example, row 3 (`Grand-Place`, no number) becomes `not_found, no_match`. Row 4 (`Avenue Louise 33`) is still `nearest_same_side`: the nearest-number result is a real address, not a street approximation, so it is kept.
+
+## Checking addresses: `corrections`
+
+To know, for each row, whether the address exists as written and what was corrected, add `--corrections` (CLI) or `corrections=true` (HTTP). Two columns are appended after the usual ones: `status` and `corrections`, the same verdict as [`/validate`](04-online-search.md#get-validate--check-an-address).
+
+```bash
+./target/release/crabfinder-batch --index ./index-belgium \
+    --abbreviation-dict data/street-type-abbreviations-v1.yaml \
+    -i customers.csv -o checked.csv --corrections
+```
+
+```
+id,street,house_number,postal_code,city,…,status,corrections
+1,Avenue Louise,32,1050,,…,valid,
+2,Av Louise,32,1000,Ixelles,…,corrected,abbreviation_expanded:street:av->avenue; postal_code_changed:postal_code:1000->1050
+3,Avenue Louise,999,1050,,…,corrected,house_number_approximated:house_number:999->589
+```
+
+`status` is `valid`, `corrected`, `ambiguous`, `incomplete` or `not_found`. Each correction reads `kind:field:input->official`, separated by `; `. Without the option the output columns don't change.
 
 ## Edge cases
 

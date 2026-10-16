@@ -51,7 +51,7 @@ If any of these commands doesn't work, jump straight to [`02-installation.md`](0
 | [01-introduction.md](01-introduction.md) | What crabfinder does, what it doesn't | Before installing |
 | [02-installation.md](02-installation.md) | Install Rust, get BeSt data, build the index, service flags, refresh | First-time setup |
 | [03-batch.md](03-batch.md) | Geocode a CSV (CLI + HTTP endpoint) | Main use case for list processing |
-| [04-online-search.md](04-online-search.md) | HTTP API: `/geocode`, `/reverse`, `/building/{id}/units`, `/metrics` | When integrating into an app |
+| [04-online-search.md](04-online-search.md) | HTTP API: `/geocode`, `/validate`, `/reverse`, `/lookup`, `/building/{id}/units`, `/metrics` | When integrating into an app |
 | [05-understanding-results.md](05-understanding-results.md) | Reading outputs: `confidence`, `fallback_reason`, `position_source`, `ambiguous`, `score` | Before acting on a geocoded CSV |
 | [06-faq.md](06-faq.md) | Common errors, performance, troubleshooting | When something goes wrong |
 

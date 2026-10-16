@@ -287,6 +287,61 @@ index under `missing`:
                "match_type": "id", "score": 1.0, "unit_count": 1, "…": "…"}]}
 ```
 
+## `GET /validate`
+
+Is the input a real BeSt address, and if not quite, which official
+address is it and what differs (v3 Phase 11.2)? Same input as
+`/geocode` (`q`, or `street` / `housenumber` / `box` / `postcode` /
+`city`), plus `lang` and `region`. The answer is the batch's top-1
+decision, compared field by field with the BeSt address it found:
+
+```
+GET /validate?street=Av Louise&housenumber=32&postcode=1000&city=Ixelles
+```
+
+```json
+{"status": "corrected",
+ "query": {"parsed": {"street_tokens": ["Av", "Louise", "Ixelles"], "house_number": "32", "box_number": null, "postal_code": "1000"}, "reading": 0},
+ "address": {"type": "Feature", "properties": {"label": "Avenue Louise 32, 1050 Ixelles", "…": "…"},
+             "confidence": "adjacent_commune", "house_number_delta": 0, "…": "…"},
+ "corrections": [
+   {"field": "street", "kind": "abbreviation_expanded", "input": "av", "official": "avenue"},
+   {"field": "postal_code", "kind": "postal_code_changed", "input": "1000", "official": "1050"}],
+ "confidence": "adjacent_commune", "fallback_reason": "postal_code_mismatch"}
+```
+
+| `status` | Meaning |
+|---|---|
+| `valid` | The address exists as written. Case, accents and completions don't count. |
+| `corrected` | It exists once the `corrections` are applied. |
+| `ambiguous` | Two near-equal answers on different streets (`/geocode`'s `ambiguous`): the input doesn't say which. |
+| `incomplete` | Only a street or a place matched: no house number, or one BeSt doesn't have on that street. `address` is that street (at its median) or place, not an address. |
+| `not_found` | Nothing matched; `address` is `null`. |
+
+| Correction `kind` | `field` | When |
+|---|---|---|
+| `street_spelling` | street | A misspelt word, within the typo tier's edit distance (`louisse` → `louise`) |
+| `abbreviation_expanded` | street | `av` → `avenue` (needs `--abbreviation-dict`) |
+| `street_completed` | street | Words of the official name are missing (`louise` → `Avenue Louise`) |
+| `street_language` | street | The street is written in another language than `lang` asks for (completion) |
+| `word_ignored` | query | An input word that matches nothing in the address |
+| `municipality_spelling` | city | A misspelt locality word |
+| `municipality_changed` | city | `city` names none of the address's municipality, postal area or part of municipality |
+| `postal_code_changed` | postal_code | The postal code given isn't the address's |
+| `postal_code_added` | postal_code | No postal code was given (completion) |
+| `house_number_approximated` | house_number | The number isn't on the street; the nearest one is |
+| `house_number_not_found` | house_number | The number isn't on the street; only the street matched |
+| `box_not_found` | box | The box given isn't one of the building's |
+| `box_added` | box | No box was given; the building has one unit, with a box (completion) |
+| `reading` | query | The free text was read another way than first parsed |
+
+Words are compared in analyzer form (lowercase, no accents): `input` and
+`official` are that form for word corrections, and the official name or
+code for the others. Completions don't turn `valid` into `corrected`.
+Every official value is BeSt's.
+
+The batch gives the same verdict per row with the `corrections` option.
+
 ## `GET /reverse`
 
 | Param | Type | Default | Notes |
@@ -396,6 +451,7 @@ by header name:
 | `id` | Required; echoed |
 | `street`, `house_number`, `postal_code` | Clean columns |
 | `box_number` | Optional; picks the unit, never filters |
+| `city` | Optional municipality / locality name, matched like street words (v3); ignored on free-text rows |
 | `address` | Free text, parsed like `/geocode?q=`; when present `street` / `house_number` / `box_number` are ignored, `postal_code` still overrides |
 
 The header must contain `street` or `address` (else 400).
@@ -410,6 +466,7 @@ win): `?format=geojson&lang=nl`.
 | `format` | `csv` | `csv` or `geojson` (else 400) |
 | `lang` | — | `fr`/`nl`/`de` for the `label` column (else 400) |
 | `mid_street_fallback` | `true` | `false`: rows whose number can't be matched come back `not_found` instead of a street-level answer |
+| `corrections` | `false` | `true`: append the `/validate` columns `status` and `corrections` (v3) |
 
 ### Output
 
@@ -418,7 +475,10 @@ postal_code, matched_street, matched_house_number, matched_postal_code,
 lat, lng, confidence, fallback_reason, house_number_delta,
 street_match_score, building_group_id, best_id, address, label,
 position_source, ambiguous`. The last four were appended in v2; the
-first fifteen are unchanged from v1.
+first fifteen are unchanged from v1. With `corrections=true`, two more
+columns follow: `status` (as `/validate`) and `corrections`, each one as
+`kind:field:input->official`, separated by `; `
+(`street_spelling:street:louisse->louise; postal_code_added:postal_code:->1050`).
 
 ```
 $ curl -X POST -H 'Content-Type: text/csv' --data-binary @in.csv '127.0.0.1:8080/batch/geocode?lang=nl'

@@ -353,3 +353,30 @@ fn pois_flag_resolves_landmark_rows() {
     let err = run_with_io(&args, csv.as_bytes(), &mut out).unwrap_err();
     assert!(format!("{err:#}").contains("missing.csv"), "{err:#}");
 }
+
+#[test]
+fn corrections_flag_adds_status_and_corrections() {
+    let ti = index();
+    let csv = format!("{HEADER}1,Av Louise,10,1050\n2,Avenue Louise,15,1050\n");
+    let (_, plain) = run_csv(&Args::for_index(ti.path()), &csv);
+    assert!(!plain.lines().next().unwrap().contains("status"));
+    let args = Args {
+        corrections: true,
+        ..Args::for_index(ti.path())
+    };
+    let (_, body) = run_csv(&args, &csv);
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(col(&h, &rows[0], "status"), "corrected");
+    assert_eq!(
+        col(&h, &rows[0], "corrections"),
+        "word_ignored:query:av->; street_completed:street:av louise->Avenue Louise"
+    );
+    assert_eq!(col(&h, &rows[1], "status"), "corrected");
+    assert!(
+        col(&h, &rows[1], "corrections").starts_with("house_number_approximated:house_number:15->")
+    );
+    use clap::Parser;
+    let parsed =
+        Args::try_parse_from(["crabfinder-batch", "--index", "x", "--corrections"]).unwrap();
+    assert!(parsed.corrections);
+}

@@ -26,6 +26,7 @@ Le service écoute **en IPv4 uniquement** sur `127.0.0.1:8080` par défaut. Inte
 | `GET` | `/reverse` | Géocodage inverse (coordonnées → adresse) |
 | `GET` | `/building/{id}/units` | Lister toutes les unités d'un bâtiment |
 | `GET` | `/lookup` | Adresses par identifiant BeSt |
+| `GET` | `/validate` | Vérifier une adresse : valide, corrigée (et comment), ambiguë, incomplète |
 | `POST` | `/batch/geocode` | Voir [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Métriques Prometheus (sauf si démarré avec `--no-metrics`) |
 
@@ -438,6 +439,36 @@ features[0].properties.label = "Wetstraat 16, 1000 Brussel"
 ```
 
 Un `id` vide donne un 400 (`id is empty`), plus de 50 aussi (`too many ids: 51 (max 50)`).
+
+## `GET /validate` — vérifier une adresse
+
+Tu as une adresse venant d'un formulaire ou d'un fichier client et tu veux savoir : existe-t-elle dans BeSt, et sinon exactement, quelle est l'adresse officielle ? `/validate` prend la même entrée que `/geocode` (`q`, ou `street` / `housenumber` / `box` / `postcode` / `city`, plus `lang` et `region`) et répond par un `status`, l'adresse BeSt officielle et la liste de ce qui diffère.
+
+```bash
+curl -G "http://127.0.0.1:8080/validate" \
+  --data-urlencode "street=Av Louise" --data housenumber=32 \
+  --data postcode=1000 --data city=Ixelles
+```
+
+```
+status = "corrected"
+address.properties.label = "Avenue Louise 32, 1050 Ixelles"
+corrections = [
+  {field: "street",      kind: "abbreviation_expanded", input: "av",   official: "avenue"},
+  {field: "postal_code", kind: "postal_code_changed",   input: "1000", official: "1050"}]
+```
+
+| `status` | Que faire |
+|---|---|
+| `valid` | L'adresse existe telle qu'écrite (majuscules et accents ne comptent pas). Garde-la. |
+| `corrected` | Elle existe une fois corrigée : affiche le `label` officiel, ou enregistre l'adresse BeSt. |
+| `ambiguous` | Deux rues conviennent autant l'une que l'autre : demande le code postal ou la commune. |
+| `incomplete` | Seule la rue (ou un lieu) a été trouvée : pas de numéro, ou un numéro qui n'existe pas dans cette rue. Demande le numéro. |
+| `not_found` | Rien ne correspond. |
+
+Les corrections disent quel champ a changé et comment : un mot mal orthographié (`street_spelling`), une abréviation développée (`abbreviation_expanded`), des mots manquants du nom de rue (`street_completed`), un mot qui ne correspond à rien (`word_ignored`), une commune fausse ou mal écrite (`municipality_changed`, `municipality_spelling`), un autre code postal (`postal_code_changed`), le numéro existant le plus proche (`house_number_approximated`), un numéro absent de la rue (`house_number_not_found`), une boîte que le bâtiment n'a pas (`box_not_found`), ou une autre lecture du texte libre (`reading`). Trois ne sont que des compléments et laissent une adresse `valid` valide : un code postal manquant (`postal_code_added`), une boîte manquante sur un bâtiment à une seule unité (`box_added`), et une rue écrite dans une autre langue que `lang` (`street_language`). Les mots sont comparés en minuscules et sans accents. Le tableau complet est dans [`docs/api.md`](../api.md#get-validate).
+
+Pour un fichier entier, le batch fait la même vérification : l'option `corrections` (voir [`03-batch.md`](03-batch.md#vérifier-des-adresses--corrections)).
 
 ## Filtres et stratégies de désambiguïsation
 

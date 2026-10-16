@@ -11,6 +11,7 @@ pub mod geocode;
 pub mod health;
 pub mod lookup;
 pub mod reverse;
+pub mod validate;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -88,6 +89,7 @@ pub fn router_with(state: AppState, opts: &RouterOptions) -> Router {
         )
         .route("/reverse", get(reverse::reverse))
         .route("/lookup", get(lookup::lookup))
+        .route("/validate", get(validate::validate))
         .route_layer(middleware::from_fn_with_state(
             guard_for(opts.request_timeout),
             guard,

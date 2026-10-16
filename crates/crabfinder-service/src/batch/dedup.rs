@@ -53,6 +53,7 @@ type CacheKey = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
 );
 
 fn cache_key(row: &InputRow) -> CacheKey {
@@ -62,6 +63,7 @@ fn cache_key(row: &InputRow) -> CacheKey {
         row.postal_code.clone(),
         row.box_number.clone(),
         row.address.as_ref().map(|a| a.to_lowercase()),
+        row.city.as_ref().map(|c| c.to_lowercase()),
     )
 }
 
@@ -73,6 +75,9 @@ fn cache_key(row: &InputRow) -> CacheKey {
 /// A free-text row (`address` column, v2 Phase 6) is parsed whole, like
 /// `/geocode?q=`, alternatives included; a `postal_code` column overrides
 /// the parsed postal code in every reading.
+///
+/// A `city` column (v3 Phase 11.2) appends its words to the street words,
+/// as `/geocode?city=` does, and `AddressQuery::city_tokens` counts them.
 pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
     if let Some(address) = &row.address {
         let mut q = AddressQuery::from_parsed(index, &crabfinder_parser::parse(address));
@@ -92,11 +97,19 @@ pub fn row_query(index: &tantivy::Index, row: &InputRow) -> AddressQuery {
         }
         None => (None, None),
     };
+    let mut street_tokens = analyze(index, &row.street);
+    let city_tokens = row
+        .city
+        .as_deref()
+        .map_or(Vec::new(), |c| analyze(index, c));
+    let n_city = city_tokens.len();
+    street_tokens.extend(city_tokens);
     AddressQuery {
-        street_tokens: analyze(index, &row.street),
+        street_tokens,
         house_number,
         box_number: row.box_number.clone().or(parsed_box),
         postal_code: row.postal_code.clone(),
+        city_tokens: n_city,
         ..Default::default()
     }
 }
@@ -250,6 +263,11 @@ pub fn output_row_from(
         label,
         position_source,
         ambiguous: resolved.ambiguous,
+        status: resolved
+            .validation
+            .as_ref()
+            .map(|v| v.status.as_str().to_string()),
+        corrections: resolved.validation.as_ref().map(|v| v.corrections_column()),
     }
 }
 
@@ -331,6 +349,8 @@ mod tests {
             fallback_reason: Some(FallbackReason::NoMatch),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
             // Inject the input street into a field so we can verify which
             // unique key each row mapped to — except we can't extend the
             // resolver shape here, so we lean on the order-preservation check
@@ -376,6 +396,8 @@ mod tests {
             fallback_reason: Some(FallbackReason::NoMatch),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
         });
         let out = dedup_then_resolve(vec![], &resolver, id_make_query, None);
         assert!(out.is_empty());
@@ -398,6 +420,8 @@ mod tests {
             fallback_reason: Some(FallbackReason::NoMatch),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
         });
         let out = dedup_then_resolve(rows, &resolver, id_make_query, None);
         assert_eq!(out.len(), 3);
@@ -428,6 +452,8 @@ mod tests {
             fallback_reason: Some(FallbackReason::HouseNumberOutOfRange),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
         };
         let out = output_row_from(row, resolved, None);
         assert_eq!(out.id, "42");
@@ -453,6 +479,8 @@ mod tests {
             fallback_reason: Some(FallbackReason::NoMatch),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
         };
         let out = output_row_from(row, resolved, None);
         assert_eq!(out.confidence, "not_found");
@@ -553,6 +581,8 @@ mod tests {
                 address_count: 1,
                 region: None,
             }),
+            reading: 0,
+            validation: None,
         };
         let row = InputRow {
             id: "1".into(),
@@ -600,6 +630,33 @@ mod tests {
         assert_eq!(
             row_query(&ti.index, &row).postal_code.as_deref(),
             Some("1050")
+        );
+    }
+
+    #[test]
+    fn city_column_words_follow_the_street_and_are_counted() {
+        let ti = crabfinder_test_support::TestIndex::build(&[]);
+        let row = InputRow {
+            id: "1".into(),
+            street: "Rue de Fer".into(),
+            city: Some("Saint-Servais".into()),
+            ..Default::default()
+        };
+        let q = row_query(&ti.index, &row);
+        assert_eq!(q.street_tokens, ["rue", "de", "fer", "saint", "servais"]);
+        assert_eq!(q.city_tokens, 2);
+        // Ignored on free-text rows; part of the dedup key.
+        let free = InputRow {
+            address: Some("Rue de Fer 25".into()),
+            ..row.clone()
+        };
+        assert_eq!(row_query(&ti.index, &free).city_tokens, 0);
+        assert_ne!(
+            cache_key(&row),
+            cache_key(&InputRow {
+                city: None,
+                ..row.clone()
+            })
         );
     }
 }

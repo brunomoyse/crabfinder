@@ -2,7 +2,7 @@
 //!
 //! Schema (per `docs/design-batch-geocoding.md` §3.2, extended in v2):
 //! ```text
-//! Input:   id, street, house_number?, postal_code?, box_number?
+//! Input:   id, street, house_number?, postal_code?, box_number?, city?
 //!     or:  id, address, postal_code?            (free text, v2 Phase 6)
 //! Output:  id, street, house_number, postal_code,
 //!          matched_street, matched_house_number, matched_postal_code,
@@ -10,6 +10,7 @@
 //!          confidence, fallback_reason, house_number_delta, street_match_score,
 //!          building_group_id, best_id,
 //!          address, label, position_source, ambiguous  (appended in v2)
+//!          status, corrections         (only with `corrections`, v3 Phase 11.2)
 //! ```
 //!
 //! Output is CSV, or a GeoJSON FeatureCollection (`OutputFormat`).
@@ -46,6 +47,11 @@ pub struct InputRow {
     /// ignored; a `postal_code` column still overrides the parsed one.
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub address: Option<String>,
+    /// Municipality or locality name (v3 Phase 11.2): matched like street
+    /// words, and compared with the address's place names by the
+    /// `corrections` option. Ignored on free-text rows.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub city: Option<String>,
 }
 
 /// One row of output. Field order is the wire contract — `csv::Writer`
@@ -82,6 +88,14 @@ pub struct OutputRow {
     /// Two near-equal answers on different streets (`/geocode`'s
     /// `ambiguous`).
     pub ambiguous: bool,
+    // --- only with the `corrections` option (v3 Phase 11.2) ---
+    /// `/validate`'s status: `valid`, `corrected`, `ambiguous`,
+    /// `incomplete` or `not_found`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// `kind:field:input->official` per correction, `; `-separated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corrections: Option<String>,
 }
 
 /// Batch output format.
@@ -377,6 +391,8 @@ mod tests {
                 label: Some("Avenue Louise 32, 1050 Ixelles".into()),
                 position_source: Some("measured".into()),
                 ambiguous: false,
+                status: None,
+                corrections: None,
             })
             .unwrap();
             w.flush().unwrap();
@@ -482,6 +498,8 @@ mod tests {
             label: None,
             position_source: None,
             ambiguous: true,
+            status: None,
+            corrections: None,
         };
         let missing = OutputRow {
             id: "2".into(),

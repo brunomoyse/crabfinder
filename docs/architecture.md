@@ -178,6 +178,7 @@ Markt.
 | `spatial` | R-tree over point-accurate positions for `/reverse` |
 | `interpolate` | `/reverse?interpolate=true` house-number estimate (pure geometry) |
 | `telemetry` | Prometheus series for `/metrics` |
+| `validate` | `/validate` and the batch `corrections` columns: input vs. the resolved BeSt address, field by field (v3 Phase 11.2) |
 | `http` | Router, guard (deadline, concurrency), CORS and the handlers |
 | `batch` | CSV/GeoJSON I/O, intra-batch dedup, rayon fan-out, `POST /batch/geocode` |
 

@@ -26,6 +26,7 @@ The service listens on **IPv4 only** on `127.0.0.1:8080` by default. Always quer
 | `GET` | `/reverse` | Reverse geocoding (coordinates → address) |
 | `GET` | `/building/{id}/units` | List all units in a building |
 | `GET` | `/lookup` | Addresses by BeSt id |
+| `GET` | `/validate` | Check an address: valid, corrected (and how), ambiguous, incomplete |
 | `POST` | `/batch/geocode` | See [`03-batch.md`](03-batch.md) |
 | `GET` | `/metrics` | Prometheus metrics (unless started with `--no-metrics`) |
 
@@ -438,6 +439,36 @@ features[0].properties.label = "Wetstraat 16, 1000 Brussel"
 ```
 
 An empty `id` is a 400 (`id is empty`), more than 50 too (`too many ids: 51 (max 50)`).
+
+## `GET /validate` — check an address
+
+You have an address from a form or a customer file and want to know: does it exist in BeSt, and if not exactly, what is the official one? `/validate` takes the same input as `/geocode` (`q`, or `street` / `housenumber` / `box` / `postcode` / `city`, plus `lang` and `region`) and answers with a `status`, the official BeSt address and the list of what differs.
+
+```bash
+curl -G "http://127.0.0.1:8080/validate" \
+  --data-urlencode "street=Av Louise" --data housenumber=32 \
+  --data postcode=1000 --data city=Ixelles
+```
+
+```
+status = "corrected"
+address.properties.label = "Avenue Louise 32, 1050 Ixelles"
+corrections = [
+  {field: "street",      kind: "abbreviation_expanded", input: "av",   official: "avenue"},
+  {field: "postal_code", kind: "postal_code_changed",   input: "1000", official: "1050"}]
+```
+
+| `status` | What to do |
+|---|---|
+| `valid` | The address exists as written (case and accents don't count). Keep it. |
+| `corrected` | It exists once corrected: show the official `label`, or store the BeSt address. |
+| `ambiguous` | Two streets fit equally well: ask for the postal code or the municipality. |
+| `incomplete` | Only the street (or a place) was found: no house number, or one that isn't on that street. Ask for the number. |
+| `not_found` | Nothing matched. |
+
+The corrections say which field changed and how: a misspelt word (`street_spelling`), an abbreviation written out (`abbreviation_expanded`), missing words of the street name (`street_completed`), a word that matches nothing (`word_ignored`), a wrong or misspelt municipality (`municipality_changed`, `municipality_spelling`), another postal code (`postal_code_changed`), the nearest existing number (`house_number_approximated`), a number not on the street (`house_number_not_found`), a box the building doesn't have (`box_not_found`), or another reading of the free text (`reading`). Three are only completions and leave a `valid` address valid: a missing postal code (`postal_code_added`), a missing box on a one-unit building (`box_added`), and a street written in another language than `lang` (`street_language`). Words are compared lowercase and without accents. The full table is in [`docs/api.md`](../api.md#get-validate).
+
+For a whole file, the batch has the same check: the `corrections` option (see [`03-batch.md`](03-batch.md#checking-addresses-corrections)).
 
 ## Filters and disambiguation strategies
 

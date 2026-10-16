@@ -29,6 +29,7 @@ use crabfinder_service::batch::io::{
     BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson,
 };
 use crabfinder_service::resolver::{AddressQuery, SearchOptions, resolve_with};
+use crabfinder_service::validate::resolve_and_assess;
 use crabfinder_service::{AppState, LoadOptions};
 
 #[derive(Debug, Clone, Parser)]
@@ -82,6 +83,11 @@ pub struct Args {
     /// address's own language.
     #[arg(long, value_parser = parse_lang)]
     pub lang: Option<Language>,
+
+    /// Add the `/validate` columns `status` and `corrections` (v3 Phase
+    /// 11.2): what differs between each row and the official address.
+    #[arg(long, default_value_t = false)]
+    pub corrections: bool,
 }
 
 fn parse_format(s: &str) -> Result<OutputFormat, String> {
@@ -109,6 +115,7 @@ impl Args {
             parallel: None,
             format: OutputFormat::Csv,
             lang: None,
+            corrections: false,
         }
     }
 }
@@ -169,7 +176,13 @@ pub fn run_with_io(args: &Args, mut input: impl Read, output: impl Write) -> Res
         mid_street_fallback: !args.no_mid_street,
         ..SearchOptions::default()
     };
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &search_opts, &ctx));
+    let resolver = ClosureResolver(|q: &AddressQuery| {
+        if args.corrections {
+            resolve_and_assess(q, &search_opts, &ctx, args.lang)
+        } else {
+            resolve_with(q, &search_opts, &ctx)
+        }
+    });
     let make_query = |row: &InputRow| row_query(&state.index, row);
     let t0 = std::time::Instant::now();
     let out = pool.install(|| dedup_then_resolve(rows, &resolver, make_query, args.lang));

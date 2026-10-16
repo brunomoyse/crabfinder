@@ -38,6 +38,7 @@ use crate::query_builder::{
     build_typo_query, search_score_only, search_with_notability, searchable_field, slot_is_unknown,
 };
 use crate::spatial::haversine_m;
+use crate::validate::Validation;
 
 /// Structured address input. Both the HTTP free-text path (after parsing) and
 /// the batch CSV path (already-structured columns) construct `AddressQuery`.
@@ -79,6 +80,11 @@ pub struct AddressQuery {
     pub area: Option<Area>,
     /// Caller's hard rectangle (`/geocode?bbox=`, v2 Phase 10).
     pub bbox: Option<BBox>,
+    /// How many trailing `street_tokens` came from a separate city field
+    /// (`/geocode?city=`, the batch `city` column). Only `/validate`
+    /// reads it, to compare those words with the address's place names
+    /// (v3 Phase 11.2); the search treats them as street words.
+    pub city_tokens: usize,
 }
 
 impl AddressQuery {
@@ -235,6 +241,11 @@ pub struct ResolvedAddress {
     /// understood to name. `address` / `hit` are the BeSt address nearest
     /// to it, with their own BeSt position.
     pub locality: Option<Locality>,
+    /// Which reading matched (`CandidateSet::reading`).
+    pub reading: usize,
+    /// Input vs. official address, when asked for
+    /// (`validate::resolve_and_assess`, v3 Phase 11.2).
+    pub validation: Option<Validation>,
 }
 
 impl ResolvedAddress {
@@ -248,6 +259,8 @@ impl ResolvedAddress {
             fallback_reason: Some(FallbackReason::NoMatch),
             ambiguous: false,
             locality: None,
+            reading: 0,
+            validation: None,
         }
     }
 }
@@ -1530,7 +1543,7 @@ fn label_nearest(set: &mut CandidateSet, query: &AddressQuery) {
 
 /// Box numbers compare case-insensitively and ignore whitespace and
 /// leading zeros (`"03"` = `"3"`, `"b  2"` = `"B2"`).
-fn normalize_box(b: &str) -> String {
+pub(crate) fn normalize_box(b: &str) -> String {
     let b: String = b
         .chars()
         .filter(|c| !c.is_whitespace())
@@ -1624,6 +1637,8 @@ pub fn resolve_with(
         fallback_reason: c.fallback_reason,
         ambiguous,
         locality: set.locality,
+        reading: set.reading,
+        validation: None,
     }
 }
 

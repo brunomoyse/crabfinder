@@ -331,3 +331,46 @@ async fn label_language_follows_lang() {
     let (h, rows) = parse_csv(&body);
     assert_eq!(col(&h, &rows[0], "label"), "Grote Markt 1, 1000 Brussel");
 }
+
+#[tokio::test]
+async fn corrections_option_adds_the_validate_columns() {
+    let app = app();
+    let csv = "id,street,house_number,postal_code,city\n\
+               1,Avenue Louise,10,1050,\n\
+               2,Avenue Louisse,20,,Ixelles\n\
+               3,Nowhere,1,1000,\n";
+    // Off by default: the columns are unchanged.
+    let (_, _, body) = app.post("/batch/geocode", "text/csv", csv).await;
+    let (h, _) = parse_csv(&body);
+    assert!(
+        !h.iter().any(|c| c == "status" || c == "corrections"),
+        "{h:?}"
+    );
+
+    let (status, _, body) = app
+        .post("/batch/geocode?corrections=true", "text/csv", csv)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (h, rows) = parse_csv(&body);
+    assert_eq!(h[h.len() - 2..], ["status", "corrections"]);
+    assert_eq!(col(&h, &rows[0], "status"), "valid");
+    assert_eq!(col(&h, &rows[0], "corrections"), "");
+    assert_eq!(col(&h, &rows[1], "status"), "corrected");
+    assert_eq!(
+        col(&h, &rows[1], "corrections"),
+        "street_spelling:street:louisse->louise; municipality_changed:city:ixelles->Bruxelles; \
+         postal_code_added:postal_code:->1050"
+    );
+    assert_eq!(col(&h, &rows[2], "status"), "not_found");
+
+    // Same through JSON options and GeoJSON output.
+    let body = serde_json::json!({
+        "addresses": [{"id": "a", "street": "Avenue Louise", "house_number": "10", "postal_code": "1050"}],
+        "options": {"format": "geojson", "corrections": true}
+    });
+    let (_, _, out) = app
+        .post("/batch/geocode", "application/json", body.to_string())
+        .await;
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["features"][0]["properties"]["status"], "valid");
+}

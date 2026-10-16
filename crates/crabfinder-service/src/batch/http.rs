@@ -46,6 +46,7 @@ use crabfinder_core::Language;
 
 use crate::AppState;
 use crate::resolver::{AddressQuery, SearchOptions, resolve_with};
+use crate::validate::resolve_and_assess;
 
 use super::dedup::{ClosureResolver, dedup_then_resolve, row_query};
 use super::io::{BatchWriter, InputRow, OutputFormat, read_rows, sniff_delimiter, write_geojson};
@@ -86,6 +87,9 @@ pub struct BatchOptions {
     /// Language of the `label` column: `fr`, `nl` or `de` (default: each
     /// address's own). Anything else is a 400.
     pub lang: Option<String>,
+    /// Add the `/validate` columns `status` and `corrections` (v3 Phase
+    /// 11.2). Default `false`: the columns stay as they were.
+    pub corrections: bool,
 }
 
 impl Default for BatchOptions {
@@ -94,6 +98,7 @@ impl Default for BatchOptions {
             mid_street_fallback: true,
             format: "csv".to_string(),
             lang: None,
+            corrections: false,
         }
     }
 }
@@ -104,6 +109,7 @@ struct BatchQuery {
     mid_street_fallback: Option<bool>,
     format: Option<String>,
     lang: Option<String>,
+    corrections: Option<bool>,
 }
 
 /// `BatchOptions` once checked.
@@ -112,6 +118,7 @@ struct RunOptions {
     mid_street_fallback: bool,
     format: OutputFormat,
     lang: Option<Language>,
+    corrections: bool,
 }
 
 impl BatchOptions {
@@ -124,6 +131,9 @@ impl BatchOptions {
         }
         if q.lang.is_some() {
             self.lang = q.lang;
+        }
+        if let Some(c) = q.corrections {
+            self.corrections = c;
         }
         self
     }
@@ -144,6 +154,7 @@ impl BatchOptions {
             mid_street_fallback: self.mid_street_fallback,
             format,
             lang,
+            corrections: self.corrections,
         })
     }
 }
@@ -291,7 +302,13 @@ fn run_resolve_to_channel(
         mid_street_fallback: options.mid_street_fallback,
         ..SearchOptions::default()
     };
-    let resolver = ClosureResolver(|q: &AddressQuery| resolve_with(q, &opts, &ctx));
+    let resolver = ClosureResolver(|q: &AddressQuery| {
+        if options.corrections {
+            resolve_and_assess(q, &opts, &ctx, options.lang)
+        } else {
+            resolve_with(q, &opts, &ctx)
+        }
+    });
     let make_query = |row: &InputRow| row_query(&state.index, row);
 
     let out_rows = dedup_then_resolve(rows, &resolver, make_query, options.lang);
@@ -489,8 +506,10 @@ mod tests {
             mid_street_fallback: Some(false),
             format: Some("GeoJSON".into()),
             lang: Some("NL".into()),
+            corrections: Some(true),
         });
         let r = o.validate().unwrap();
+        assert!(r.corrections);
         assert!(!r.mid_street_fallback);
         assert_eq!(r.format, OutputFormat::GeoJson);
         assert_eq!(r.lang, Some(Language::Nl));
